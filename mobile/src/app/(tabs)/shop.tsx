@@ -1,5 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import {
   ActivityIndicator,
   FlatList,
@@ -11,7 +13,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
+
 import {
   ArrowUpDown,
   BadgePercent,
@@ -25,8 +29,10 @@ import {
   Tag,
   X,
 } from 'lucide-react-native';
+
 import { useLocalSearchParams } from 'expo-router';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+
 import { api, getImageUrl } from '../../lib/api';
 import { ProductCard } from '../../components/ui/ProductCard';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -49,6 +55,14 @@ type Subcategory = {
   category?: string | { _id?: string; name?: string };
 };
 
+type Palette = ReturnType<typeof getBrandTokens>;
+
+type Product = {
+  _id?: string;
+  slug?: string;
+  [key: string]: unknown;
+};
+
 const sortOptions = [
   { label: 'Newest', value: '' },
   { label: 'Price: Low to High', value: 'price' },
@@ -56,21 +70,23 @@ const sortOptions = [
 ];
 
 const currency = '\u09F3';
+const PAGE_SIZE = 20;
 
-function FilterChip({
+const MemoProductCard = memo(ProductCard);
+
+const FilterChip = memo(function FilterChip({
   label,
   active,
   onPress,
   icon,
+  palette,
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
   icon?: React.ReactNode;
+  palette: Palette;
 }) {
-  const theme = useAppStore((s) => s.theme);
-  const palette = getBrandTokens(theme);
-
   return (
     <Pressable
       onPress={onPress}
@@ -90,20 +106,19 @@ function FilterChip({
       </Text>
     </Pressable>
   );
-}
+});
 
-function CategoryCard({
+const CategoryCard = memo(function CategoryCard({
   category,
   active,
   onPress,
+  palette,
 }: {
   category: { name: string; slug: string; image?: string; icon?: React.ReactNode };
   active: boolean;
   onPress: () => void;
+  palette: Palette;
 }) {
-  const theme = useAppStore((s) => s.theme);
-  const palette = getBrandTokens(theme);
-
   return (
     <Pressable
       onPress={onPress}
@@ -132,7 +147,7 @@ function CategoryCard({
       </Text>
     </Pressable>
   );
-}
+});
 
 export default function ShopScreen() {
   const params = useLocalSearchParams();
@@ -150,10 +165,20 @@ export default function ShopScreen() {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [sortBy, setSortBy] = useState('');
+  const [draftCategory, setDraftCategory] = useState('');
+  const [draftSubcategory, setDraftSubcategory] = useState('');
+  const [draftMinPrice, setDraftMinPrice] = useState('');
+  const [draftMaxPrice, setDraftMaxPrice] = useState('');
+  const [draftSortBy, setDraftSortBy] = useState('');
 
   useEffect(() => {
-    if (params.category) setSelectedCategory(params.category as string);
-    if (params.subcategory) setSelectedSubcategory(params.subcategory as string);
+    const category = typeof params.category === 'string' ? params.category : '';
+    const subcategory = typeof params.subcategory === 'string' ? params.subcategory : '';
+
+    setSelectedCategory(category);
+    setSelectedSubcategory(subcategory);
+    setDraftCategory(category);
+    setDraftSubcategory(subcategory);
   }, [params.category, params.subcategory]);
 
   useEffect(() => {
@@ -167,6 +192,7 @@ export default function ShopScreen() {
       const { data } = await api.get('/categories');
       return Array.isArray(data) ? data : data?.categories || [];
     },
+    staleTime: 1000 * 60 * 5,
   });
 
   const { data: subcategories = [] } = useQuery<Subcategory[]>({
@@ -175,44 +201,62 @@ export default function ShopScreen() {
       const { data } = await api.get('/subcategories', { params: { limit: 100 } });
       return data?.subcategories || [];
     },
+    staleTime: 1000 * 60 * 5,
   });
 
-  const selectedCategoryObj = useMemo(
-    () => categories.find((cat) => cat.slug === selectedCategory),
-    [categories, selectedCategory],
+  const draftCategoryObj = useMemo(
+    () => categories.find((cat) => cat.slug === draftCategory),
+    [categories, draftCategory],
   );
 
   const visibleSubcategories = useMemo(() => {
-    if (!selectedCategoryObj) return subcategories;
+    if (!draftCategoryObj) return subcategories;
     return subcategories.filter((sub) => {
       const catId = typeof sub.category === 'object' ? sub.category?._id : sub.category;
-      return String(catId) === String(selectedCategoryObj._id);
+      return String(catId) === String(draftCategoryObj._id);
     });
-  }, [selectedCategoryObj, subcategories]);
+  }, [draftCategoryObj, subcategories]);
 
-  const activeFilterCount = [
-    selectedCategory,
-    selectedSubcategory,
-    minPrice || maxPrice,
-    sortBy,
-  ].filter(Boolean).length;
+  const activeFilterCount = useMemo(
+    () =>
+      [selectedCategory, selectedSubcategory, minPrice || maxPrice, sortBy].filter(Boolean)
+        .length,
+    [maxPrice, minPrice, selectedCategory, selectedSubcategory, sortBy],
+  );
 
-  const fetchProducts = async ({ pageParam = 1 }) => {
-    let url = `/products?page=${pageParam}&limit=20`;
-    if (debouncedSearch) url += `&search=${encodeURIComponent(debouncedSearch)}`;
-    if (selectedCategory === 'isFeatured') {
-      url += '&isFeatured=true';
-    } else if (selectedCategory) {
-      url += `&category=${selectedCategory}`;
-    }
-    if (selectedSubcategory) url += `&subcategory=${selectedSubcategory}`;
-    if (minPrice) url += `&minPrice=${minPrice}`;
-    if (maxPrice) url += `&maxPrice=${maxPrice}`;
-    if (sortBy) url += `&sort=${sortBy}`;
+  const draftFilterCount = useMemo(
+    () =>
+      [draftCategory, draftSubcategory, draftMinPrice || draftMaxPrice, draftSortBy].filter(Boolean)
+        .length,
+    [draftCategory, draftMaxPrice, draftMinPrice, draftSortBy, draftSubcategory],
+  );
 
-    const { data } = await api.get(url);
-    return data;
-  };
+  const appliedQueryParams = useMemo(
+    () => ({
+      search: debouncedSearch || undefined,
+      category: selectedCategory && selectedCategory !== 'isFeatured' ? selectedCategory : undefined,
+      subcategory: selectedSubcategory || undefined,
+      isFeatured: selectedCategory === 'isFeatured' ? 'true' : undefined,
+      minPrice: minPrice || undefined,
+      maxPrice: maxPrice || undefined,
+      sort: sortBy || undefined,
+    }),
+    [debouncedSearch, maxPrice, minPrice, selectedCategory, selectedSubcategory, sortBy],
+  );
+
+  const fetchProducts = useCallback(
+    async ({ pageParam = 1 }) => {
+      const { data } = await api.get('/products', {
+        params: {
+          page: pageParam,
+          limit: PAGE_SIZE,
+          ...appliedQueryParams,
+        },
+      });
+      return data;
+    },
+    [appliedQueryParams],
+  );
 
   const {
     data,
@@ -223,15 +267,7 @@ export default function ShopScreen() {
     refetch,
     isRefetching,
   } = useInfiniteQuery({
-    queryKey: [
-      'shopProducts',
-      debouncedSearch,
-      selectedCategory,
-      selectedSubcategory,
-      minPrice,
-      maxPrice,
-      sortBy,
-    ],
+    queryKey: ['shopProducts', appliedQueryParams],
     queryFn: fetchProducts,
     getNextPageParam: (lastPage) => {
       const currentPage = Number(lastPage.currentPage || 1);
@@ -244,10 +280,10 @@ export default function ShopScreen() {
 
   const productsList = useMemo(() => {
     const seen = new Set<string>();
-    const products: any[] = [];
+    const products: Product[] = [];
 
     data?.pages.forEach((page) => {
-      (page.products || []).forEach((product: any) => {
+      (page.products || []).forEach((product: Product) => {
         const key = String(product?._id || product?.slug || '');
         if (!key || seen.has(key)) return;
         seen.add(key);
@@ -260,20 +296,43 @@ export default function ShopScreen() {
 
   const endReachedLockedRef = useRef(false);
 
-  const handleCategoryChange = (slug: string) => {
-    setSelectedCategory(slug);
-    setSelectedSubcategory('');
-  };
+  const openFilters = useCallback(() => {
+    setDraftCategory(selectedCategory);
+    setDraftSubcategory(selectedSubcategory);
+    setDraftMinPrice(minPrice);
+    setDraftMaxPrice(maxPrice);
+    setDraftSortBy(sortBy);
+    setIsFilterPanelOpen(true);
+  }, [maxPrice, minPrice, selectedCategory, selectedSubcategory, sortBy]);
 
-  const handleClearFilters = () => {
+  const handleDraftCategoryChange = useCallback((slug: string) => {
+    setDraftCategory(slug);
+    setDraftSubcategory('');
+  }, []);
+
+  const handleApplyFilters = useCallback(() => {
+    setSelectedCategory(draftCategory);
+    setSelectedSubcategory(draftSubcategory);
+    setMinPrice(draftMinPrice);
+    setMaxPrice(draftMaxPrice);
+    setSortBy(draftSortBy);
+    setIsFilterPanelOpen(false);
+  }, [draftCategory, draftMaxPrice, draftMinPrice, draftSortBy, draftSubcategory]);
+
+  const handleClearFilters = useCallback(() => {
     setMinPrice('');
     setMaxPrice('');
     setSortBy('');
     setSelectedCategory('');
     setSelectedSubcategory('');
+    setDraftMinPrice('');
+    setDraftMaxPrice('');
+    setDraftSortBy('');
+    setDraftCategory('');
+    setDraftSubcategory('');
     setSearchTerm('');
     setDebouncedSearch('');
-  };
+  }, []);
 
   const handleEndReached = useCallback(() => {
     if (endReachedLockedRef.current || !hasNextPage || isFetchingNextPage) return;
@@ -284,9 +343,11 @@ export default function ShopScreen() {
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const renderProduct = useCallback(
-    ({ item }: { item: any }) => <ProductCard product={item} />,
+    ({ item }: { item: Product }) => <MemoProductCard product={item} />,
     [],
   );
+
+  const keyExtractor = useCallback((item: Product) => String(item._id || item.slug), []);
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: palette.background }}>
@@ -312,7 +373,7 @@ export default function ShopScreen() {
           </View>
 
           <Pressable
-            onPress={() => setIsFilterPanelOpen(true)}
+            onPress={openFilters}
             className="h-12 w-12 items-center justify-center rounded-2xl active:scale-95"
             style={{ backgroundColor: palette.primary }}
           >
@@ -372,21 +433,18 @@ export default function ShopScreen() {
                 </Text>
                 <ScrollView overScrollMode="never" horizontal showsHorizontalScrollIndicator={false}>
                   {sortOptions.map((option) => {
-                    const isSelected = sortBy === option.value;
+                    const isSelected = draftSortBy === option.value;
                     return (
                       <Pressable
                         key={option.label}
-                        onPress={() => setSortBy(option.value)}
+                        onPress={() => setDraftSortBy(option.value)}
                         className="mr-2 h-11 flex-row items-center gap-2 rounded-2xl border px-4 active:scale-95"
                         style={{
                           backgroundColor: isSelected ? palette.primary : palette.surfaceSoft,
                           borderColor: isSelected ? palette.primary : palette.border,
                         }}
                       >
-                        <ArrowUpDown
-                          size={13}
-                          color={isSelected ? palette.onPrimary : mutedIconColor}
-                        />
+                        <ArrowUpDown size={13} color={isSelected ? palette.onPrimary : mutedIconColor} />
                         <Text
                           className="text-[10px] font-black uppercase tracking-wider"
                           style={{ color: isSelected ? palette.onPrimary : palette.textSecondary }}
@@ -407,8 +465,9 @@ export default function ShopScreen() {
                 <ScrollView overScrollMode="never" horizontal showsHorizontalScrollIndicator={false}>
                   <CategoryCard
                     category={{ name: 'All', slug: '', icon: <Grid2X2 size={18} color={mutedIconColor} /> }}
-                    active={selectedCategory === ''}
-                    onPress={() => handleCategoryChange('')}
+                    active={draftCategory === ''}
+                    onPress={() => handleDraftCategoryChange('')}
+                    palette={palette}
                   />
                   <CategoryCard
                     category={{
@@ -416,8 +475,9 @@ export default function ShopScreen() {
                       slug: 'isFeatured',
                       icon: <Sparkles size={18} color={palette.warning} />,
                     }}
-                    active={selectedCategory === 'isFeatured'}
-                    onPress={() => handleCategoryChange('isFeatured')}
+                    active={draftCategory === 'isFeatured'}
+                    onPress={() => handleDraftCategoryChange('isFeatured')}
+                    palette={palette}
                   />
                   <CategoryCard
                     category={{
@@ -425,8 +485,9 @@ export default function ShopScreen() {
                       slug: 'on-sale',
                       icon: <BadgePercent size={18} color={palette.danger} />,
                     }}
-                    active={selectedCategory === 'on-sale'}
-                    onPress={() => handleCategoryChange('on-sale')}
+                    active={draftCategory === 'on-sale'}
+                    onPress={() => handleDraftCategoryChange('on-sale')}
+                    palette={palette}
                   />
                   {categories
                     .filter((cat) => cat.slug !== 'on-sale')
@@ -434,8 +495,9 @@ export default function ShopScreen() {
                       <CategoryCard
                         key={cat._id}
                         category={cat}
-                        active={selectedCategory === cat.slug}
-                        onPress={() => handleCategoryChange(cat.slug)}
+                        active={draftCategory === cat.slug}
+                        onPress={() => handleDraftCategoryChange(cat.slug)}
+                        palette={palette}
                       />
                     ))}
                 </ScrollView>
@@ -451,14 +513,15 @@ export default function ShopScreen() {
                       <FilterChip
                         key={sub._id}
                         label={sub.name}
-                        active={selectedSubcategory === sub.slug}
-                        onPress={() => setSelectedSubcategory(selectedSubcategory === sub.slug ? '' : sub.slug)}
+                        active={draftSubcategory === sub.slug}
+                        onPress={() => setDraftSubcategory(draftSubcategory === sub.slug ? '' : sub.slug)}
                         icon={
                           <Tag
                             size={12}
-                            color={selectedSubcategory === sub.slug ? palette.onPrimary : mutedIconColor}
+                            color={draftSubcategory === sub.slug ? palette.onPrimary : mutedIconColor}
                           />
                         }
+                        palette={palette}
                       />
                     ))}
                   </ScrollView>
@@ -482,8 +545,8 @@ export default function ShopScreen() {
                         className="flex-1 py-1 text-base font-black"
                         style={{ color: palette.text }}
                         keyboardType="numeric"
-                        value={minPrice}
-                        onChangeText={setMinPrice}
+                        value={draftMinPrice}
+                        onChangeText={setDraftMinPrice}
                       />
                     </View>
                   </View>
@@ -502,8 +565,8 @@ export default function ShopScreen() {
                         className="flex-1 py-1 text-base font-black"
                         style={{ color: palette.text }}
                         keyboardType="numeric"
-                        value={maxPrice}
-                        onChangeText={setMaxPrice}
+                        value={draftMaxPrice}
+                        onChangeText={setDraftMaxPrice}
                       />
                     </View>
                   </View>
@@ -512,8 +575,8 @@ export default function ShopScreen() {
             </ScrollView>
 
             <Button
-              title={`Show Products${activeFilterCount ? ` (${activeFilterCount})` : ''}`}
-              onPress={() => setIsFilterPanelOpen(false)}
+              title={`Show Products${draftFilterCount ? ` (${draftFilterCount})` : ''}`}
+              onPress={handleApplyFilters}
               className="mt-2 h-12 rounded-2xl"
             />
           </View>
@@ -539,9 +602,10 @@ export default function ShopScreen() {
           <Button title="Reset Filters" onPress={handleClearFilters} className="w-1/2" />
         </View>
       ) : (
-        <FlatList overScrollMode="never"
+        <FlatList
+          overScrollMode="never"
           data={productsList}
-          keyExtractor={(item, index) => `${item._id || item.slug || 'product'}-${index}`}
+          keyExtractor={keyExtractor}
           numColumns={2}
           contentContainerStyle={{ padding: 6, paddingBottom: 28 }}
           renderItem={renderProduct}
