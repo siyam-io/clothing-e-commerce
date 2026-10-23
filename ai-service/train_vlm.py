@@ -262,8 +262,23 @@ def train(args):
     )
 
     # 9. Execute Training
+    resume_checkpoint = None
+    if args.resume_from_checkpoint and args.resume_from_checkpoint.lower() not in ("none", "false"):
+        if args.resume_from_checkpoint.lower() == "auto":
+            checkpoints = [
+                d for d in Path(args.output_dir).glob("checkpoint-*")
+                if d.is_dir() and (d / "trainer_state.json").exists()
+            ]
+            if checkpoints:
+                checkpoints.sort(key=lambda p: int(p.name.split("-")[-1]))
+                resume_checkpoint = str(checkpoints[-1])
+                print(f"🔄 Auto-resuming from latest checkpoint: {resume_checkpoint}")
+        else:
+            resume_checkpoint = args.resume_from_checkpoint
+            print(f"🔄 Resuming from checkpoint: {resume_checkpoint}")
+
     print("🔥 Starting QLoRA Training...")
-    trainer.train()
+    trainer.train(resume_from_checkpoint=resume_checkpoint)
 
     # 10. Save Adapter Weights & Processor
     final_output_path = Path(args.output_dir) / "final_adapter"
@@ -289,6 +304,7 @@ if __name__ == "__main__":
     parser.add_argument("--lora_alpha", type=int, default=32, help="LoRA alpha scaling parameter")
     parser.add_argument("--lora_dropout", type=float, default=0.05, help="LoRA dropout rate")
     parser.add_argument("--use_4bit", action="store_true", help="Enable 4-bit NF4 quantization (default: BF16 LoRA)")
+    parser.add_argument("--resume_from_checkpoint", type=str, default="auto", help="Resume from checkpoint path, 'auto' for latest checkpoint, or 'none' to start fresh")
 
     args = parser.parse_args()
     train(args)
