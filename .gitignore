@@ -21,6 +21,8 @@
 /ai-service/.venv/
 /ai-service/__pycache__/
 /ai-service/weights/
+/ai-service/cloudflared.exe
+*.exe
 
 # Handle nested ignores (optional but good practice)
 # If you want to ignore specific things inside backend or web, 

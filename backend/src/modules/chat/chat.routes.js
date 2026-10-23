@@ -22,8 +22,8 @@ router.patch("/conversations/:id/mode", requireAuth, updateConversationMode);
 router.post("/conversations/start", requireAuth, admin, startConversation);
 router.get("/search-users", requireAuth, admin, searchUsers);
 
-// 🛡️ কাস্টমার এবং অ্যাডমিনরা চ্যাটে ইমেজ আপলোড করতে পারবে
-router.post("/upload", requireAuth, upload.single("image"), async (req, res) => {
+// 🛡️ কাস্টমার এবং অ্যাডমিনরা চ্যাটে ইমেজ আপলোড করতে পারবে (গেস্ট ইউজারও ইমেজ পাঠাতে পারবে)
+router.post("/upload", extractUser, upload.single("image"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: "No file provided" });
     const imageUrl = await uploadImage(req.file, "chat");

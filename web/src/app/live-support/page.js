@@ -329,8 +329,44 @@ const ChatMessage = ({ message, isMe, onAddToCart }) => {
 // -----------------------------------------------------------------------------
 export default function LiveSupportPage() {
   const { user, isAuthenticated } = useAuthStore();
+  const isAuth = !!user && isAuthenticated;
   const addToCartStore = useProductStore((state) => state.addToCart);
-  const { messages, isConnected, isAiTyping, sendMessage, chatMode, setChatMode } = useChat(true);
+
+  // Real-time socket chat for authenticated users
+  const {
+    messages: socketMessages,
+    isConnected,
+    isAiTyping: isSocketAiTyping,
+    sendMessage,
+    chatMode: socketChatMode,
+    setChatMode: setSocketChatMode,
+  } = useChat(isAuth);
+
+  // Local state for guest users
+  const [localChatMode, setLocalChatMode] = useState("ai");
+  const [guestMessages, setGuestMessages] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("vanguard_guest_chat");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {
+        console.warn("Failed to load guest chat from localStorage:", e);
+      }
+    }
+    return [
+      {
+        _id: "welcome-ai-1",
+        isAi: true,
+        senderName: "AI Assistant",
+        text: "👋 Welcome to Vanguard! I am your AI Shopping Assistant running our custom multimodal vision model.\n\nAsk me anything about our clothing collections, sizing, prices, or upload a photo of any outfit to find matching products instantly—no login required!",
+        createdAt: new Date().toISOString(),
+      },
+    ];
+  });
+  const [isGuestAiTyping, setIsGuestAiTyping] = useState(false);
 
   const [input, setInput] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -340,12 +376,17 @@ export default function LiveSupportPage() {
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  // Active chat mode and messages
+  const currentChatMode = isAuth ? socketChatMode : localChatMode;
+  const displayMessages = isAuth && socketMessages.length > 0 ? socketMessages : guestMessages;
+  const isAiThinking = isAuth && currentChatMode === "ai" ? isSocketAiTyping : isGuestAiTyping;
+
   // Auto-scroll to bottom
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages.length, isAiTyping]);
+  }, [displayMessages.length, isAiThinking]);
 
   // Handle selected image preview
   useEffect(() => {
@@ -371,6 +412,17 @@ export default function LiveSupportPage() {
     };
   }, []);
 
+  const handleModeChange = (newMode) => {
+    if (isAuth) {
+      setSocketChatMode(newMode);
+    } else {
+      setLocalChatMode(newMode);
+      if (newMode === "agent") {
+        toast.info("💡 To connect with a human support agent, you can sign in or continue chatting with our AI Assistant right here!");
+      }
+    }
+  };
+
   const handleAddToCart = (product, sizeId) => {
     addToCartStore(
       {
@@ -382,7 +434,7 @@ export default function LiveSupportPage() {
       },
       sizeId,
       1,
-      !!user
+      isAuth
     );
     toast.success(`Added ${product.name} to cart!`);
   };
@@ -393,9 +445,104 @@ export default function LiveSupportPage() {
 
     setInput("");
     const file = selectedFile;
+    const previewUrl = imagePreviewUrl;
     setSelectedFile(null);
 
-    // If image is attached, upload first
+    // -------------------------------------------------------------------------
+    // 1. GUEST USER OR LOCAL AI MODE -> High-performance REST endpoint /api/chat
+    // -------------------------------------------------------------------------
+    if (!isAuth || currentChatMode === "ai") {
+      const userMsg = {
+        _id: `user_${Date.now()}`,
+        sender: user?._id || null,
+        senderName: user?.name || "You",
+        isMe: true,
+        text: textToSend,
+        image: previewUrl,
+        createdAt: new Date().toISOString(),
+      };
+
+      setGuestMessages((prev) => {
+        const updated = [...prev, userMsg];
+        try {
+          localStorage.setItem("vanguard_guest_chat", JSON.stringify(updated.slice(-30)));
+        } catch (e) {}
+        return updated;
+      });
+
+      setIsGuestAiTyping(true);
+
+      try {
+        const formData = new FormData();
+        if (textToSend) formData.append("message", textToSend);
+        if (file) formData.append("image", file);
+
+        // Previous 4 turns context
+        const historyContext = displayMessages.slice(-4).map((m) => ({
+          role: m.isAi ? "assistant" : "user",
+          content: m.text || (m.image ? "User sent an outfit image" : ""),
+        }));
+        formData.append("history", JSON.stringify(historyContext));
+
+        const res = await api.post("/chat", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+
+        if (res.data?.success && res.data.data) {
+          const { reply, actionPayload, actionResult, matchedProducts } = res.data.data;
+
+          // If AI placed item into cart automatically
+          if (actionResult?.success && actionResult.product) {
+            const p = actionResult.product;
+            addToCartStore(
+              { _id: p.id, name: p.name, price: p.unitPrice, discount: 0, images: [] },
+              p.sizeId || "default",
+              p.quantity || 1,
+              isAuth
+            );
+            toast.success(actionResult.message || "Added item to cart!");
+          }
+
+          const aiMsg = {
+            _id: `ai_${Date.now()}`,
+            isAi: true,
+            senderName: "AI Assistant",
+            text: reply,
+            actionPayload,
+            actionResult,
+            matchedProducts: matchedProducts || (actionResult?.product ? [actionResult.product] : []),
+            createdAt: new Date().toISOString(),
+          };
+
+          setGuestMessages((prev) => {
+            const updated = [...prev, aiMsg];
+            try {
+              localStorage.setItem("vanguard_guest_chat", JSON.stringify(updated.slice(-30)));
+            } catch (e) {}
+            return updated;
+          });
+        }
+      } catch (err) {
+        console.error("AI chat transmission error:", err);
+        setGuestMessages((prev) => [
+          ...prev,
+          {
+            _id: `err_${Date.now()}`,
+            isAi: true,
+            senderName: "AI Assistant",
+            text: "I experienced a temporary communication hiccup while contacting our local vision model. Please ask me again or browse our collections!",
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+      } finally {
+        setIsGuestAiTyping(false);
+      }
+      return;
+    }
+
+    // -------------------------------------------------------------------------
+    // 2. AUTHENTICATED USER IN AGENT TAKEOVER MODE -> Stream to Socket.io
+    // -------------------------------------------------------------------------
     let uploadedImageUrl = null;
     if (file) {
       setIsUploading(true);
@@ -415,7 +562,6 @@ export default function LiveSupportPage() {
       }
     }
 
-    // Send via socket message
     sendMessage({
       text: textToSend,
       image: uploadedImageUrl,
@@ -428,6 +574,12 @@ export default function LiveSupportPage() {
       handleSend();
     }
   };
+
+  const isSendDisabled =
+    (!input.trim() && !selectedFile) ||
+    isUploading ||
+    isAiThinking ||
+    (isAuth && currentChatMode === "agent" && !isConnected);
 
   return (
     <div id="live-support-container" className="fixed inset-0 flex flex-col bg-[#f0f2f5] dark:bg-[#0b141a] overflow-hidden z-50">
@@ -447,12 +599,12 @@ export default function LiveSupportPage() {
 
           <div className="relative">
             <div className="w-10 h-10 rounded-full bg-accent-secondary/15 flex items-center justify-center text-accent-secondary">
-              {chatMode === "ai" ? <Bot size={22} /> : <Headphones size={22} />}
+              {currentChatMode === "ai" ? <Bot size={22} /> : <Headphones size={22} />}
             </div>
             <div
               className={cn(
                 "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-[#202c33]",
-                isConnected ? "bg-emerald-500 animate-pulse" : "bg-rose-500"
+                currentChatMode === "ai" || isConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
               )}
             />
           </div>
@@ -460,21 +612,21 @@ export default function LiveSupportPage() {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-[15px] font-bold leading-tight">
-                {chatMode === "ai" ? "Vanguard AI Shopping Assistant" : "Live Customer Support"}
+                {currentChatMode === "ai" ? "Vanguard AI Shopping Assistant" : "Live Customer Support"}
               </h2>
-              {chatMode === "ai" && (
-                <span className="rounded-full bg-accent-secondary/20 px-2 py-0.5 text-[9px] font-extrabold text-accent-secondary">
+              {currentChatMode === "ai" && (
+                <span className="rounded-full bg-orange-500/15 border border-orange-500/30 px-2 py-0.5 text-[9px] font-bold text-orange-400">
                   Qwen2-VL Local
                 </span>
               )}
             </div>
             <p className="text-[11px] font-medium text-emerald-500 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              {isConnected
-                ? chatMode === "ai"
-                  ? "AI Assistant is ready (Instant Answers)"
-                  : "Live Agent is online"
-                : "Connecting to server..."}
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              {currentChatMode === "ai"
+                ? "AI Assistant is ready (Instant Answers • No Login Required)"
+                : isAuth && isConnected
+                ? "Live Agent is online"
+                : "Live Support (Sign in for human agent)"}
             </p>
           </div>
         </div>
@@ -483,27 +635,27 @@ export default function LiveSupportPage() {
         <div className="flex items-center gap-2">
           <div className="flex items-center rounded-2xl bg-black/30 dark:bg-black/50 p-1 border border-white/10 shadow-inner">
             <button
-              onClick={() => setChatMode("ai")}
+              onClick={() => handleModeChange("ai")}
               className={cn(
                 "flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-[11px] font-black transition-all cursor-pointer",
-                chatMode === "ai"
+                currentChatMode === "ai"
                   ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/25"
                   : "text-zinc-400 hover:text-white"
               )}
             >
-              <Bot size={14} className={chatMode === "ai" ? "text-white" : "text-zinc-400"} />
+              <Bot size={14} className={currentChatMode === "ai" ? "text-white" : "text-zinc-400"} />
               AI Assistant
             </button>
             <button
-              onClick={() => setChatMode("agent")}
+              onClick={() => handleModeChange("agent")}
               className={cn(
                 "flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-[11px] font-black transition-all cursor-pointer",
-                chatMode === "agent"
+                currentChatMode === "agent"
                   ? "bg-gradient-to-r from-emerald-600 to-teal-500 text-white shadow-md shadow-emerald-600/25"
                   : "text-zinc-400 hover:text-white"
               )}
             >
-              <Headphones size={14} className={chatMode === "agent" ? "text-white" : "text-zinc-400"} />
+              <Headphones size={14} className={currentChatMode === "agent" ? "text-white" : "text-zinc-400"} />
               Live Agent
             </button>
           </div>
@@ -517,12 +669,24 @@ export default function LiveSupportPage() {
         <div className="max-w-3xl mx-auto space-y-2 relative z-10">
           {/* Real-time Mode Notification Banner */}
           <div className="flex justify-center mb-3 sticky top-0 z-20">
-            {chatMode === "agent" ? (
+            {currentChatMode === "agent" ? (
               <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/15 backdrop-blur-md border border-emerald-500/30 text-emerald-400 text-[11px] font-bold shadow-sm">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>🎧 Live Support agent is connected to your chat.</span>
+                <span>
+                  {isAuth
+                    ? "🎧 Live Support agent is connected to your chat."
+                    : "🎧 Live Human Agent (Sign in to connect or continue with AI below)"}
+                </span>
+                {!isAuth && (
+                  <Link
+                    href="/login"
+                    className="ml-1 px-2 py-0.5 rounded bg-emerald-500 text-white font-black text-[10px] hover:bg-emerald-600"
+                  >
+                    Sign In
+                  </Link>
+                )}
                 <button
-                  onClick={() => setChatMode("ai")}
+                  onClick={() => handleModeChange("ai")}
                   className="ml-1 underline font-black hover:text-emerald-300 cursor-pointer text-emerald-300"
                 >
                   Switch to AI
@@ -531,9 +695,9 @@ export default function LiveSupportPage() {
             ) : (
               <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-500/15 backdrop-blur-md border border-orange-500/30 text-orange-400 text-[11px] font-bold shadow-sm">
                 <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
-                <span>🤖 AI Shopping Assistant is active (Instant Answers).</span>
+                <span>🤖 AI Shopping Assistant is active (Instant Answers • Free for all).</span>
                 <button
-                  onClick={() => setChatMode("agent")}
+                  onClick={() => handleModeChange("agent")}
                   className="ml-1 underline font-black hover:text-orange-300 cursor-pointer text-orange-300"
                 >
                   Request Human
@@ -542,7 +706,7 @@ export default function LiveSupportPage() {
             )}
           </div>
 
-          {messages.length === 0 ? (
+          {displayMessages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
               <div className="w-20 h-20 bg-accent-secondary/10 rounded-3xl flex items-center justify-center text-accent-secondary">
                 <Sparkles size={36} />
@@ -557,13 +721,18 @@ export default function LiveSupportPage() {
               </div>
             </div>
           ) : (
-            messages.map((msg, i) => {
+            displayMessages.map((msg, i) => {
               const myId = user?._id || user?.id;
               const senderId = typeof msg.sender === "string" ? msg.sender : msg.sender?._id || msg.sender?.id;
-              const isMe = msg.sender?.role?.name === "customer" || (senderId && senderId === myId);
+              const isMe =
+                msg.isMe ||
+                msg.senderName === "You" ||
+                (myId && senderId === myId) ||
+                msg.sender?.role?.name === "customer";
+
               return (
                 <ChatMessage
-                  key={msg._id || i}
+                  key={msg._id || msg.id || i}
                   message={msg}
                   isMe={isMe}
                   onAddToCart={handleAddToCart}
@@ -573,20 +742,20 @@ export default function LiveSupportPage() {
           )}
 
           {/* AI Typing Indicator */}
-          {isAiTyping && (
+          {isAiThinking && (
             <motion.div
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-2 text-muted-foreground p-2 px-3 rounded-2xl bg-card/60 backdrop-blur-md border border-white/5 w-fit"
+              className="flex items-center gap-2 text-muted-foreground p-2.5 px-3.5 rounded-2xl bg-[#18222d] border border-orange-500/25 w-fit shadow-lg"
             >
-              <Bot size={15} className="animate-spin text-accent-secondary" />
-              <span className="text-[12px] font-semibold text-accent-secondary">
-                AI Assistant is thinking...
+              <Bot size={15} className="animate-spin text-orange-400" />
+              <span className="text-[12px] font-extrabold text-orange-400">
+                AI Assistant is analyzing inventory & outfit...
               </span>
               <div className="flex gap-1 ml-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-accent-secondary animate-bounce" />
-                <span className="w-1.5 h-1.5 rounded-full bg-accent-secondary animate-bounce [animation-delay:0.2s]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-accent-secondary animate-bounce [animation-delay:0.4s]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-bounce" />
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-bounce [animation-delay:0.2s]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-bounce [animation-delay:0.4s]" />
               </div>
             </motion.div>
           )}
@@ -598,7 +767,7 @@ export default function LiveSupportPage() {
       {/* Selected Image Preview Pill */}
       {imagePreviewUrl && (
         <div className="px-4 py-2 bg-black/40 border-t border-white/5 flex items-center gap-3 shrink-0">
-          <div className="relative h-14 w-14 rounded-xl overflow-hidden border border-accent-secondary/50">
+          <div className="relative h-14 w-14 rounded-xl overflow-hidden border border-orange-500/50 shadow-md">
             <img src={imagePreviewUrl} alt="Preview" className="h-full w-full object-cover" />
             <button
               onClick={() => setSelectedFile(null)}
@@ -607,9 +776,10 @@ export default function LiveSupportPage() {
               <X size={12} />
             </button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Image attached. Hit send or type a question about this item!
-          </p>
+          <div>
+            <p className="text-xs font-bold text-white">Outfit Image Attached</p>
+            <p className="text-[10px] text-zinc-400">Click send to find matching products instantly!</p>
+          </div>
         </div>
       )}
 
@@ -630,12 +800,13 @@ export default function LiveSupportPage() {
             type="button"
             variant="ghost"
             size="icon"
-            disabled={isUploading}
+            disabled={isUploading || isAiThinking}
             onClick={() => fileInputRef.current?.click()}
-            className="h-11 w-11 md:h-12 md:w-12 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-muted-foreground shrink-0"
+            className="h-11 w-11 md:h-12 md:w-12 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-muted-foreground shrink-0 cursor-pointer"
+            title="Upload clothing photo"
           >
             {isUploading ? (
-              <Loader2 size={20} className="animate-spin text-accent-secondary" />
+              <Loader2 size={20} className="animate-spin text-orange-400" />
             ) : (
               <ImageIcon size={20} />
             )}
@@ -647,31 +818,35 @@ export default function LiveSupportPage() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={
-                chatMode === "ai"
-                  ? "Ask AI Assistant about products, sizes, prices or upload a photo..."
+                currentChatMode === "ai"
+                  ? "Ask AI Assistant about products, sizes, prices, or upload photo (No login required)..."
                   : "Type your message to live agent..."
               }
-              className="w-full h-11 md:h-12 bg-[#f0f2f5] dark:bg-[#2a3942] border-none rounded-2xl px-4 md:px-5 text-[14px] md:text-[15px] focus-visible:ring-0 placeholder:text-muted-foreground/50 shadow-inner"
+              className="w-full h-11 md:h-12 bg-[#f0f2f5] dark:bg-[#2a3942] border-none rounded-2xl px-4 md:px-5 text-[14px] md:text-[15px] focus-visible:ring-0 placeholder:text-muted-foreground/50 shadow-inner text-foreground font-medium"
             />
           </div>
 
           <Button
             onClick={handleSend}
-            disabled={(!input.trim() && !selectedFile) || !isConnected}
+            disabled={isSendDisabled}
             className={cn(
-              "h-11 w-11 md:h-12 md:w-12 rounded-full shadow-md transition-all duration-300",
+              "h-11 w-11 md:h-12 md:w-12 rounded-full shadow-md transition-all duration-300 cursor-pointer",
               input.trim() || selectedFile
-                ? "bg-accent-secondary hover:bg-accent-secondary/90 scale-100"
-                : "bg-muted text-muted-foreground scale-95 opacity-50"
+                ? "bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white scale-100 shadow-orange-500/25"
+                : "bg-muted text-muted-foreground scale-95 opacity-50 cursor-not-allowed"
             )}
           >
-            <Send
-              size={18}
-              className={cn(
-                "transition-transform",
-                (input.trim() || selectedFile) && "translate-x-0.5 -translate-y-0.5"
-              )}
-            />
+            {isAiThinking ? (
+              <Loader2 size={18} className="animate-spin text-white" />
+            ) : (
+              <Send
+                size={18}
+                className={cn(
+                  "transition-transform text-white",
+                  (input.trim() || selectedFile) && "translate-x-0.5 -translate-y-0.5"
+                )}
+              />
+            )}
           </Button>
         </div>
       </footer>

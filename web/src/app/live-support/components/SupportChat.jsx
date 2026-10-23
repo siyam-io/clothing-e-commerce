@@ -197,16 +197,40 @@ export default function SupportChat() {
   const [chatMode, setChatMode] = useState("ai");
 
   // ---------------------------------------------------------------------------
-  // AI Assistant State
+  // AI Assistant State (Persisted in localStorage for guest and logged-in users)
   // ---------------------------------------------------------------------------
-  const [aiMessages, setAiMessages] = useState([
-    {
-      id: "welcome-1",
-      role: "assistant",
-      text: "👋 Welcome to Vanguard! I am your AI Shopping Assistant running our custom local multimodal vision model.\n\nUpload a picture of any outfit or ask me about style, sizing, and pricing to find and order products instantly!",
-      timestamp: new Date().toISOString(),
-    },
-  ]);
+  const [aiMessages, setAiMessages] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("vanguard_guest_chat");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((m) => ({
+              id: m._id || m.id || `msg_${Math.random()}`,
+              role: m.role || (m.isAi ? "assistant" : "user"),
+              text: m.text,
+              image: m.image,
+              matchedProducts: m.matchedProducts,
+              actionResult: m.actionResult,
+              actionPayload: m.actionPayload,
+              timestamp: m.createdAt || m.timestamp || new Date().toISOString(),
+            }));
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to load guest chat in drawer:", e);
+      }
+    }
+    return [
+      {
+        id: "welcome-1",
+        role: "assistant",
+        text: "👋 Welcome to Vanguard! I am your AI Shopping Assistant running our custom local multimodal vision model.\n\nUpload a picture of any outfit or ask me about style, sizing, and pricing to find and order products instantly—no login required!",
+        timestamp: new Date().toISOString(),
+      },
+    ];
+  });
   const [aiInput, setAiInput] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -264,7 +288,11 @@ export default function SupportChat() {
       timestamp: new Date().toISOString(),
     };
 
-    setAiMessages((prev) => [...prev, userMsg]);
+    setAiMessages((prev) => {
+      const next = [...prev, userMsg];
+      try { localStorage.setItem("vanguard_guest_chat", JSON.stringify(next.slice(-30))); } catch (e) {}
+      return next;
+    });
     setAiInput("");
     const fileToUpload = selectedFile;
     setSelectedFile(null);
@@ -311,7 +339,11 @@ export default function SupportChat() {
           timestamp: new Date().toISOString(),
         };
 
-        setAiMessages((prev) => [...prev, assistantMsg]);
+        setAiMessages((prev) => {
+          const next = [...prev, assistantMsg];
+          try { localStorage.setItem("vanguard_guest_chat", JSON.stringify(next.slice(-30))); } catch (e) {}
+          return next;
+        });
       } else {
         throw new Error(res.data?.message || "Failed to receive AI response");
       }
@@ -678,13 +710,13 @@ export default function SupportChat() {
                     onClick={() => handleSendAiMessage()}
                     disabled={(!aiInput.trim() && !selectedFile) || isAiLoading}
                     className={cn(
-                      "h-10 w-10 rounded-xl flex items-center justify-center transition-all duration-200 shrink-0",
+                      "h-10 w-10 rounded-xl flex items-center justify-center transition-all duration-200 shrink-0 cursor-pointer",
                       aiInput.trim() || selectedFile
-                        ? "bg-accent-secondary text-primary shadow-md hover:scale-105 active:scale-95"
+                        ? "bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-md hover:scale-105 active:scale-95 shadow-orange-500/20"
                         : "bg-muted/40 text-muted-foreground/40 cursor-not-allowed"
                     )}
                   >
-                    {isAiLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                    {isAiLoading ? <Loader2 size={16} className="animate-spin text-white" /> : <Send size={16} className="text-white" />}
                   </button>
                 </>
               ) : (
