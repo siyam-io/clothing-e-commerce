@@ -39,6 +39,12 @@ import { toast } from "sonner";
 // Interactive Product Preview Card for Matched Products
 // -----------------------------------------------------------------------------
 function ProductMatchCard({ product, onAddToCart }) {
+  const images = (Array.isArray(product.images) && product.images.length > 0)
+    ? product.images
+    : (product.image ? [product.image] : []);
+  const [activeImgIdx, setActiveImgIdx] = useState(0);
+  const activeImage = images[activeImgIdx] || images[0] || "";
+
   const [selectedSizeId, setSelectedSizeId] = useState(() => {
     if (!product.sizes || product.sizes.length === 0) return null;
     const inStock = product.sizes.find((s) => s.stock > 0);
@@ -49,7 +55,6 @@ function ProductMatchCard({ product, onAddToCart }) {
   const price = product.price || 0;
   const discount = product.discount || 0;
   const finalPrice = discount > 0 ? price - (price * discount) / 100 : price;
-  const primaryImage = product.images?.[0] || "";
 
   const handleAdd = () => {
     if (!selectedSizeId) {
@@ -62,19 +67,55 @@ function ProductMatchCard({ product, onAddToCart }) {
   };
 
   return (
-    <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md transition-all hover:border-accent-secondary/40 shadow-lg text-left">
-      <div className="flex gap-3 p-3">
-        {/* Product Image */}
-        <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-black/40 border border-white/5">
-          <img
-            src={getImageUrl(primaryImage, 200)}
-            alt={product.name}
-            className="h-full w-full object-cover"
-          />
-          {discount > 0 && (
-            <span className="absolute top-1 left-1 rounded-md bg-rose-500/90 px-1.5 py-0.5 text-[8px] font-black text-white shadow">
-              -{discount}%
-            </span>
+    <div className="mt-3 overflow-hidden rounded-2xl border border-accent-secondary/30 bg-black/60 backdrop-blur-md transition-all hover:border-accent-secondary/60 shadow-2xl text-left">
+      <div className="flex gap-3.5 p-3.5">
+        {/* Product Image with Multi-Angle Previews */}
+        <div className="flex flex-col gap-1.5 flex-shrink-0">
+          <div
+            onClick={() => activeImage && window.open(getImageUrl(activeImage, 1200), "_blank")}
+            className="relative h-24 w-24 sm:h-28 sm:w-28 overflow-hidden rounded-2xl bg-black/60 border border-white/10 shadow-inner cursor-pointer group"
+            title="Click to view full image"
+          >
+            <img
+              src={getImageUrl(activeImage, 400)}
+              alt={product.name}
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+            />
+            {discount > 0 && (
+              <span className="absolute top-1.5 left-1.5 rounded-md bg-rose-500/90 px-1.5 py-0.5 text-[8px] font-black text-white shadow">
+                -{discount}%
+              </span>
+            )}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-bold">
+              🔍 View Full
+            </div>
+          </div>
+
+          {/* Mini Image Thumbnails if multiple exist */}
+          {images.length > 1 && (
+            <div className="flex gap-1 justify-center max-w-[112px] overflow-x-auto no-scrollbar">
+              {images.slice(0, 4).map((img, idx) => (
+                <button
+                  key={idx}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveImgIdx(idx);
+                  }}
+                  className={cn(
+                    "h-5 w-5 rounded-md overflow-hidden border transition-all",
+                    activeImgIdx === idx
+                      ? "border-accent-secondary ring-1 ring-accent-secondary scale-105"
+                      : "border-white/20 opacity-60 hover:opacity-100"
+                  )}
+                >
+                  <img
+                    src={getImageUrl(img, 80)}
+                    alt={`Angle ${idx + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
           )}
         </div>
 
@@ -86,20 +127,20 @@ function ProductMatchCard({ product, onAddToCart }) {
                 {product.sku || "IN-STOCK"}
               </span>
               <span className="text-[9px] font-bold text-emerald-400 flex items-center gap-0.5">
-                <ShieldCheck size={10} /> Verified
+                <ShieldCheck size={10} /> Official Product
               </span>
             </div>
-            <h4 className="mt-1 truncate text-[12px] font-bold text-foreground">
+            <h4 className="mt-1.5 line-clamp-2 text-[13px] font-extrabold text-foreground leading-snug">
               {product.name}
             </h4>
           </div>
 
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-[13px] font-black text-foreground">
+          <div className="flex items-baseline gap-2 mt-2">
+            <span className="text-[15px] font-black text-accent-secondary">
               ৳{Math.round(finalPrice)}
             </span>
             {discount > 0 && (
-              <span className="text-[10px] text-muted-foreground line-through opacity-60">
+              <span className="text-[11px] text-muted-foreground line-through opacity-60">
                 ৳{price}
               </span>
             )}
@@ -109,10 +150,10 @@ function ProductMatchCard({ product, onAddToCart }) {
 
       {/* Size Selector Pills */}
       {product.sizes && product.sizes.length > 0 && (
-        <div className="border-t border-white/5 bg-black/20 px-3 py-2">
+        <div className="border-t border-white/10 bg-black/30 px-3.5 py-2.5">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-              Choose Size:
+              Select Size:
             </span>
             <span className="text-[9px] text-muted-foreground/60 font-mono">
               {product.sizes.filter((s) => s.stock > 0).length} in stock
@@ -131,7 +172,7 @@ function ProductMatchCard({ product, onAddToCart }) {
                   disabled={!isAvailable}
                   onClick={() => setSelectedSizeId(sizeId)}
                   className={cn(
-                    "rounded-lg px-2 py-0.5 text-[9px] font-bold transition-all",
+                    "rounded-lg px-2.5 py-1 text-[10px] font-bold transition-all",
                     !isAvailable && "opacity-30 line-through cursor-not-allowed bg-transparent",
                     isSelected
                       ? "bg-accent-secondary text-primary shadow-sm"
@@ -147,18 +188,18 @@ function ProductMatchCard({ product, onAddToCart }) {
       )}
 
       {/* Action Footer */}
-      <div className="flex items-center justify-between border-t border-white/5 bg-white/5 p-2 px-3">
+      <div className="flex items-center justify-between border-t border-white/10 bg-white/5 p-2.5 px-3.5">
         <Link
           href={`/product/${product.slug || product._id}`}
-          className="text-[9px] font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+          className="text-[10px] font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
         >
-          Details <ChevronRight size={10} />
+          View Details <ChevronRight size={11} />
         </Link>
 
         <button
           onClick={handleAdd}
           className={cn(
-            "flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all duration-300 shadow-md",
+            "flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all duration-300 shadow-md",
             isAdded
               ? "bg-emerald-500 text-white"
               : "bg-accent-secondary text-primary hover:bg-accent-secondary/90 active:scale-95"
@@ -166,11 +207,11 @@ function ProductMatchCard({ product, onAddToCart }) {
         >
           {isAdded ? (
             <>
-              <CheckCircle2 size={12} /> Added
+              <CheckCircle2 size={13} /> Added!
             </>
           ) : (
             <>
-              <ShoppingBag size={12} /> Add to Cart
+              <ShoppingBag size={13} /> Add to Cart
             </>
           )}
         </button>
@@ -246,15 +287,15 @@ const ChatMessage = ({ message, isMe, onAddToCart }) => {
               <p className="text-[14px] md:text-[15px] leading-[1.6] whitespace-pre-wrap break-words font-[450]">
                 {message.text}
               </p>
+            </div>
+          )}
 
-              {/* Matched Product Cards */}
-              {message.matchedProducts && message.matchedProducts.length > 0 && (
-                <div className="mt-2 space-y-2">
-                  {message.matchedProducts.map((p) => (
-                    <ProductMatchCard key={p._id || p.id} product={p} onAddToCart={onAddToCart} />
-                  ))}
-                </div>
-              )}
+          {/* Matched Product Cards */}
+          {message.matchedProducts && message.matchedProducts.length > 0 && (
+            <div className="px-3 pb-3 space-y-2">
+              {message.matchedProducts.map((p) => (
+                <ProductMatchCard key={p._id || p.id} product={p} onAddToCart={onAddToCart} />
+              ))}
             </div>
           )}
         </div>

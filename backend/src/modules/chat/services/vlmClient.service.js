@@ -3,9 +3,28 @@ import path from 'path';
 import axios from 'axios';
 import FormData from 'form-data';
 import Product from '../../product/product.model.js';
+import '../../size/size.model.js';
 
 const VLM_SERVICE_URL = process.env.VLM_SERVICE_URL || 'http://localhost:8000';
 const VLM_TIMEOUT_MS = parseInt(process.env.VLM_TIMEOUT_MS, 10) || 20000; // 20 seconds timeout
+
+let _cachedCatalog = null;
+const loadCatalog = async () => {
+  if (_cachedCatalog) return _cachedCatalog;
+  const possiblePaths = [
+    path.resolve(process.cwd(), 'products_data/products_detailed.json'),
+    path.resolve(process.cwd(), '../products_data/products_detailed.json'),
+    path.resolve(process.cwd(), '../../products_data/products_detailed.json'),
+  ];
+  for (const p of possiblePaths) {
+    try {
+      const content = await fs.readFile(p, 'utf-8');
+      _cachedCatalog = JSON.parse(content);
+      return _cachedCatalog;
+    } catch (_) {}
+  }
+  return [];
+};
 
 export class VlmClientService {
   /**
@@ -62,7 +81,11 @@ export class VlmClientService {
       });
 
       if (response.data && response.data.success) {
-        const matchedProducts = await this.findRelevantProducts(message, response.data.action_payload);
+        const matchedProducts = await this.findRelevantProducts(
+          message,
+          response.data.action_payload,
+          response.data.reply
+        );
         return {
           reply: response.data.reply,
           action_payload: response.data.action_payload || null,
@@ -79,35 +102,139 @@ export class VlmClientService {
     }
   }
 
-  static async findRelevantProducts(message, actionPayload) {
+  static async findRelevantProducts(message = '', actionPayload = null, reply = '') {
     try {
-      let queryKeywords = [];
-      if (actionPayload?.product_name) queryKeywords.push(actionPayload.product_name);
-      if (actionPayload?.sku) queryKeywords.push(actionPayload.sku);
+      const queryNames = [];
+      const querySkus = [];
 
-      if (queryKeywords.length === 0 && message) {
-        const words = message.toLowerCase().match(/\b(shirt|polo|t-shirt|pant|jeans|chinos|formal|panjabi|hoodie|jacket|dress|trouser|kurti)\b/g);
-        if (words && words.length > 0) {
-          queryKeywords.push(...words);
+      if (actionPayload?.product_name) queryNames.push(actionPayload.product_name);
+      if (actionPayload?.sku) querySkus.push(actionPayload.sku);
+
+      // Extract bold product titles and SKUs from AI model reply (e.g. **Baby Hooded Towel 10**)
+      if (reply) {
+        const boldMatches = Array.from(reply.matchAll(/\*\*([^*]+)\*\*/g))
+          .map((m) => m[1].trim())
+          .filter(
+            (b) =>
+              b.length > 2 &&
+              !b.endsWith(':') &&
+              !b.startsWith('৳') &&
+              !['pricing', 'availability', 'category', 'target', 'regular', 'units', 'details', 'status'].some(
+                (s) => b.toLowerCase().includes(s)
+              )
+          );
+
+        for (const bold of boldMatches) {
+          queryNames.push(bold);
+          // If title has a trailing number (e.g. "Baby Hooded Towel 10"), also add base name "Baby Hooded Towel"
+          const cleaned = bold.replace(/\s+\d+$/, '').trim();
+          if (cleaned && cleaned !== bold) {
+            queryNames.push(cleaned);
+          }
+        }
+
+        const skuMatches = reply.match(/\bSKU[-_ ]?[A-Z0-9]+\b/gi);
+        if (skuMatches) {
+          for (const s of skuMatches) {
+            querySkus.push(s.trim());
+          }
         }
       }
 
-      if (queryKeywords.length === 0) return [];
+      // Extract keywords from user message AND AI reply
+      const combined = `${message || ''} ${reply || ''}`.toLowerCase();
+      const words = combined.match(
+        /\b(shirt|polo|t-shirt|pant|jeans|chinos|formal|panjabi|hoodie|jacket|dress|trouser|kurti|towel|baby|bodysuit|sweater|cardigan|coat|sandals|sneakers|backpack|cap)\b/g
+      );
+      if (words) {
+        queryNames.push(...words);
+      }
 
-      const regexQuery = queryKeywords.map(k => new RegExp(k, 'i'));
-      return await Product.find({
-        isActive: true,
-        $or: [
-          { name: { $in: regexQuery } },
-          { tags: { $in: regexQuery } },
-          { sku: { $in: regexQuery } }
-        ]
-      })
-        .limit(3)
-        .select('name price discount sku images sizes slug')
-        .populate('sizes.size', 'name');
+      const uniqueNames = Array.from(new Set(queryNames)).filter(Boolean);
+      const uniqueSkus = Array.from(new Set(querySkus)).filter(Boolean);
+
+      if (uniqueNames.length === 0 && uniqueSkus.length === 0) return [];
+
+      const nameRegexes = uniqueNames.map((n) => new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
+      const skuRegexes = uniqueSkus.map((s) => new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
+
+      // 1. Try to match in MongoDB Product collection (with name prioritized first)
+      let mongoMatches = [];
+      try {
+        if (nameRegexes.length > 0) {
+          mongoMatches = await Product.find({
+            isActive: true,
+            $or: [{ name: { $in: nameRegexes } }, { tags: { $in: nameRegexes } }],
+          })
+            .limit(3)
+            .select('name price discount sku images sizes slug')
+            .populate({ path: 'sizes.size', select: 'name' })
+            .lean();
+        }
+
+        if ((!mongoMatches || mongoMatches.length === 0) && skuRegexes.length > 0) {
+          mongoMatches = await Product.find({
+            isActive: true,
+            sku: { $in: skuRegexes },
+          })
+            .limit(3)
+            .select('name price discount sku images sizes slug')
+            .populate({ path: 'sizes.size', select: 'name' })
+            .lean();
+        }
+      } catch (dbErr) {
+        console.warn('⚠️ MongoDB query failed in findRelevantProducts, falling back to catalog:', dbErr.message);
+      }
+
+      if (mongoMatches && mongoMatches.length > 0) {
+        return mongoMatches;
+      }
+
+      // 2. Fallback to full catalog (products_detailed.json) which has all catalog images
+      try {
+        const catalog = await loadCatalog();
+        if (catalog && catalog.length > 0) {
+          const catalogMatches = [];
+          for (const item of catalog) {
+            const itemName = (item.name || '').toLowerCase();
+            const itemSku = (item.sku || '').toLowerCase();
+
+            // Match by name or SKU
+            const nameMatch = uniqueNames.some((q) => {
+              const lowQ = q.toLowerCase();
+              return itemName.includes(lowQ) || lowQ.includes(itemName);
+            });
+            const skuMatch = uniqueSkus.some((s) => s.toLowerCase() === itemSku);
+
+            if (nameMatch || skuMatch) {
+              if (!catalogMatches.some((m) => m.name === item.name)) {
+                catalogMatches.push({
+                  _id: item._id || item.sku || `prod_${catalogMatches.length + 1}`,
+                  name: item.name,
+                  sku: item.sku || 'IN-STOCK',
+                  price: item.price || 0,
+                  discount: item.discount || 0,
+                  images: item.images || [],
+                  slug: item.slug || '',
+                  sizes: (item.sizes || []).map((s) => ({
+                    size: { _id: s.size || s.name || s, name: s.size || s.name || s },
+                    stock: s.stock || 20,
+                  })),
+                });
+              }
+            }
+            if (catalogMatches.length >= 3) break;
+          }
+
+          if (catalogMatches.length > 0) return catalogMatches;
+        }
+      } catch (catErr) {
+        console.warn('⚠️ Catalog file fallback failed:', catErr.message);
+      }
+
+      return [];
     } catch (err) {
-      console.warn('Product search failed:', err.message);
+      console.warn('⚠️ Product matching failed:', err.message);
       return [];
     }
   }

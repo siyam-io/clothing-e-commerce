@@ -46,7 +46,11 @@ function ProductMatchCard({ product, onAddToCart }) {
   const price = product.price || 0;
   const discount = product.discount || 0;
   const finalPrice = discount > 0 ? price - (price * discount) / 100 : price;
-  const primaryImage = product.images?.[0] || "";
+  const images = (Array.isArray(product.images) && product.images.length > 0)
+    ? product.images
+    : (product.image ? [product.image] : []);
+  const [activeImgIdx, setActiveImgIdx] = useState(0);
+  const activeImage = images[activeImgIdx] || images[0] || "";
 
   const handleAdd = () => {
     if (!selectedSizeId) {
@@ -59,14 +63,18 @@ function ProductMatchCard({ product, onAddToCart }) {
   };
 
   return (
-    <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md transition-all hover:border-accent-secondary/40 shadow-lg">
+    <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md transition-all hover:border-accent-secondary/40 shadow-lg text-left">
       <div className="flex gap-3 p-3">
         {/* Product Image */}
-        <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-black/20 border border-white/5">
+        <div 
+          onClick={() => activeImage && window.open(getImageUrl(activeImage, 1000), "_blank")}
+          className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-black/20 border border-white/5 cursor-pointer group"
+          title="Click to view full image"
+        >
           <img
-            src={getImageUrl(primaryImage, 200)}
+            src={getImageUrl(activeImage, 300)}
             alt={product.name}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover transition-transform group-hover:scale-105"
           />
           {discount > 0 && (
             <span className="absolute top-1 left-1 rounded-md bg-rose-500/90 px-1.5 py-0.5 text-[8px] font-black text-white shadow">
@@ -571,6 +579,17 @@ export default function SupportChat() {
                                   />
                                 )}
                                 {msg.text && <p>{msg.text}</p>}
+                                {msg.matchedProducts && msg.matchedProducts.length > 0 && (
+                                  <div className="space-y-2 pt-2">
+                                    {msg.matchedProducts.slice(0, 2).map((prod) => (
+                                      <ProductMatchCard
+                                        key={prod._id || prod.id}
+                                        product={prod}
+                                        onAddToCart={handleAddToCartFromCard}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
