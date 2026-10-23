@@ -1,10 +1,15 @@
 import express from "express";
 import { getChatHistory, getAllConversations, getConversationById, getConversationMessages, getMyConversation, searchUsers, startConversation, markMessagesAsRead, getUnreadCount } from "./chat.controller.js";
-import { requireAuth, admin } from "../../middleware/auth.js";
+import { requireAuth, admin, extractUser } from "../../middleware/auth.js";
 import upload from "../../middleware/upload.js";
 import { uploadImage } from "../../services/imageUploadService.js";
+import { handleAiChat } from "./controllers/aiChat.controller.js";
 
 const router = express.Router();
+
+// 🤖 AI Shopping Assistant & Multimodal VLM Chat (POST /api/chat)
+router.post("/", extractUser, upload.single("image"), handleAiChat);
+router.post("/message", extractUser, upload.single("image"), handleAiChat);
 
 // 🛒 কাস্টমার এবং অ্যাডমিন দুজনেই চ্যাট হিস্টোরি দেখতে পারবে
 router.get("/history/:recipientId", requireAuth, getChatHistory);
