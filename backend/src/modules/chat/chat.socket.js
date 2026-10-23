@@ -1,10 +1,12 @@
 import { Conversation, Message } from "./chat.model.js";
+import { VlmClientService } from "./services/vlmClient.service.js";
+import { ConversationalOrderService } from "./services/conversationalOrder.service.js";
 
 // 📡 Online users tracker: Map<userId, Set<socketId>>
 const onlineUsers = new Map();
 
 /**
- * 🛰️ Vanguard Chat Engine: High-Performance Socket Handlers
+ * 🛰️ Vanguard Chat Engine: High-Performance Socket Handlers with Local VLM AI Assistant
  * Scalable Architecture for 100k+ Users
  */
 export const initSocketEvents = (io) => {
@@ -55,7 +57,8 @@ export const initSocketEvents = (io) => {
           if (!conversation) {
             conversation = await Conversation.create({
               participants: [targetId],
-              type: "support"
+              type: "support",
+              mode: "ai"
             });
           }
         }
@@ -93,7 +96,13 @@ export const initSocketEvents = (io) => {
 
         // 4. Real-time Broadcasting
         if (isAdmin) {
-          // Admin -> Specific User
+          // Admin replies: human takes over conversation
+          await Conversation.findByIdAndUpdate(conversation._id, {
+            $set: {
+              isHandedOver: true,
+              mode: "agent"
+            }
+          });
           io.to(recipientId).emit("new_message", broadcastData);
         } else {
           // User -> All Admins
@@ -103,9 +112,117 @@ export const initSocketEvents = (io) => {
         // Echo back to sender
         socket.emit("new_message", broadcastData);
 
+        // 5. 🤖 Automated Local VLM Assistant Auto-Reply
+        // Triggers if sender is customer and conversation mode is "ai" (not handed over to human agent)
+        const isAiActive = !isAdmin && conversation.mode !== "agent" && !conversation.isHandedOver;
+        if (isAiActive) {
+          // Emit typing indicator to customer
+          socket.emit("ai_typing", { conversationId: conversation._id, isTyping: true });
+
+          // Run async to avoid blocking socket thread
+          (async () => {
+            try {
+              // Fetch recent conversation history for conversational context
+              const recentHistory = await Message.find({ conversationId: conversation._id })
+                .sort({ createdAt: -1 })
+                .limit(4)
+                .lean();
+
+              const formattedHistory = recentHistory.reverse().map((m) => ({
+                role: m.isAi ? "assistant" : "user",
+                content: m.text || (m.image ? "User sent an image" : ""),
+              }));
+
+              const vlmResponse = await VlmClientService.sendChatMessage({
+                message: text,
+                imageUrl: image,
+                history: formattedHistory,
+              });
+
+              if (vlmResponse && vlmResponse.reply) {
+                // If VLM detected an automated order/cart action
+                if (vlmResponse.action_payload) {
+                  try {
+                    await ConversationalOrderService.handleAction(
+                      vlmResponse.action_payload,
+                      senderId,
+                      socket.user
+                    );
+                  } catch (actErr) {
+                    console.warn("⚠️ Socket AI Action Error:", actErr.message);
+                  }
+                }
+
+                // Save AI Assistant reply in database
+                const aiMessage = await Message.create({
+                  conversationId: conversation._id,
+                  sender: null,
+                  senderName: "AI Assistant",
+                  isAi: true,
+                  text: vlmResponse.reply,
+                  actionPayload: vlmResponse.action_payload || null,
+                  matchedProducts: vlmResponse.matchedProducts || null,
+                  isRead: false,
+                });
+
+                await Conversation.findByIdAndUpdate(conversation._id, {
+                  $set: {
+                    lastMessage: {
+                      text: vlmResponse.reply,
+                      senderName: "AI Assistant",
+                      createdAt: new Date(),
+                    },
+                  },
+                });
+
+                const aiBroadcastData = {
+                  message: {
+                    _id: aiMessage._id,
+                    conversationId: conversation._id,
+                    sender: null,
+                    senderName: "AI Assistant",
+                    isAi: true,
+                    text: vlmResponse.reply,
+                    actionPayload: vlmResponse.action_payload || null,
+                    matchedProducts: vlmResponse.matchedProducts || null,
+                    createdAt: aiMessage.createdAt,
+                  },
+                  conversationId: conversation._id,
+                };
+
+                socket.emit("ai_typing", { conversationId: conversation._id, isTyping: false });
+                socket.emit("new_message", aiBroadcastData);
+                io.to("admin_support_room").emit("new_message", aiBroadcastData);
+              }
+            } catch (aiErr) {
+              console.error("⚠️ Socket AI Auto-Reply Error:", aiErr);
+              socket.emit("ai_typing", { conversationId: conversation._id, isTyping: false });
+            }
+          })();
+        }
+
       } catch (err) {
         console.error("🚨 Transmission Failure:", err.message);
         socket.emit("error_report", { message: "Message delivery failed." });
+      }
+    });
+
+    /**
+     * @event set_chat_mode
+     * @payload { mode: "ai" | "agent", conversationId }
+     */
+    socket.on("set_chat_mode", async ({ mode, conversationId }) => {
+      try {
+        if (!["ai", "agent"].includes(mode)) return;
+        const conv = await Conversation.findById(conversationId);
+        if (conv) {
+          conv.mode = mode;
+          conv.isHandedOver = mode === "agent";
+          await conv.save();
+          socket.emit("chat_mode_changed", { conversationId, mode });
+        }
+      } catch (e) {
+        console.error("Failed to switch chat mode:", e.message);
       }
     });
 

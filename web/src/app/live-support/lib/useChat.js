@@ -14,6 +14,8 @@ export const useChat = (isOpen) => {
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+  const [isAiTyping, setIsAiTyping] = useState(false);
+
   // 🚀 Fetch initial or more messages
   const fetchMessages = useCallback(async (pageNum = 1) => {
     if (!token) return;
@@ -72,6 +74,7 @@ export const useChat = (isOpen) => {
     const handleNewMessage = (data) => {
       if (isOpen) {
         setMessages((prev) => [...prev, data.message]);
+        setIsAiTyping(false);
         fetchUnreadCount();
         const { resetUnread } = useChatStore.getState();
         resetUnread();
@@ -98,12 +101,17 @@ export const useChat = (isOpen) => {
       }
     };
 
+    const handleAiTyping = (data) => {
+      setIsAiTyping(!!data?.isTyping);
+    };
+
     socket.on("new_message", handleNewMessage);
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
     socket.on("messages_seen", handleMessagesSeen);
     socket.on("message_edited", handleMessageEdited);
     socket.on("message_deleted", handleMessageDeleted);
+    socket.on("ai_typing", handleAiTyping);
     
     setIsConnected(socket.connected);
 
@@ -114,8 +122,9 @@ export const useChat = (isOpen) => {
       socket.off("messages_seen", handleMessagesSeen);
       socket.off("message_edited", handleMessageEdited);
       socket.off("message_deleted", handleMessageDeleted);
+      socket.off("ai_typing", handleAiTyping);
     };
-  }, [socket, isOpen, fetchUnreadCount]);
+  }, [socket, isOpen, fetchUnreadCount, conversationId]);
 
   const sendMessage = (payload) => {
     const data = typeof payload === "string" ? { text: payload } : payload;
@@ -131,5 +140,5 @@ export const useChat = (isOpen) => {
     }
   };
 
-  return { messages, isConnected, sendMessage, conversationId, loadMore, hasMore, isLoadingMore };
+  return { messages, isConnected, isAiTyping, sendMessage, conversationId, loadMore, hasMore, isLoadingMore };
 };
