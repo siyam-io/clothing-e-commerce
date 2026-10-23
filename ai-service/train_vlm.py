@@ -237,7 +237,7 @@ def train(args):
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate,
         lr_scheduler_type="cosine",
-        warmup_ratio=0.03,
+        warmup_steps=20,
         weight_decay=0.01,
         logging_steps=10,
         eval_strategy="steps",
@@ -249,7 +249,8 @@ def train(args):
         bf16=(compute_dtype == torch.bfloat16),
         optim="paged_adamw_8bit" if device == "cuda" else "adamw_torch",
         report_to="none",
-        dataloader_pin_memory=False
+        dataloader_pin_memory=False,
+        remove_unused_columns=False
     )
 
     trainer = Trainer(
