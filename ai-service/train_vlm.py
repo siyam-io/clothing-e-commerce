@@ -175,36 +175,41 @@ def train(args):
     compute_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
     print(f"💻 Compute Device: {device} | Precision: {compute_dtype}")
 
-    # 2. 4-bit Quantization Configuration (QLoRA)
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=compute_dtype,
-        bnb_4bit_use_double_quant=True
-    )
+    # 2. Base Model Loading (BF16 or 4-bit NF4)
+    print(f"⏳ Loading base model: {args.model_id} (use_4bit={args.use_4bit})...")
+    if args.use_4bit and device == "cuda":
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=compute_dtype,
+            bnb_4bit_use_double_quant=True
+        )
+        model = Qwen2VLForConditionalGeneration.from_pretrained(
+            args.model_id,
+            quantization_config=bnb_config,
+            device_map="auto",
+            torch_dtype=compute_dtype
+        )
+        model = prepare_model_for_kbit_training(model)
+    else:
+        model = Qwen2VLForConditionalGeneration.from_pretrained(
+            args.model_id,
+            device_map="auto" if device == "cuda" else None,
+            torch_dtype=compute_dtype
+        )
 
-    # 3. Load Base Model
-    print(f"⏳ Loading quantized base model: {args.model_id}...")
-    model = Qwen2VLForConditionalGeneration.from_pretrained(
-        args.model_id,
-        quantization_config=bnb_config if device == "cuda" else None,
-        device_map="auto" if device == "cuda" else None,
-        torch_dtype=compute_dtype
-    )
+    # Enable gradient checkpointing to drastically reduce VRAM usage
+    if hasattr(model, "gradient_checkpointing_enable"):
+        model.gradient_checkpointing_enable()
 
-    # 4. Load Processor & Visual Config
+    # 3. Load Processor & Visual Config
     processor = AutoProcessor.from_pretrained(
         args.model_id,
         min_pixels=256 * 28 * 28,
         max_pixels=512 * 28 * 28
     )
 
-    # 5. Prepare Model for k-bit Training
-    if device == "cuda":
-        model = prepare_model_for_kbit_training(model)
-        model.gradient_checkpointing_enable()
-
-    # 6. LoRA Adapter Configuration
+    # 4. LoRA Adapter Configuration
     lora_config = LoraConfig(
         r=args.lora_r,
         lora_alpha=args.lora_alpha,
@@ -272,8 +277,8 @@ def train(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="QLoRA VLM Fine-Tuning for E-Commerce Assistant")
     parser.add_argument("--model_id", type=str, default="Qwen/Qwen2-VL-2B-Instruct", help="Hugging Face Model ID or local path")
-    parser.add_argument("--train_file", type=str, default="dataset/vlm_train.json", help="Path to training dataset JSON")
-    parser.add_argument("--val_file", type=str, default="dataset/vlm_val.json", help="Path to validation dataset JSON")
+    parser.add_argument("--train_file", type=str, default="dataset/final_bitext_vlm_train.json", help="Path to training dataset JSON")
+    parser.add_argument("--val_file", type=str, default="dataset/final_bitext_vlm_val.json", help="Path to validation dataset JSON")
     parser.add_argument("--output_dir", type=str, default="./trained_vlm_adapter", help="Directory to save adapter weights")
     parser.add_argument("--epochs", type=int, default=3, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=1, help="Per-device batch size")
@@ -282,6 +287,7 @@ if __name__ == "__main__":
     parser.add_argument("--lora_r", type=int, default=16, help="LoRA rank dimension")
     parser.add_argument("--lora_alpha", type=int, default=32, help="LoRA alpha scaling parameter")
     parser.add_argument("--lora_dropout", type=float, default=0.05, help="LoRA dropout rate")
+    parser.add_argument("--use_4bit", action="store_true", help="Enable 4-bit NF4 quantization (default: BF16 LoRA)")
 
     args = parser.parse_args()
     train(args)
