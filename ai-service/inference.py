@@ -99,8 +99,9 @@ def load_model_pipeline():
     model.eval()
 
     # Load Processor
+    processor_source = str(adapter_dir) if (adapter_dir / "processor_config.json").exists() else BASE_MODEL_ID
     processor = AutoProcessor.from_pretrained(
-        BASE_MODEL_ID,
+        processor_source,
         min_pixels=256 * 28 * 28,
         max_pixels=512 * 28 * 28
     )
