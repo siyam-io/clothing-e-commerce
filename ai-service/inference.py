@@ -263,6 +263,57 @@ async def vlm_chat_endpoint(
         raise HTTPException(status_code=500, detail=f"Inference failure: {str(e)}")
 
 
+@app.post("/api/vlm/embed")
+async def extract_image_embedding_endpoint(image: UploadFile = File(...)):
+    """
+    Extracts a normalized dense vector embedding from an uploaded product image.
+    Used by the backend to index products into MongoDB Atlas Vector Search ($vectorSearch).
+    """
+    global model, processor
+
+    if model is None or processor is None:
+        try:
+            load_model_pipeline()
+        except Exception as e:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Local VLM model is unavailable: {str(e)}"
+            )
+
+    try:
+        image_bytes = await image.read()
+        image_obj = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        image_obj.thumbnail((512, 512))
+
+        inputs = processor(images=[[image_obj]], return_tensors="pt")
+        if device == "cuda":
+            inputs = {k: v.to("cuda") for k, v in inputs.items()}
+
+        with torch.inference_mode():
+            # Extract visual tokens from Qwen2-VL visual tower
+            base = model.base_model if hasattr(model, "base_model") else model
+            visual_tower = getattr(base, "visual", None) or getattr(base.model, "visual", None)
+
+            if visual_tower is not None:
+                features = visual_tower(inputs["pixel_values"], grid_thw=inputs["image_grid_thw"])
+                pooled = features.mean(dim=0)
+            else:
+                # Fallback: flatten and average features
+                pooled = inputs["pixel_values"].mean(dim=[0, 2, 3])
+
+            normalized = torch.nn.functional.normalize(pooled, p=2, dim=-1)
+            embedding_list = normalized.cpu().tolist()
+
+        return {
+            "success": True,
+            "dimensions": len(embedding_list),
+            "embedding": embedding_list
+        }
+    except Exception as e:
+        print(f"❌ Error during vector embedding extraction: {e}")
+        raise HTTPException(status_code=500, detail=f"Embedding extraction failure: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("inference:app", host="0.0.0.0", port=8000, reload=False)

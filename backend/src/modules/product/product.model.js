@@ -131,6 +131,12 @@ const productSchema = new mongoose.Schema({
     metaTitle: { type: String, default: "" },
     metaDescription: { type: String, default: "" },
     keywords: { type: String, default: "" }
+  },
+  // 🧭 Vector Search Embedding (512/1024-dimensional normalized vector)
+  embedding: {
+    type: [Number],
+    default: undefined,
+    select: false, // Omit from default queries to keep payload lightweight
   }
 }, { timestamps: true });
 
