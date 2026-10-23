@@ -11,7 +11,7 @@ import subcategoryRoutes from "./modules/subcategory/subcategory.routes.js";
 import sizeRoutes from "./modules/size/size.routes.js";
 import publicProductRoutes from "./modules/product/routes/public.product.routes.js";
 import cartRoutes from "./modules/cart/cart.routes.js";
-import wishlistRoutes from "./modules/wishlist/wishlist.routes.js"; // ✅ fixed import
+import wishlistRoutes from "./modules/wishlist/wishlist.routes.js";
 import publicOrderRoutes from "./modules/order/routes/public.order.routes.js";
 import pathaoRoutes from "./modules/pathao/pathao.routes.js";
 import reviewRoutes from "./modules/review/review.routes.js";
@@ -55,19 +55,19 @@ const allowedOrigins = [
 
 export const isAllowedOrigin = (origin) => {
   if (!origin || origin === "null") return true;
-  
+
   const sanitized = origin.trim().replace(/\/$/, "");
-  
+
   // Standard list of allowed domains
   if (allowedOrigins.includes(sanitized)) return true;
-  
+
   // Allow localhost on any port
   if (/^http:\/\/localhost(:\d+)?$/.test(sanitized)) return true;
   if (/^http:\/\/127\.0\.0\.1(:\d+)?$/.test(sanitized)) return true;
-  
+
   // Allow local network IPs on any port (e.g. 192.168.x.x, 10.x.x.x, 172.16-31.x.x)
   if (/^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(sanitized)) return true;
-  
+
   return false;
 };
 
@@ -159,7 +159,7 @@ app.use("/api/track", trackingRoutes);
 // app.use("/api/banners", bannerRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/auth", authRoutes);
-app.use("/api/blogs",blogRoutes)
+app.use("/api/blogs", blogRoutes)
 app.use('/api', blogImageRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/home-layouts", homeLayoutRoutes);

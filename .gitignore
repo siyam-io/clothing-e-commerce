@@ -6,11 +6,21 @@
 !/web/
 !/documentation/
 !/mobile/
+!/ai-service/
 
 # Explicitly allow essential root configuration
 !/.gitignore
 !/README.md
 !/render.yaml
+
+# Downloaded data ignores
+/products_data/
+
+# Python / AI service ignores
+/ai-service/venv/
+/ai-service/.venv/
+/ai-service/__pycache__/
+/ai-service/weights/
 
 # Handle nested ignores (optional but good practice)
 # If you want to ignore specific things inside backend or web, 
