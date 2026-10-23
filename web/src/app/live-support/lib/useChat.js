@@ -13,6 +13,7 @@ export const useChat = (isOpen) => {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [chatMode, setChatModeState] = useState("ai");
 
   const [isAiTyping, setIsAiTyping] = useState(false);
 
@@ -28,6 +29,9 @@ export const useChat = (isOpen) => {
       const conversation = res.data;
       if (conversation) {
         setConversationId(conversation._id);
+        if (conversation.mode) {
+          setChatModeState(conversation.mode);
+        }
         const newMessages = conversation.messages || [];
         
         if (pageNum === 1) {
@@ -105,6 +109,12 @@ export const useChat = (isOpen) => {
       setIsAiTyping(!!data?.isTyping);
     };
 
+    const handleChatModeChanged = (data) => {
+      if (!data.conversationId || data.conversationId === conversationId) {
+        setChatModeState(data.mode);
+      }
+    };
+
     socket.on("new_message", handleNewMessage);
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
@@ -112,6 +122,7 @@ export const useChat = (isOpen) => {
     socket.on("message_edited", handleMessageEdited);
     socket.on("message_deleted", handleMessageDeleted);
     socket.on("ai_typing", handleAiTyping);
+    socket.on("chat_mode_changed", handleChatModeChanged);
     
     setIsConnected(socket.connected);
 
@@ -123,8 +134,16 @@ export const useChat = (isOpen) => {
       socket.off("message_edited", handleMessageEdited);
       socket.off("message_deleted", handleMessageDeleted);
       socket.off("ai_typing", handleAiTyping);
+      socket.off("chat_mode_changed", handleChatModeChanged);
     };
   }, [socket, isOpen, fetchUnreadCount, conversationId]);
+
+  const switchChatMode = (newMode) => {
+    setChatModeState(newMode);
+    if (socket && socket.connected && conversationId) {
+      socket.emit("set_chat_mode", { mode: newMode, conversationId });
+    }
+  };
 
   const sendMessage = (payload) => {
     const data = typeof payload === "string" ? { text: payload } : payload;
@@ -140,5 +159,16 @@ export const useChat = (isOpen) => {
     }
   };
 
-  return { messages, isConnected, isAiTyping, sendMessage, conversationId, loadMore, hasMore, isLoadingMore };
+  return { 
+    messages, 
+    isConnected, 
+    isAiTyping, 
+    sendMessage, 
+    conversationId, 
+    chatMode, 
+    setChatMode: switchChatMode, 
+    loadMore, 
+    hasMore, 
+    isLoadingMore 
+  };
 };

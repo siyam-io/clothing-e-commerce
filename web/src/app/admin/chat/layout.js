@@ -217,9 +217,20 @@ function ChatContent({ children }) {
 
                       <div className="flex-1 min-w-0 h-full flex flex-col justify-center border-b border-border/50 dark:border-white/5">
                         <div className="flex justify-between items-baseline mb-0.5">
-                          <h3 className={cn("text-[15px] truncate", conv.unreadCount > 0 ? "font-bold text-foreground" : "font-medium text-foreground/90")}>
-                            {customer?.name || "Anonymous_User"}
-                          </h3>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <h3 className={cn("text-[15px] truncate", conv.unreadCount > 0 ? "font-bold text-foreground" : "font-medium text-foreground/90")}>
+                              {customer?.name || "Anonymous_User"}
+                            </h3>
+                            {conv.mode === "agent" ? (
+                              <span className="shrink-0 px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                                ⚡ Agent
+                              </span>
+                            ) : (
+                              <span className="shrink-0 px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-purple-500/15 text-purple-400 border border-purple-500/30">
+                                🤖 AI
+                              </span>
+                            )}
+                          </div>
                           <span className={cn("text-[11px] whitespace-nowrap ml-2", conv.unreadCount > 0 ? "text-[#00a884] font-bold" : "text-muted-foreground/60")}>
                             {isToday ? lastMsgTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : lastMsgTime.toLocaleDateString([], { month: "short", day: "numeric" })}
                           </span>

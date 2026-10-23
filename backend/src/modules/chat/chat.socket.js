@@ -97,12 +97,18 @@ export const initSocketEvents = (io) => {
         // 4. Real-time Broadcasting
         if (isAdmin) {
           // Admin replies: human takes over conversation
-          await Conversation.findByIdAndUpdate(conversation._id, {
-            $set: {
-              isHandedOver: true,
-              mode: "agent"
-            }
-          });
+          const wasAi = conversation.mode !== "agent";
+          conversation.isHandedOver = true;
+          conversation.mode = "agent";
+          await conversation.save();
+
+          if (wasAi) {
+            const modePayload = { conversationId: conversation._id.toString(), mode: "agent", isHandedOver: true };
+            io.to("admin_support_room").emit("chat_mode_changed", modePayload);
+            if (recipientId) io.to(recipientId).emit("chat_mode_changed", modePayload);
+            socket.emit("chat_mode_changed", modePayload);
+          }
+
           io.to(recipientId).emit("new_message", broadcastData);
         } else {
           // User -> All Admins
@@ -219,7 +225,26 @@ export const initSocketEvents = (io) => {
           conv.mode = mode;
           conv.isHandedOver = mode === "agent";
           await conv.save();
-          socket.emit("chat_mode_changed", { conversationId, mode });
+
+          const payload = {
+            conversationId: conv._id.toString(),
+            mode: conv.mode,
+            isHandedOver: conv.isHandedOver,
+          };
+
+          // 1. Notify the caller
+          socket.emit("chat_mode_changed", payload);
+          // 2. Notify all admins
+          io.to("admin_support_room").emit("chat_mode_changed", payload);
+          // 3. Notify all conversation participants (customers)
+          if (Array.isArray(conv.participants)) {
+            for (const p of conv.participants) {
+              const pid = (p?._id || p).toString();
+              io.to(pid).emit("chat_mode_changed", payload);
+            }
+          }
+          // 4. Notify room if joined
+          io.to(conv._id.toString()).emit("chat_mode_changed", payload);
         }
       } catch (e) {
         console.error("Failed to switch chat mode:", e.message);

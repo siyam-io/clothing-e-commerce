@@ -44,6 +44,10 @@ export function ChatProvider({ children }) {
       fetchConversations();
     });
 
+    socketRef.current.on("chat_mode_changed", (data) => {
+      setConversations(prev => prev.map(c => c._id === data.conversationId ? { ...c, mode: data.mode, isHandedOver: data.isHandedOver } : c));
+    });
+
     socketRef.current.on("online_users", (users) => {
       setOnlineUsers(users);
     });
@@ -176,16 +180,25 @@ export function ChatProvider({ children }) {
         }
       };
 
+      const modeHandler = (data) => {
+        if (data.conversationId === id) {
+          setActiveConversation(prev => prev ? { ...prev, mode: data.mode, isHandedOver: data.isHandedOver } : prev);
+        }
+        setConversations(prev => prev.map(c => c._id === data.conversationId ? { ...c, mode: data.mode, isHandedOver: data.isHandedOver } : c));
+      };
+
       socket.on("new_message", handler);
       socket.on("messages_seen", seenHandler);
       socket.on("message_edited", editHandler);
       socket.on("message_deleted", deleteHandler);
+      socket.on("chat_mode_changed", modeHandler);
       return () => {
         cancelled = true;
         socket.off("new_message", handler);
         socket.off("messages_seen", seenHandler);
         socket.off("message_edited", editHandler);
         socket.off("message_deleted", deleteHandler);
+        socket.off("chat_mode_changed", modeHandler);
       };
     }
 
@@ -258,6 +271,30 @@ export function ChatProvider({ children }) {
     }
   };
 
+  const setConversationMode = async (newMode) => {
+    if (!id) return;
+    const socket = socketRef.current;
+    if (socket) {
+      socket.emit("set_chat_mode", { mode: newMode, conversationId: id });
+    }
+
+    // Optimistic state update
+    setActiveConversation((prev) =>
+      prev ? { ...prev, mode: newMode, isHandedOver: newMode === "agent" } : prev
+    );
+    setConversations((prev) =>
+      prev.map((c) =>
+        c._id === id ? { ...c, mode: newMode, isHandedOver: newMode === "agent" } : c
+      )
+    );
+
+    try {
+      await api.patch(`/chat/conversations/${id}/mode`, { mode: newMode });
+    } catch (e) {
+      console.warn("Mode API fallback notice:", e.message);
+    }
+  };
+
   return (
     <ChatContext.Provider value={{ 
       conversations, 
@@ -267,6 +304,7 @@ export function ChatProvider({ children }) {
       startConversation,
       onlineUsers,
       activeConversation,
+      setConversationMode,
       messages,
       messagesLoading,
       setMessages,

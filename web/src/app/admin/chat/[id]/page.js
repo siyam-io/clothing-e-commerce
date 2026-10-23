@@ -121,6 +121,7 @@ export default function ChatDetailPage() {
   const { user } = useAuthStore();
   const { 
     activeConversation, 
+    setConversationMode,
     messages, 
     handleEditMessage, 
     handleDeleteMessage 
@@ -173,7 +174,33 @@ export default function ChatDetailPage() {
     >
        <div className="absolute inset-0 opacity-[0.06] dark:opacity-[0.03] pointer-events-none bg-[url('https://w0.peakpx.com/wallpaper/818/148/HD-wallpaper-whatsapp-background-whatsapp-texture.jpg')] bg-repeat" />
        
-       <div className="max-w-4xl mx-auto space-y-1 relative z-10">
+       <div className="max-w-4xl mx-auto space-y-2 relative z-10">
+          {/* Mode Banner */}
+          <div className="flex justify-center mb-2 sticky top-0 z-20">
+            {activeConversation.mode === "agent" ? (
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/15 backdrop-blur-md border border-amber-500/30 text-amber-500 text-[11px] font-bold shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                <span>⚡ You have taken over this chat. AI auto-responses are paused.</span>
+                <button
+                  onClick={() => setConversationMode("ai")}
+                  className="ml-1 underline font-black hover:text-amber-400 cursor-pointer"
+                >
+                  Return to AI
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-500/15 backdrop-blur-md border border-purple-500/30 text-purple-400 text-[11px] font-bold shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+                <span>🤖 AI Shopping Assistant is active and answering this customer.</span>
+                <button
+                  onClick={() => setConversationMode("agent")}
+                  className="ml-1 underline font-black hover:text-purple-300 cursor-pointer"
+                >
+                  Take Over
+                </button>
+              </div>
+            )}
+          </div>
           {messages.map((msg, idx) => {
             const myId = user?._id || user?.id;
             const senderId = typeof msg.sender === "string" ? msg.sender : msg.sender?._id || msg.sender?.id;

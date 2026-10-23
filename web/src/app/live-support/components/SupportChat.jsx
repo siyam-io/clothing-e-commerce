@@ -63,7 +63,7 @@ function ProductMatchCard({ product, onAddToCart }) {
   };
 
   return (
-    <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md transition-all hover:border-accent-secondary/40 shadow-lg text-left">
+    <div className="mt-3 overflow-hidden rounded-2xl border border-white/15 bg-slate-900/95 backdrop-blur-md transition-all hover:border-accent-secondary/50 shadow-2xl text-left">
       <div className="flex gap-3 p-3">
         {/* Product Image */}
         <div 
@@ -86,25 +86,25 @@ function ProductMatchCard({ product, onAddToCart }) {
         {/* Product Metadata */}
         <div className="flex flex-1 flex-col justify-between overflow-hidden">
           <div>
-            <div className="flex items-center gap-1.5">
-              <span className="rounded bg-white/10 px-1.5 py-0.5 text-[8px] font-mono text-muted-foreground uppercase">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="rounded bg-white/15 px-2 py-0.5 text-[8px] font-mono font-bold text-zinc-300 uppercase">
                 {product.sku || "IN-STOCK"}
               </span>
-              <span className="text-[9px] font-bold text-emerald-400 flex items-center gap-0.5">
+              <span className="text-[9px] font-extrabold text-emerald-400 flex items-center gap-0.5">
                 <ShieldCheck size={10} /> Verified
               </span>
             </div>
-            <h4 className="mt-1 truncate text-[12px] font-bold text-foreground">
+            <h4 className="mt-1 truncate text-[13px] font-black text-white">
               {product.name}
             </h4>
           </div>
 
           <div className="flex items-baseline gap-1.5">
-            <span className="text-[13px] font-black text-foreground">
+            <span className="text-[14px] font-black text-orange-400">
               ৳{Math.round(finalPrice)}
             </span>
             {discount > 0 && (
-              <span className="text-[10px] text-muted-foreground line-through opacity-60">
+              <span className="text-[10px] text-zinc-400 line-through">
                 ৳{price}
               </span>
             )}
@@ -114,12 +114,12 @@ function ProductMatchCard({ product, onAddToCart }) {
 
       {/* Size Selector Pills */}
       {product.sizes && product.sizes.length > 0 && (
-        <div className="border-t border-white/5 bg-black/20 px-3 py-2">
+        <div className="border-t border-white/10 bg-black/40 px-3 py-2">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="text-[9px] font-extrabold uppercase tracking-wider text-zinc-300">
               Choose Size:
             </span>
-            <span className="text-[9px] text-muted-foreground/60 font-mono">
+            <span className="text-[9px] text-zinc-400 font-bold font-mono">
               {product.sizes.filter((s) => s.stock > 0).length} in stock
             </span>
           </div>
@@ -136,11 +136,11 @@ function ProductMatchCard({ product, onAddToCart }) {
                   disabled={!isAvailable}
                   onClick={() => setSelectedSizeId(sizeId)}
                   className={cn(
-                    "rounded-lg px-2 py-0.5 text-[9px] font-bold transition-all",
-                    !isAvailable && "opacity-30 line-through cursor-not-allowed bg-transparent",
+                    "rounded-lg px-2.5 py-1 text-[10px] font-extrabold transition-all border",
+                    !isAvailable && "opacity-25 line-through cursor-not-allowed bg-transparent border-white/10 text-zinc-500",
                     isSelected
-                      ? "bg-accent-secondary text-primary shadow-sm"
-                      : "bg-white/10 text-muted-foreground hover:bg-white/20"
+                      ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-400 shadow-md shadow-orange-500/30 scale-105"
+                      : "bg-white/10 text-zinc-200 border-white/10 hover:bg-white/20 hover:text-white"
                   )}
                 >
                   {sizeName}
@@ -152,21 +152,21 @@ function ProductMatchCard({ product, onAddToCart }) {
       )}
 
       {/* Action Footer */}
-      <div className="flex items-center justify-between border-t border-white/5 bg-white/5 p-2 px-3">
+      <div className="flex items-center justify-between border-t border-white/10 bg-black/50 p-2.5 px-3">
         <Link
           href={`/product/${product.slug || product._id}`}
-          className="text-[9px] font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+          className="text-[10px] font-bold text-zinc-300 hover:text-white flex items-center gap-1 transition-colors"
         >
-          Details <ChevronRight size={10} />
+          Details <ChevronRight size={11} />
         </Link>
 
         <button
           onClick={handleAdd}
           className={cn(
-            "flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all duration-300 shadow-md",
+            "flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all duration-300 shadow-md active:scale-95 cursor-pointer",
             isAdded
-              ? "bg-emerald-500 text-white"
-              : "bg-accent-secondary text-primary hover:bg-accent-secondary/90 active:scale-95"
+              ? "bg-emerald-600 text-white shadow-emerald-600/30"
+              : "bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-orange-500/25"
           )}
         >
           {isAdded ? (
@@ -394,24 +394,24 @@ export default function SupportChat() {
                 <button
                   onClick={() => setChatMode("ai")}
                   className={cn(
-                    "flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition-all duration-200",
+                    "flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition-all duration-200 cursor-pointer",
                     chatMode === "ai"
-                      ? "bg-accent-secondary text-primary shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                      ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black shadow-md shadow-orange-500/20"
+                      : "text-muted-foreground hover:text-foreground font-semibold"
                   )}
                 >
-                  <Bot size={13} /> AI Shopping Assistant
+                  <Bot size={13} className={chatMode === "ai" ? "text-white" : "text-muted-foreground"} /> AI Shopping Assistant
                 </button>
                 <button
                   onClick={() => setChatMode("agent")}
                   className={cn(
-                    "flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition-all duration-200",
+                    "flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition-all duration-200 cursor-pointer",
                     chatMode === "agent"
-                      ? "bg-accent-secondary text-primary shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                      ? "bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black shadow-md shadow-emerald-600/20"
+                      : "text-muted-foreground hover:text-foreground font-semibold"
                   )}
                 >
-                  <Headphones size={13} /> Live Agent
+                  <Headphones size={13} className={chatMode === "agent" ? "text-white" : "text-muted-foreground"} /> Live Agent
                 </button>
               </div>
             </div>
@@ -436,7 +436,7 @@ export default function SupportChat() {
                           className={cn(
                             "rounded-[1.4rem] p-3.5 text-[12px] font-medium leading-relaxed shadow-sm transition-all",
                             isUser
-                              ? "bg-accent-secondary text-primary rounded-tr-none shadow-accent-secondary/15"
+                              ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-tr-none shadow-orange-500/15"
                               : "bg-card dark:bg-[#151c24] text-foreground border border-border/40 rounded-tl-none shadow-black/5"
                           )}
                         >
@@ -535,7 +535,7 @@ export default function SupportChat() {
                       <Link
                         href="/login"
                         onClick={() => setIsOpen(false)}
-                        className="py-3 bg-accent-secondary text-primary text-[11px] font-black uppercase tracking-wider rounded-xl shadow-md text-center"
+                        className="py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-[11px] font-black uppercase tracking-wider rounded-xl shadow-md text-center hover:opacity-95"
                       >
                         Sign In Now
                       </Link>
@@ -562,13 +562,22 @@ export default function SupportChat() {
 
                         return (
                           <div key={msg._id || i} className={cn("flex w-full", isMe ? "justify-end" : "justify-start")}>
-                            <div className={cn("max-w-[80%]", isMe ? "items-end" : "items-start")}>
+                            <div className={cn("max-w-[80%] flex flex-col", isMe ? "items-end" : "items-start")}>
+                              {!isMe && (
+                                <div className="flex items-center gap-1.5 mb-1 px-1">
+                                  <span className="flex items-center gap-1 text-[11px] font-extrabold text-emerald-400">
+                                    <Headphones size={12} className="text-emerald-400" />
+                                    Live Support
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
+                                  </span>
+                                </div>
+                              )}
                               <div
                                 className={cn(
                                   "rounded-2xl p-3 text-[12px] font-medium leading-relaxed",
                                   isMe
-                                    ? "bg-accent-secondary text-primary rounded-tr-none"
-                                    : "bg-card dark:bg-[#151c24] text-foreground border border-border/40 rounded-tl-none"
+                                    ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-tr-none shadow-md shadow-orange-500/20"
+                                    : "bg-card dark:bg-[#151c24] text-foreground border border-emerald-500/25 rounded-tl-none shadow-md"
                                 )}
                               >
                                 {msg.image && (

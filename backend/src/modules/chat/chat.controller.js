@@ -295,3 +295,41 @@ export const getUnreadCount = asyncHandler(async (req, res) => {
 
   res.json({ success: true, count });
 });
+
+/**
+ * @desc    Update conversation mode (AI vs Agent Takeover)
+ * @route   PATCH /api/chat/conversations/:id/mode
+ */
+export const updateConversationMode = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { mode } = req.body;
+  if (!["ai", "agent"].includes(mode)) {
+    return res.status(400).json({ success: false, message: "Mode must be 'ai' or 'agent'" });
+  }
+
+  const conversation = await Conversation.findById(id);
+  if (!conversation) {
+    return res.status(404).json({ success: false, message: "Conversation not found" });
+  }
+
+  conversation.mode = mode;
+  conversation.isHandedOver = mode === "agent";
+  await conversation.save();
+
+  const io = req.app.get("io");
+  if (io) {
+    const payload = {
+      conversationId: conversation._id.toString(),
+      mode: conversation.mode,
+      isHandedOver: conversation.isHandedOver,
+    };
+    io.to("admin_support_room").emit("chat_mode_changed", payload);
+    if (Array.isArray(conversation.participants)) {
+      conversation.participants.forEach((p) => {
+        io.to((p?._id || p).toString()).emit("chat_mode_changed", payload);
+      });
+    }
+  }
+
+  res.json({ success: true, mode: conversation.mode, isHandedOver: conversation.isHandedOver });
+});

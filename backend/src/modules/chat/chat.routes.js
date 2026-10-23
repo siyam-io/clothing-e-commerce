@@ -1,5 +1,5 @@
 import express from "express";
-import { getChatHistory, getAllConversations, getConversationById, getConversationMessages, getMyConversation, searchUsers, startConversation, markMessagesAsRead, getUnreadCount } from "./chat.controller.js";
+import { getChatHistory, getAllConversations, getConversationById, getConversationMessages, getMyConversation, searchUsers, startConversation, markMessagesAsRead, getUnreadCount, updateConversationMode } from "./chat.controller.js";
 import { requireAuth, admin, extractUser } from "../../middleware/auth.js";
 import upload from "../../middleware/upload.js";
 import { uploadImage } from "../../services/imageUploadService.js";
@@ -18,6 +18,7 @@ router.get("/history/:recipientId", requireAuth, getChatHistory);
 router.get("/conversations", requireAuth, admin, getAllConversations);
 router.get("/conversations/:id", requireAuth, admin, getConversationById);
 router.get("/conversations/:id/messages", requireAuth, admin, getConversationMessages);
+router.patch("/conversations/:id/mode", requireAuth, updateConversationMode);
 router.post("/conversations/start", requireAuth, admin, startConversation);
 router.get("/search-users", requireAuth, admin, searchUsers);
 

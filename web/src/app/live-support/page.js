@@ -122,25 +122,25 @@ function ProductMatchCard({ product, onAddToCart }) {
         {/* Product Metadata */}
         <div className="flex flex-1 flex-col justify-between overflow-hidden">
           <div>
-            <div className="flex items-center gap-1.5">
-              <span className="rounded bg-white/10 px-1.5 py-0.5 text-[8px] font-mono text-muted-foreground uppercase">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="rounded bg-white/15 px-2 py-0.5 text-[9px] font-mono font-bold text-zinc-200 uppercase tracking-wider">
                 {product.sku || "IN-STOCK"}
               </span>
-              <span className="text-[9px] font-bold text-emerald-400 flex items-center gap-0.5">
-                <ShieldCheck size={10} /> Official Product
+              <span className="text-[10px] font-extrabold text-emerald-400 flex items-center gap-1">
+                <ShieldCheck size={11} /> Official Product
               </span>
             </div>
-            <h4 className="mt-1.5 line-clamp-2 text-[13px] font-extrabold text-foreground leading-snug">
+            <h4 className="mt-1.5 line-clamp-2 text-[14px] font-black text-white leading-snug">
               {product.name}
             </h4>
           </div>
 
           <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-[15px] font-black text-accent-secondary">
+            <span className="text-[18px] font-black text-orange-400">
               ৳{Math.round(finalPrice)}
             </span>
             {discount > 0 && (
-              <span className="text-[11px] text-muted-foreground line-through opacity-60">
+              <span className="text-[12px] font-semibold text-zinc-400 line-through">
                 ৳{price}
               </span>
             )}
@@ -150,12 +150,12 @@ function ProductMatchCard({ product, onAddToCart }) {
 
       {/* Size Selector Pills */}
       {product.sizes && product.sizes.length > 0 && (
-        <div className="border-t border-white/10 bg-black/30 px-3.5 py-2.5">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+        <div className="border-t border-white/10 bg-black/40 px-3.5 py-2.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-200">
               Select Size:
             </span>
-            <span className="text-[9px] text-muted-foreground/60 font-mono">
+            <span className="text-[10px] text-zinc-400 font-bold font-mono">
               {product.sizes.filter((s) => s.stock > 0).length} in stock
             </span>
           </div>
@@ -172,11 +172,11 @@ function ProductMatchCard({ product, onAddToCart }) {
                   disabled={!isAvailable}
                   onClick={() => setSelectedSizeId(sizeId)}
                   className={cn(
-                    "rounded-lg px-2.5 py-1 text-[10px] font-bold transition-all",
-                    !isAvailable && "opacity-30 line-through cursor-not-allowed bg-transparent",
+                    "rounded-xl px-3 py-1.5 text-[11px] font-extrabold transition-all border",
+                    !isAvailable && "opacity-25 line-through cursor-not-allowed bg-transparent border-white/10 text-zinc-500",
                     isSelected
-                      ? "bg-accent-secondary text-primary shadow-sm"
-                      : "bg-white/10 text-muted-foreground hover:bg-white/20"
+                      ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-400 shadow-md shadow-orange-500/30 scale-105"
+                      : "bg-white/10 text-zinc-100 border-white/10 hover:bg-white/20 hover:text-white"
                   )}
                 >
                   {sizeName}
@@ -188,30 +188,30 @@ function ProductMatchCard({ product, onAddToCart }) {
       )}
 
       {/* Action Footer */}
-      <div className="flex items-center justify-between border-t border-white/10 bg-white/5 p-2.5 px-3.5">
+      <div className="flex items-center justify-between border-t border-white/10 bg-black/50 p-2.5 px-3.5">
         <Link
           href={`/product/${product.slug || product._id}`}
-          className="text-[10px] font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+          className="text-[11px] font-extrabold text-zinc-300 hover:text-white flex items-center gap-1 transition-colors"
         >
-          View Details <ChevronRight size={11} />
+          View Details <ChevronRight size={12} />
         </Link>
 
         <button
           onClick={handleAdd}
           className={cn(
-            "flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all duration-300 shadow-md",
+            "flex items-center gap-1.5 rounded-xl px-4 py-2 text-[11px] font-black uppercase tracking-wider transition-all duration-300 shadow-md active:scale-95 cursor-pointer",
             isAdded
-              ? "bg-emerald-500 text-white"
-              : "bg-accent-secondary text-primary hover:bg-accent-secondary/90 active:scale-95"
+              ? "bg-emerald-600 text-white shadow-emerald-600/30"
+              : "bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-orange-500/25"
           )}
         >
           {isAdded ? (
             <>
-              <CheckCircle2 size={13} /> Added!
+              <CheckCircle2 size={14} className="text-white" /> Added!
             </>
           ) : (
             <>
-              <ShoppingBag size={13} /> Add to Cart
+              <ShoppingBag size={14} className="text-white" /> Add to Cart
             </>
           )}
         </button>
@@ -247,15 +247,16 @@ const ChatMessage = ({ message, isMe, onAddToCart }) => {
         {!isMe && (
           <div className="flex items-center gap-1.5 mb-1 px-1">
             {isAi ? (
-              <span className="flex items-center gap-1 text-[11px] font-extrabold text-accent-secondary">
-                <Bot size={13} className="text-accent-secondary" />
+              <span className="flex items-center gap-1 text-[11px] font-extrabold text-orange-400">
+                <Bot size={13} className="text-orange-400" />
                 AI Shopping Assistant
                 <Sparkles size={11} className="text-amber-400" />
               </span>
             ) : (
-              <span className="flex items-center gap-1 text-[11px] font-bold text-foreground/80">
+              <span className="flex items-center gap-1.5 text-[11px] font-extrabold text-emerald-400">
                 <Headphones size={13} className="text-emerald-400" />
-                {message.sender?.name || "Support Desk"}
+                Live Support
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
               </span>
             )}
           </div>
@@ -267,8 +268,8 @@ const ChatMessage = ({ message, isMe, onAddToCart }) => {
             isMe
               ? "bg-gradient-to-br from-[#0084ff] to-[#0073e6] text-white rounded-[20px] rounded-tr-[4px] shadow-[#0084ff20]"
               : isAi
-              ? "bg-card/90 backdrop-blur-md text-foreground rounded-[20px] rounded-tl-[4px] border border-accent-secondary/20 shadow-lg"
-              : "bg-white dark:bg-[#262d31] text-foreground rounded-[20px] rounded-tl-[4px] border border-[#00000008] dark:border-white/5"
+              ? "bg-[#18222d] text-zinc-100 rounded-[20px] rounded-tl-[4px] border border-orange-500/25 shadow-2xl"
+              : "bg-[#1e293b] text-zinc-100 rounded-[20px] rounded-tl-[4px] border border-emerald-500/25 shadow-lg"
           )}
         >
           {message.image && (
@@ -284,7 +285,7 @@ const ChatMessage = ({ message, isMe, onAddToCart }) => {
 
           {message.text && (
             <div className="px-4 py-2.5 md:px-5 md:py-3">
-              <p className="text-[14px] md:text-[15px] leading-[1.6] whitespace-pre-wrap break-words font-[450]">
+              <p className="text-[14px] md:text-[15px] leading-[1.6] whitespace-pre-wrap break-words font-medium text-zinc-100">
                 {message.text}
               </p>
             </div>
@@ -329,10 +330,8 @@ const ChatMessage = ({ message, isMe, onAddToCart }) => {
 export default function LiveSupportPage() {
   const { user, isAuthenticated } = useAuthStore();
   const addToCartStore = useProductStore((state) => state.addToCart);
-  const { messages, isConnected, isAiTyping, sendMessage } = useChat(true);
+  const { messages, isConnected, isAiTyping, sendMessage, chatMode, setChatMode } = useChat(true);
 
-  // Chat Mode: "ai" (Local VLM) or "agent" (Human Support)
-  const [chatMode, setChatMode] = useState("ai");
   const [input, setInput] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -482,29 +481,29 @@ export default function LiveSupportPage() {
 
         {/* Dual Mode Switcher Pill */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center rounded-2xl bg-black/5 dark:bg-white/5 p-1 border border-border/10">
+          <div className="flex items-center rounded-2xl bg-black/30 dark:bg-black/50 p-1 border border-white/10 shadow-inner">
             <button
               onClick={() => setChatMode("ai")}
               className={cn(
-                "flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-bold transition-all",
+                "flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-[11px] font-black transition-all cursor-pointer",
                 chatMode === "ai"
-                  ? "bg-accent-secondary text-primary shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/25"
+                  : "text-zinc-400 hover:text-white"
               )}
             >
-              <Bot size={14} />
+              <Bot size={14} className={chatMode === "ai" ? "text-white" : "text-zinc-400"} />
               AI Assistant
             </button>
             <button
               onClick={() => setChatMode("agent")}
               className={cn(
-                "flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-bold transition-all",
+                "flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-[11px] font-black transition-all cursor-pointer",
                 chatMode === "agent"
-                  ? "bg-accent-secondary text-primary shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-gradient-to-r from-emerald-600 to-teal-500 text-white shadow-md shadow-emerald-600/25"
+                  : "text-zinc-400 hover:text-white"
               )}
             >
-              <Headphones size={14} />
+              <Headphones size={14} className={chatMode === "agent" ? "text-white" : "text-zinc-400"} />
               Live Agent
             </button>
           </div>
@@ -516,6 +515,33 @@ export default function LiveSupportPage() {
         <div className="absolute inset-0 opacity-[0.04] dark:opacity-[0.02] pointer-events-none bg-[url('https://w0.peakpx.com/wallpaper/818/148/HD-wallpaper-whatsapp-background-whatsapp-texture.jpg')] bg-repeat" />
 
         <div className="max-w-3xl mx-auto space-y-2 relative z-10">
+          {/* Real-time Mode Notification Banner */}
+          <div className="flex justify-center mb-3 sticky top-0 z-20">
+            {chatMode === "agent" ? (
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/15 backdrop-blur-md border border-emerald-500/30 text-emerald-400 text-[11px] font-bold shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>🎧 Live Support agent is connected to your chat.</span>
+                <button
+                  onClick={() => setChatMode("ai")}
+                  className="ml-1 underline font-black hover:text-emerald-300 cursor-pointer text-emerald-300"
+                >
+                  Switch to AI
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-500/15 backdrop-blur-md border border-orange-500/30 text-orange-400 text-[11px] font-bold shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                <span>🤖 AI Shopping Assistant is active (Instant Answers).</span>
+                <button
+                  onClick={() => setChatMode("agent")}
+                  className="ml-1 underline font-black hover:text-orange-300 cursor-pointer text-orange-300"
+                >
+                  Request Human
+                </button>
+              </div>
+            )}
+          </div>
+
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
               <div className="w-20 h-20 bg-accent-secondary/10 rounded-3xl flex items-center justify-center text-accent-secondary">
