@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useAdminUsers } from "@/app/admin/users/lib/useAdminUsers";
 import { useAuthStore } from "@/store/authStore";
 import { useFilters } from "@/app/admin/_hooks/useFilters";
-import DataTable from "@/app/admin/_components/DataTable";
-import TableSkeleton from "@/components/common/TableSkeleton";
-import FilterBar from "@/components/common/FilterBar";
-import Pagination from "@/components/common/Pagination";
+import { AdminPageContainer } from "@/app/admin/_components/AdminPageContainer";
+import AdminPageHeader, { AdminHeaderStat } from "@/app/admin/_components/AdminPageHeader";
+import { AdminCard, AdminCardContent } from "@/app/admin/_components/AdminCard";
+import { AdminDataTable } from "@/app/admin/_components/AdminDataTable";
+import { AdminFilterBar } from "@/app/admin/_components/AdminFilterBar";
+import { AdminDeleteModal } from "@/app/admin/_components/AdminDeleteModal";
 import { getImageUrl } from "@/utils/imageUtils";
 import { notify } from "@/utils/swal";
 import { 
@@ -17,15 +19,14 @@ import {
   Edit3, 
   Eye,
   ShieldAlert,
-  ShieldCheck
+  ShieldCheck,
+  UserCheck,
+  UserX
 } from "lucide-react";
-
-// Shadcn UI Imports
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import AdminPageHeader, { AdminHeaderStat } from "@/app/admin/_components/AdminPageHeader";
 
 function UsersContent() {
   const { 
@@ -42,6 +43,8 @@ function UsersContent() {
   });
 
   const { user: currentUser } = useAuthStore();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const { 
     users, 
@@ -65,96 +68,99 @@ function UsersContent() {
     if (item.role?.name === "superadmin") {
       return notify.error("Action Denied", "Superadmin status cannot be modified.");
     }
-    const action = item.isActive !== false ? "Block" : "Activate";
+    const isBlocking = item.isActive !== false;
+    const action = isBlocking ? "Block" : "Activate";
     const isConfirmed = await notify.confirm(
       `${action} User?`,
-      `Are you sure you want to ${action.toLowerCase()} this user's account?`
+      `Are you sure you want to ${action.toLowerCase()} this account?`
     );
     if (isConfirmed) {
       try {
-        await updateUser.mutateAsync({ id: item._id, data: { isActive: item.isActive === false } });
-        notify.success(`User status updated to ${item.isActive === false ? "ACTIVE" : "BLOCKED"}`);
+        await updateUser.mutateAsync({ id: item._id, data: { isActive: !isBlocking } });
+        notify.success(`User successfully ${isBlocking ? "blocked" : "activated"}`);
       } catch (err) {
         notify.error("Error", "Could not update user status.");
       }
     }
   };
 
-  const handleDelete = async (id, role) => {
-    if (role?.name === "admin") {
-      return notify.error("Action Denied", "Admin users cannot be deleted.");
-    }
-    const isConfirmed = await notify.confirm("Delete User?", "This user will be permanently deleted.");
-    if (isConfirmed) {
-      try {
-        await deleteUser.mutateAsync(id);
-        notify.success("User deleted");
-      } catch (err) {
-        notify.error("Error", "Could not delete user.");
-      }
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      setIsDeleting(true);
+      await deleteUser.mutateAsync(deleteTarget._id);
+      notify.success("User deleted successfully");
+      setDeleteTarget(null);
+    } catch (err) {
+      notify.error("Error", "Could not delete user.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   const columns = [
     {
-      label: "User Details",
+      label: "User",
       render: (item) => (
-        <div className="flex items-center gap-4">
-          <div className="relative h-12 w-12 rounded-2xl overflow-hidden border border-border/10 shrink-0 bg-accent/5 group/avatar">
+        <div className="flex items-center gap-3">
+          <div className="relative size-10 rounded-full overflow-hidden border border-border/60 bg-muted shrink-0 flex items-center justify-center font-semibold text-xs text-foreground">
             {item.avatar ? (
               <img
                 src={getImageUrl(item.avatar)}
                 alt={item.name}
-                className="w-full h-full object-cover grayscale group-hover/avatar:grayscale-0 transition-all duration-700"
+                className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-muted-foreground font-black text-xs uppercase italic">
-                {item.name?.charAt(0)}
-              </div>
+              item.name?.charAt(0).toUpperCase() || "U"
             )}
           </div>
-          <div>
-            <p className="text-[13px] font-black text-foreground leading-none mb-1 uppercase tracking-tighter italic">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground truncate">
               {item.name}
             </p>
-            <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest opacity-60">
+            <p className="text-xs text-muted-foreground truncate">
               {item.email}
             </p>
           </div>
         </div>
       ),
     },
-
     {
       label: "Role",
+      render: (item) => {
+        const roleName = item.role?.name || "Customer";
+        return (
+          <Badge
+            variant="outline"
+            className={cn(
+              "px-2.5 py-0.5 text-xs font-medium rounded-full capitalize",
+              roleName === "superadmin" 
+                ? "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border-rose-200/60 dark:border-rose-800/40"
+                : roleName === "admin"
+                  ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border-amber-200/60 dark:border-amber-800/40"
+                  : "bg-muted text-muted-foreground border-border/60"
+            )}
+          >
+            {roleName}
+          </Badge>
+        );
+      },
+    },
+    {
+      label: "Status",
       render: (item) => (
-        <div className="flex items-center gap-2">
-          <Badge
-            variant="outline"
-            className={cn(
-              "px-4 py-1.5 text-[8px] font-black uppercase tracking-[0.2em] rounded-full",
-              item.role?.name === "superadmin" 
-                ? "bg-rose-500/10 text-rose-500 border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.1)]"
-                : item.role?.name === "admin"
-                  ? "bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.1)]"
-                  : "bg-zinc-500/10 text-zinc-500 border-zinc-500/20"
-            )}
-          >
-            {item.role?.name || "Customer"}
-          </Badge>
-          <Badge
-            variant="outline"
-            className={cn(
-              "px-3 py-1 text-[8px] font-black uppercase tracking-[0.2em] rounded-full",
-              item.isActive !== false
-                ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
-                : "bg-amber-500/10 text-amber-500 border-amber-500/20 animate-pulse"
-            )}
-          >
-            {item.isActive !== false ? "Active" : "Blocked"}
-          </Badge>
-        </div>
+        <Badge
+          variant="outline"
+          className={cn(
+            "px-2.5 py-0.5 text-xs font-medium rounded-full",
+            item.isActive !== false
+              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200/60 dark:border-emerald-800/40"
+              : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border-rose-200/60 dark:border-rose-800/40"
+          )}
+        >
+          {item.isActive !== false ? "Active" : "Blocked"}
+        </Badge>
       ),
     },
     {
@@ -162,7 +168,7 @@ function UsersContent() {
       render: (item) => {
         const date = item.createdAt ? new Date(item.createdAt) : null;
         return (
-          <span className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em]">
+          <span className="text-xs text-muted-foreground">
             {date && !isNaN(date.getTime()) 
               ? date.toLocaleDateString("en-US", {
                   year: "numeric",
@@ -176,49 +182,54 @@ function UsersContent() {
     },
     {
       label: "Actions",
+      className: "text-right",
       render: (item) => (
-        <div className="flex items-center gap-3 justify-end">
+        <div className="flex items-center gap-1.5 justify-end">
           <Button 
             asChild 
-            variant="outline" 
+            variant="ghost" 
             size="icon" 
-            className="h-10 w-10 rounded-xl border-border/10 hover:border-blue-600/50 hover:bg-blue-600 hover:text-white bg-background/50 transition-all active:scale-95 group"
+            className="size-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+            title="View Details"
           >
             <Link href={`/admin/users/${item._id}`}>
-              <Eye size={16} className="group-hover:scale-110 transition-transform" />
+              <Eye className="size-4" />
             </Link>
           </Button>
           <Button 
             asChild 
-            variant="outline" 
+            variant="ghost" 
             size="icon" 
-            className="h-10 w-10 rounded-xl border-border/10 hover:border-foreground/50 hover:bg-foreground hover:text-background bg-background/50 transition-all active:scale-95"
+            className="size-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+            title="Edit User"
           >
             <Link href={`/admin/users/${item._id}/edit`}>
-              <Edit3 size={16} />
+              <Edit3 className="size-4" />
             </Link>
           </Button>
           <Button 
-            variant="outline" 
+            variant="ghost" 
             size="icon" 
             onClick={() => handleToggleStatus(item)}
             className={cn(
-              "h-10 w-10 rounded-xl transition-all active:scale-95 border",
+              "size-8 rounded-lg transition-colors",
               item.isActive !== false 
-                ? "border-border/10 bg-background/50 text-foreground hover:border-amber-600/50 hover:bg-amber-600 hover:text-white" 
-                : "bg-amber-500/10 text-amber-500 border-amber-500/20 hover:border-emerald-600/50 hover:bg-emerald-600 hover:text-white"
+                ? "text-muted-foreground hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-950/30" 
+                : "text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
             )}
             title={item.isActive !== false ? "Block User" : "Activate User"}
           >
-            {item.isActive !== false ? <ShieldAlert size={16} /> : <ShieldCheck size={16} />}
+            {item.isActive !== false ? <UserX className="size-4" /> : <UserCheck className="size-4" />}
           </Button>
           <Button 
-            variant="outline" 
+            variant="ghost" 
             size="icon" 
-            onClick={() => handleDelete(item._id, item.role)}
-            className="h-10 w-10 rounded-xl border-border/10 hover:border-rose-600/50 hover:bg-rose-600 hover:text-white bg-background/50 transition-all active:scale-95"
+            onClick={() => setDeleteTarget(item)}
+            disabled={item.role?.name === "admin" || item.role?.name === "superadmin"}
+            className="size-8 rounded-lg hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30 text-muted-foreground"
+            title="Delete User"
           >
-            <Trash2 size={16} />
+            <Trash2 className="size-4" />
           </Button>
         </div>
       ),
@@ -226,56 +237,48 @@ function UsersContent() {
   ];
 
   return (
-    <div className="admin-page-container">
+    <AdminPageContainer className="space-y-6">
       <AdminPageHeader
         title="Users"
-        description="Manage customer accounts and roles"
+        description="Manage customer accounts, roles, and platform permissions"
         actions={<AdminHeaderStat label="Total users" value={total || 0} />}
       />
-      <div className="admin-table-form animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <div className="p-6 md:p-8 border-b border-border/10 bg-background/20">
-          <FilterBar
-            search={search}
-            onSearchSubmit={handleSearch}
+
+      <AdminCard>
+        <div className="p-4 sm:p-5 border-b border-border/60">
+          <AdminFilterBar
+            searchPlaceholder="Search users by name or email..."
             onSearchChange={handleSearch}
-            sort={sort}
-            onSortChange={setSort}
-            suggestionEndpoint="/users"
-            suggestionKey="users"
-            entityType="user"
-            sortOptions={[
-              { label: "Newest Joined", value: "-createdAt" },
-              { label: "Oldest Joined", value: "createdAt" },
-              { label: "Alphabetical (A-Z)", value: "name" },
-              { label: "Role", value: "role" },
-            ]}
-            searchPlaceholder="Search by Name or Email..."
+            showReset={Boolean(search)}
+            onReset={() => handleSearch("")}
+            totalCount={total}
+            entityName="users"
           />
         </div>
 
-        <div className="pt-0">
-          {isLoading ? (
-            <div className="p-8">
-              <TableSkeleton rowCount={10} colCount={4} />
-            </div>
-          ) : (
-            <div className={cn("transition-all duration-300", isFetching && "opacity-50 blur-[2px] pointer-events-none")}>
-               <DataTable columns={columns} data={users || []} className="border-none rounded-none" />
-            </div>
-          )}
-        </div>
+        <AdminCardContent className="p-0">
+          <AdminDataTable
+            columns={columns}
+            data={users || []}
+            isLoading={isLoading}
+            page={currentPage}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            emptyTitle="No users found"
+            emptyMessage="No customer accounts match your search criteria."
+          />
+        </AdminCardContent>
+      </AdminCard>
 
-        {/* Standardized Pagination */}
-        <div className="p-8 border-t border-border/10 bg-background/5">
-           <Pagination 
-             page={currentPage} 
-             totalPages={totalPages} 
-             onPageChange={setPage} 
-             className="py-0 sm:py-0 justify-between flex-row-reverse" 
-           />
-        </div>
-      </div>
-    </div>
+      <AdminDeleteModal
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        isLoading={isDeleting}
+        title="Delete User Account"
+        description={`Are you sure you want to permanently delete "${deleteTarget?.name}"? All associated order records will remain, but login access will be removed.`}
+      />
+    </AdminPageContainer>
   );
 }
 
@@ -283,17 +286,13 @@ export default function UserListPage() {
   return (
     <Suspense
       fallback={
-        <div className="admin-page-container">
-          <Skeleton className="min-h-[120px] w-full rounded-[3rem]" />
-          <Skeleton className="h-20 w-full rounded-full" />
-          <Skeleton className="min-h-[500px] w-full rounded-[3rem]" />
-        </div>
+        <AdminPageContainer className="space-y-6">
+          <Skeleton className="h-16 w-full rounded-2xl" />
+          <Skeleton className="h-96 w-full rounded-2xl" />
+        </AdminPageContainer>
       }
     >
       <UsersContent />
     </Suspense>
   );
 }
-
-
-

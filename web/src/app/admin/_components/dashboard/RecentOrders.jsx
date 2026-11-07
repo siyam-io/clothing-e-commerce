@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardContent } from "@/app/admin/_components/AdminCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import StatusBadge from "@/app/admin/_components/StatusBadge";
-import { cn } from "@/lib/utils";
-import { Calendar, Clock } from "lucide-react";
+import { ArrowRight, Calendar, Clock, ShoppingCart } from "lucide-react";
+import { Price } from "@/components/common/Price";
 
 const formatDateTime = (dateString) => {
   if (!dateString) return { date: "N/A", time: "N/A" };
@@ -25,80 +25,85 @@ const formatDateTime = (dateString) => {
 
 export function RecentOrders({ recentOrders, isLoading }) {
   return (
-    <Card className="bg-card rounded-[3rem] border border-border shadow-sm transition-all duration-500">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.4em]">
-          Recent Orders
-        </CardTitle>
+    <AdminCard>
+      <AdminCardHeader className="flex flex-row items-center justify-between pb-3">
+        <div className="flex items-center gap-2">
+          <ShoppingCart className="size-4 text-primary" />
+          <AdminCardTitle className="text-base font-semibold">
+            Recent Orders
+          </AdminCardTitle>
+        </div>
         <Link
           href="/admin/orders"
-          className="text-[9px] font-black text-primary hover:text-primary/80 uppercase tracking-widest transition-colors"
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline transition-colors"
         >
-          View All →
+          View All <ArrowRight className="size-3" />
         </Link>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      </AdminCardHeader>
+      <AdminCardContent className="space-y-3 pt-1">
         {isLoading ? (
-          [1, 2, 3].map((i) => (
-            <div key={i} className="flex items-center justify-between p-5 rounded-3xl bg-muted/30 border border-border">
-              <div className="flex items-center gap-4">
-                <Skeleton className="h-10 w-10 rounded-xl" />
-                <div className="space-y-2">
-                  <Skeleton className="h-3 w-24" />
-                  <Skeleton className="h-2 w-16" />
+          [1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex items-center justify-between p-3.5 rounded-xl bg-muted/20 border border-border/50">
+              <div className="flex items-center gap-3">
+                <Skeleton className="size-9 rounded-lg" />
+                <div className="space-y-1.5">
+                  <Skeleton className="h-3.5 w-28" />
+                  <Skeleton className="h-3 w-16" />
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-2">
-                <Skeleton className="h-4 w-12" />
-                <Skeleton className="h-3 w-16" />
-                <Skeleton className="h-3 w-20" />
+              <div className="flex flex-col items-end gap-1.5">
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-5 w-20 rounded-full" />
               </div>
             </div>
           ))
+        ) : recentOrders?.length === 0 ? (
+          <div className="py-10 text-center text-xs text-muted-foreground">
+            No recent orders found
+          </div>
         ) : (
-          recentOrders.map((order) => {
+          recentOrders.slice(0, 5).map((order) => {
             const { date, time } = formatDateTime(order.createdAt);
             return (
               <div
                 key={order._id}
-                className="flex items-center justify-between p-5 rounded-3xl bg-muted/30 border border-border hover:border-primary/30 transition-all group"
+                className="flex items-center justify-between p-3.5 rounded-xl bg-muted/20 hover:bg-muted/40 border border-border/50 transition-colors"
               >
-                <div className="flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-xl bg-background border border-border flex items-center justify-center font-black text-muted-foreground group-hover:text-primary transition-colors">
-                    {order.user?.name?.charAt(0) || "G"}
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="size-9 rounded-lg bg-primary/10 text-primary border border-primary/20 flex items-center justify-center font-semibold text-xs shrink-0">
+                    {order.user?.name?.charAt(0).toUpperCase() || "G"}
                   </div>
-                  <div>
-                    <p className="text-xs font-black uppercase text-foreground">
-                      {order.user?.name || "Guest"}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {order.user?.name || "Guest Customer"}
                     </p>
-                    <p className="text-[8px] font-bold text-muted-foreground tracking-widest">
+                    <p className="text-xs text-muted-foreground font-mono">
                       #{order._id.slice(-6).toUpperCase()}
                     </p>
                   </div>
                 </div>
-                <div className="text-right space-y-2">
-                  <div className="flex gap-3 items-center justify-end">
-                    <p className="text-sm font-black text-foreground">
-                      ৳{order.totalPrice?.toFixed(0)}
-                    </p>
+                <div className="text-right space-y-1 shrink-0 ml-3">
+                  <div className="flex items-center gap-2 justify-end">
+                    <Price
+                      amount={order.totalPrice || 0}
+                      className="text-sm font-semibold text-foreground"
+                    />
                     <StatusBadge value={order.orderStatus} />
                   </div>
-                  <div className="flex gap-4 items-center justify-end text-[8px] font-bold text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Calendar size={12} className="opacity-60" />
-                      <span>{date}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Clock size={12} className="opacity-60" />
-                      <span>{time}</span>
-                    </div>
+                  <div className="flex items-center gap-2 justify-end text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="size-3" /> {date}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="size-3" /> {time}
+                    </span>
                   </div>
                 </div>
               </div>
             );
           })
         )}
-      </CardContent>
-    </Card>
+      </AdminCardContent>
+    </AdminCard>
   );
 }

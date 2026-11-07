@@ -1,8 +1,11 @@
 import redis from "../config/redis.js";
+import logger from "../utils/logger.js";
 
 /**
- * 🚀 High-Performance Redis Caching Middleware
- * @param {number} ttl - Time to live in seconds
+ * Express middleware for Redis response caching on idempotent GET requests.
+ *
+ * @param {number} [ttl=300] - Cache entry time to live in seconds.
+ * @returns {Function} Express middleware handler.
  */
 export const cacheMiddleware = (ttl = 300) => {
   return async (req, res, next) => {
@@ -22,45 +25,46 @@ export const cacheMiddleware = (ttl = 300) => {
         return res.status(200).json(JSON.parse(cachedResponse));
       }
 
-      res.originalJson = res.json;
+      const originalJson = res.json.bind(res);
       res.json = (data) => {
         if (res.statusCode === 200) {
-          // Store in cache without blocking the response
-          redis.set(key, JSON.stringify(data), "EX", ttl).catch(err => {
-            console.error("Redis Set Error:", err.message);
+          redis.set(key, JSON.stringify(data), "EX", ttl).catch((err) => {
+            logger.error("Redis set operation failed:", { key, error: err.message });
           });
         }
-        res.originalJson(data);
+        return originalJson(data);
       };
 
       next();
     } catch (err) {
-      console.error("Redis Cache Middleware Error:", err.message);
+      logger.error("Redis cache lookup error:", { key, error: err.message });
       next();
     }
   };
 };
 
 /**
- * 🗑️ Efficient Cache Clearing (Non-blocking)
- * @param {string} pattern - Pattern to match keys
+ * Invalidate cached keys matching a glob pattern using Redis scan stream.
+ *
+ * @param {string} pattern - Key glob pattern (e.g. 'cache:/api/products*').
  */
 export const clearCache = (pattern) => {
   if (!redis || redis.status !== "ready") return;
 
-  // Use scanStream instead of keys for better performance
   const stream = redis.scanStream({
     match: pattern,
-    count: 100
+    count: 100,
   });
 
   stream.on("data", (resultKeys) => {
     if (resultKeys.length > 0) {
-      redis.del(resultKeys).catch(err => console.error("Redis Del Error:", err.message));
+      redis.del(resultKeys).catch((err) => {
+        logger.error("Redis key deletion failed:", { count: resultKeys.length, error: err.message });
+      });
     }
   });
 
   stream.on("error", (err) => {
-    console.error("Redis Scan Error:", err.message);
+    logger.error("Redis key scan error:", { pattern, error: err.message });
   });
 };

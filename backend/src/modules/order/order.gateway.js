@@ -25,7 +25,7 @@ export const initiateSSLCommerz = async (order, creds) => {
         ipn_url: `${backendUrl}/api/orders/ssl/ipn`,
         
         cus_name: order.shippingAddress.name || "Customer",
-        cus_email: order.shippingAddress.email || "customer@vanguard.os",
+        cus_email: order.shippingAddress.email || "customer@store.com",
         cus_add1: order.shippingAddress.street || "Dhaka",
         cus_city: order.shippingAddress.city || "Dhaka",
         cus_state: "Dhaka",
@@ -33,7 +33,7 @@ export const initiateSSLCommerz = async (order, creds) => {
         cus_country: "Bangladesh",
         cus_phone: order.shippingAddress.phone,
 
-        // 🚚 Shipping Information
+        // Shipping Information
         ship_name: order.shippingAddress.name || "Customer",
         ship_add1: order.shippingAddress.street || "Dhaka",
         ship_add2: "N/A",
@@ -42,9 +42,9 @@ export const initiateSSLCommerz = async (order, creds) => {
         ship_postcode: "1000",
         ship_country: "Bangladesh",
 
-        // 📦 Product Information
+        // Product Information
         shipping_method: "Courier",
-        product_name: "Vanguard Apparel",
+        product_name: "Apparel Collection",
         product_category: "Clothing",
         product_profile: "general",
     };
@@ -54,7 +54,7 @@ export const initiateSSLCommerz = async (order, creds) => {
         if (res?.GatewayPageURL) {
             return res.GatewayPageURL;
         } else {
-            console.error("❌ SSLCommerz API Error:", res?.failedreason);
+            console.error(" SSLCommerz API Error:", res?.failedreason);
             throw new Error(res?.failedreason || "SSLCommerz Initialization Failed");
         }
     } catch (err) {

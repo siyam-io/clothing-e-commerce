@@ -1,12 +1,21 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { URL } from 'url';
 import axios from 'axios';
 import FormData from 'form-data';
 import Product from '../../product/product.model.js';
 import '../../size/size.model.js';
+import logger from '../../../utils/logger.js';
 
 const VLM_SERVICE_URL = process.env.VLM_SERVICE_URL || 'http://localhost:8000';
 const VLM_TIMEOUT_MS = parseInt(process.env.VLM_TIMEOUT_MS, 10) || 20000; // 20 seconds timeout
+
+const ALLOWED_REMOTE_IMAGE_DOMAINS = [
+  'res.cloudinary.com',
+  'clothing-e-commerce-web.vercel.app',
+  'images.unsplash.com'
+];
+const LOCAL_UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
 
 let _cachedCatalog = null;
 const loadCatalog = async () => {
@@ -46,16 +55,35 @@ export class VlmClientService {
         filename: file.originalname || 'upload.jpg',
         contentType: file.mimetype || 'image/jpeg',
       });
-    } else if (imageUrl) {
+    } else if (imageUrl && typeof imageUrl === 'string') {
       try {
         let imgBuffer = null;
         if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-          const imgRes = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 8000 });
+          const parsedUrl = new URL(imageUrl);
+          const isDomainAllowed = ALLOWED_REMOTE_IMAGE_DOMAINS.includes(parsedUrl.hostname.toLowerCase());
+          const isPrivateIp = /^(localhost|127\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.|169\.254\.)/.test(parsedUrl.hostname);
+
+          if (!isDomainAllowed || isPrivateIp) {
+            logger.warn(`SSRF attempt blocked. Disallowed hostname: ${parsedUrl.hostname}`);
+            throw new Error("Target image host is not on the approved external domain whitelist.");
+          }
+
+          const imgRes = await axios.get(imageUrl, {
+            responseType: 'arraybuffer',
+            timeout: 5000,
+            maxContentLength: 10 * 1024 * 1024
+          });
           imgBuffer = Buffer.from(imgRes.data);
         } else if (imageUrl.startsWith('/uploads/') || imageUrl.startsWith('uploads/')) {
-          const cleanPath = imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
-          const localPath = path.join(process.cwd(), cleanPath);
-          imgBuffer = await fs.readFile(localPath);
+          const relativeSub = path.normalize(imageUrl.replace(/^\/?uploads\/?/, '')).replace(/^(\.\.[\/\\])+/, '');
+          const safeLocalPath = path.resolve(LOCAL_UPLOADS_DIR, relativeSub);
+
+          if (!safeLocalPath.startsWith(LOCAL_UPLOADS_DIR + path.sep)) {
+            logger.warn(`Path traversal attempt blocked: ${imageUrl}`);
+            throw new Error("Access Denied: Path escapes sandbox boundaries.");
+          }
+
+          imgBuffer = await fs.readFile(safeLocalPath);
         }
         if (imgBuffer) {
           formData.append('image', imgBuffer, {
@@ -64,7 +92,7 @@ export class VlmClientService {
           });
         }
       } catch (e) {
-        console.warn('⚠️ Failed to load image buffer for VLM:', e.message);
+        logger.warn('Image acquisition rejected for VLM:', { error: e.message });
       }
     }
 
@@ -97,7 +125,7 @@ export class VlmClientService {
 
       throw new Error('VLM server returned unsuccessful payload');
     } catch (error) {
-      console.warn(`⚠️ Local VLM Server call failed (${error.code || error.message}). Activating graceful fallback...`);
+      logger.warn(`VLM Server call failed (${error.code || error.message}). Activating fallback.`);
       return await this.handleGracefulFallback(message, file);
     }
   }
@@ -183,7 +211,7 @@ export class VlmClientService {
             .lean();
         }
       } catch (dbErr) {
-        console.warn('⚠️ MongoDB query failed in findRelevantProducts, falling back to catalog:', dbErr.message);
+        logger.warn('MongoDB query failed in findRelevantProducts, falling back to catalog:', { error: dbErr.message });
       }
 
       if (mongoMatches && mongoMatches.length > 0) {
@@ -229,12 +257,12 @@ export class VlmClientService {
           if (catalogMatches.length > 0) return catalogMatches;
         }
       } catch (catErr) {
-        console.warn('⚠️ Catalog file fallback failed:', catErr.message);
+        logger.warn('Catalog file fallback failed:', { error: catErr.message });
       }
 
       return [];
     } catch (err) {
-      console.warn('⚠️ Product matching failed:', err.message);
+      logger.warn('Product matching failed:', { error: err.message });
       return [];
     }
   }

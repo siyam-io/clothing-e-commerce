@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { useEffect, useState } from "react";
 import { useSizes } from "@/app/admin/sizes/lib/useSizes";
 import { useAdminCategories } from "@/app/admin/categories/lib/useAdminCategories";
@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -17,9 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Save, Maximize2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { swalToast, swalError } from "@/utils/swal";
+import AdminPageContainer from "@/app/admin/_components/AdminPageContainer";
+import AdminPageHeader, { AdminBackLink } from "@/app/admin/_components/AdminPageHeader";
+import { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardDescription, AdminCardContent } from "@/app/admin/_components/AdminCard";
+import Loader from "@/components/common/Loader";
 
 export default function SizeForm() {
   const { id } = useParams();
@@ -39,6 +41,7 @@ export default function SizeForm() {
     setValue,
     watch,
     reset,
+    control,
     formState: { errors },
   } = useForm({
     defaultValues: {
@@ -69,7 +72,6 @@ export default function SizeForm() {
     }
   }, [isEdit, id, sizes, categoriesLoading, reset]);
 
-  // Sync presetCategory if it changes
   useEffect(() => {
     if (!isEdit && presetCategory && !selectedCategory) {
       setValue("category", presetCategory);
@@ -81,133 +83,117 @@ export default function SizeForm() {
     try {
       if (isEdit) {
         await updateSize({ id, ...data });
-        swalToast("Size updated", "success");
+        swalToast("Size updated successfully", "success");
       } else {
         await createSize(data);
-        swalToast("Size created", "success");
+        swalToast("Size created successfully", "success");
       }
-      setTimeout(() => router.push("/admin/categories"), 1500);
+      setTimeout(() => router.push("/admin/categories"), 1200);
     } catch (err) {
-      swalError("Protocol Error", err.response?.data?.message || "Error syncing size data.");
+      swalError("Save Failed", err.response?.data?.message || "Could not save size.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (loading)
+  if (loading) {
     return (
-      <div className="max-w-4xl mx-auto p-10 space-y-10">
-        <Skeleton className="h-32 w-full rounded-[2.5rem]" />
-        <Skeleton className="h-[400px] w-full rounded-[2.5rem]" />
+      <div className="admin-page-container flex items-center justify-center min-h-[40vh]">
+        <Loader />
       </div>
     );
+  }
 
   return (
-    <div className="max-w-4xl mx-auto pb-20 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {/* Header */}
-      <Card className="p-8 rounded-[2.5rem] border-border bg-card shadow-xl">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="space-y-1">
-            <h1 className="text-3xl md:text-4xl font-black text-foreground tracking-tighter uppercase italic leading-none">
-              {isEdit ? "Edit Size" : "Create Size"}
-            </h1>
-            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.4em] ml-1">
-              Set up size details
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            onClick={() => router.push("/admin/categories")}
-            className="text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground rounded-full h-12 px-6"
-          >
-            <ChevronLeft className="mr-2" size={16} /> Cancel
-          </Button>
-        </div>
-      </Card>
+    <AdminPageContainer maxWidth="max-w-2xl">
+      <AdminBackLink href="/admin/categories" label="Back to Categories" />
+      <AdminPageHeader
+        title={isEdit ? "Edit Size" : "New Size"}
+        description={isEdit ? "Update size label and category binding" : "Add a new size variation to a category"}
+      />
 
-      {/* Main Form Card */}
-      <Card className="rounded-[3rem] border-border bg-card shadow-2xl overflow-hidden">
-        <CardContent className="p-10 md:p-14">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-10">
-            <div className="grid md:grid-cols-2 gap-10">
-              <div className="space-y-3">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] ml-1">
-                  Category *
-                </Label>
-                <Select
-                  value={selectedCategory}
-                  onValueChange={(val) => setValue("category", val)}
-                >
-                  <SelectTrigger className="h-14 bg-muted/30 border-border rounded-2xl px-6 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all">
-                    <SelectValue placeholder="Select Category" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border rounded-2xl">
-                    {categories?.map((cat) => (
-                      <SelectItem key={cat._id} value={cat._id} className="rounded-xl py-3 px-4 font-bold text-xs uppercase tracking-widest focus:bg-primary focus:text-primary-foreground">
-                        {cat.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <AdminCard>
+          <AdminCardHeader>
+            <AdminCardTitle>Size Configuration</AdminCardTitle>
+            <AdminCardDescription>Define size label (e.g. S, M, L, XL, 32, 34) and category assignment</AdminCardDescription>
+          </AdminCardHeader>
 
-              <div className="space-y-3">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] ml-1">
-                  Size Name *
-                </Label>
-                <Input
-                  {...register("name", { required: true })}
-                  className="h-14 bg-muted/30 border-border rounded-2xl px-6 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all"
-                  placeholder="e.g. XL, 32, or 42"
-                />
-                <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest mt-2 ml-1">
-                  Enter size label (e.g. M, L, XL).
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] ml-1">
-                Description (Optional)
+          <AdminCardContent className="space-y-5">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-foreground">
+                Category <span className="text-rose-500">*</span>
               </Label>
-              <Textarea
-                {...register("description")}
-                rows={5}
-                className="bg-muted/30 border-border rounded-3xl px-6 py-5 text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all resize-none shadow-inner"
-                placeholder="Enter size description..."
+              <Controller
+                name="category"
+                control={control}
+                rules={{ required: true }}
+                render={({ field }) => (
+                  <Select value={field.value || ""} onValueChange={field.onChange}>
+                    <SelectTrigger className="h-10 bg-background/80 border-border/60 rounded-xl text-xs font-medium">
+                      <SelectValue placeholder="Select target category" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-card border-border rounded-xl">
+                      {categories?.map((cat) => (
+                        <SelectItem key={cat._id} value={cat._id} className="text-xs">
+                          {cat.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 pt-10 border-t border-border mt-10">
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="flex-[2] h-14 bg-foreground text-background hover:bg-primary hover:text-primary-foreground rounded-full font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl transition-all active:scale-95 disabled:opacity-50"
-              >
-                {isSubmitting ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin" />
-                    Saving...
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Save size={16} />
-                    {isEdit ? "Update Size" : "Create Size"}
-                  </div>
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => router.push("/admin/categories")}
-                className="flex-1 h-14 rounded-full border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground font-black uppercase tracking-[0.2em] text-[10px] transition-all"
-              >
-                Discard
-              </Button>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-foreground">
+                Size Label <span className="text-rose-500">*</span>
+              </Label>
+              <Input
+                {...register("name", { required: true })}
+                placeholder="e.g. M, L, XL, 32/34"
+                className="h-10 rounded-xl bg-background/80 border-border/60 text-sm font-semibold"
+              />
             </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-foreground">Fit / Measurements Note</Label>
+              <Textarea
+                {...register("description")}
+                rows={3}
+                placeholder="e.g. Chest: 40-42 inches, Length: 28 inches"
+                className="bg-background/80 border-border/60 rounded-xl px-3.5 py-2.5 text-sm resize-none"
+              />
+            </div>
+          </AdminCardContent>
+
+          <div className="flex items-center justify-end gap-3 p-5 border-t border-border/40 bg-muted/20">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push("/admin/categories")}
+              disabled={isSubmitting}
+              className="h-10 px-5 rounded-xl text-xs font-medium"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="h-10 px-6 rounded-xl text-xs font-medium gap-2 shadow-xs cursor-pointer"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                isEdit ? "Update Size" : "Create Size"
+              )}
+            </Button>
+          </div>
+        </AdminCard>
+      </form>
+    </AdminPageContainer>
   );
 }

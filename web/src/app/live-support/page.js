@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useChat } from "@/app/live-support/lib/useChat";
 import { useAuthStore } from "@/store/authStore";
+import { useAppStore } from "@/store/appStore";
 import { useProductStore } from "@/store/productStore";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -27,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { Price } from "@/components/common/Price";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -136,13 +138,16 @@ function ProductMatchCard({ product, onAddToCart }) {
           </div>
 
           <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-[18px] font-black text-orange-400">
-              ৳{Math.round(finalPrice)}
-            </span>
+            <Price
+              amount={Math.round(finalPrice)}
+              className="text-[18px] font-black text-orange-400"
+            />
             {discount > 0 && (
-              <span className="text-[12px] font-semibold text-zinc-400 line-through">
-                ৳{price}
-              </span>
+              <Price
+                amount={price}
+                lineThrough
+                className="text-[12px] font-semibold text-zinc-400"
+              />
             )}
           </div>
         </div>
@@ -329,8 +334,14 @@ const ChatMessage = ({ message, isMe, onAddToCart }) => {
 // -----------------------------------------------------------------------------
 export default function LiveSupportPage() {
   const { user, isAuthenticated } = useAuthStore();
+  const { settings } = useAppStore();
+  const siteName = settings?.branding?.siteName || "Store";
   const isAuth = !!user && isAuthenticated;
   const addToCartStore = useProductStore((state) => state.addToCart);
+
+  useEffect(() => {
+    document.title = `Live Support | ${siteName}`;
+  }, [siteName]);
 
   // Real-time socket chat for authenticated users
   const {
@@ -361,7 +372,7 @@ export default function LiveSupportPage() {
         _id: "welcome-ai-1",
         isAi: true,
         senderName: "AI Assistant",
-        text: "👋 Welcome to Vanguard! I am your AI Shopping Assistant running our custom multimodal vision model.\n\nAsk me anything about our clothing collections, sizing, prices, or upload a photo of any outfit to find matching products instantly—no login required!",
+        text: `Welcome! I am your AI Shopping Assistant running our custom multimodal vision model.\n\nAsk me anything about our clothing collections, sizing, prices, or upload a photo of any outfit to find matching products instantly—no login required!`,
         createdAt: new Date().toISOString(),
       },
     ];
@@ -612,7 +623,7 @@ export default function LiveSupportPage() {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-[15px] font-bold leading-tight">
-                {currentChatMode === "ai" ? "Vanguard AI Shopping Assistant" : "Live Customer Support"}
+                {currentChatMode === "ai" ? `${siteName} AI Shopping Assistant` : "Live Customer Support"}
               </h2>
               {currentChatMode === "ai" && (
                 <span className="rounded-full bg-orange-500/15 border border-orange-500/30 px-2 py-0.5 text-[9px] font-bold text-orange-400">
@@ -713,7 +724,7 @@ export default function LiveSupportPage() {
               </div>
               <div className="max-w-sm space-y-1">
                 <h3 className="text-base font-bold text-foreground">
-                  Welcome to Vanguard AI Live Support
+                  Welcome to {siteName} AI Live Support
                 </h3>
                 <p className="text-xs text-muted-foreground">
                   Ask me about clothing items, sizing, prices, or upload an outfit picture to find matching products instantly!

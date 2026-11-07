@@ -6,43 +6,43 @@ import ProductFilter from "@/app/admin/products/components/ProductFilter";
 import ProductTable from "@/app/admin/products/components/ProductTable";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus } from "lucide-react";
+import AdminPageContainer from "@/app/admin/_components/AdminPageContainer";
 import AdminPageHeader, { AdminHeaderButton } from "@/app/admin/_components/AdminPageHeader";
+import { AdminCard, AdminCardContent } from "@/app/admin/_components/AdminCard";
 
 function AdminProductsContent() {
   const { pagination, isLoading } = useAdminProducts();
 
   return (
-    <div className="admin-page-container">
+    <AdminPageContainer>
       <AdminPageHeader
         title="Products"
-        description={`Manage your catalog · ${pagination?.total || 0} products`}
+        description={`Manage your product catalog, inventory, and visibility · ${pagination?.total || 0} total products`}
         actions={
           <AdminHeaderButton href="/admin/products/new" icon={Plus}>
-            Add product
+            Add Product
           </AdminHeaderButton>
         }
       />
 
-      <div className="admin-table-form">
-        <div className="p-6 md:p-8 border-b border-border/10 bg-background/20">
+      <AdminCard>
+        <div className="p-4 sm:p-6 border-b border-border/40 bg-muted/20">
           <ProductFilter />
         </div>
 
-        <div className="pt-0">
+        <AdminCardContent className="p-0">
           {isLoading ? (
-            <div className="p-8">
-              <div className="space-y-4">
-                 {[1, 2, 3, 4, 5].map((i) => (
-                    <Skeleton key={i} className="h-16 w-full rounded-xl" />
-                 ))}
-              </div>
+            <div className="p-6 space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-14 w-full rounded-xl" />
+              ))}
             </div>
           ) : (
             <ProductTable />
           )}
-        </div>
-      </div>
-    </div>
+        </AdminCardContent>
+      </AdminCard>
+    </AdminPageContainer>
   );
 }
 
@@ -50,20 +50,14 @@ export default function AdminProductsPage() {
   return (
     <Suspense
       fallback={
-        <div className="admin-page-container">
-          <Skeleton className="min-h-[120px] w-full rounded-[2.5rem]" />
-          <Skeleton className="min-h-[80px] w-full rounded-full" />
-          <div className="flex flex-wrap gap-4">
-             {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-10 w-24 md:w-32 rounded-full" />)}
-          </div>
-          <Skeleton className="min-h-[500px] w-full rounded-[2.5rem]" />
-        </div>
+        <AdminPageContainer>
+          <Skeleton className="h-16 w-1/3 rounded-xl" />
+          <Skeleton className="h-24 w-full rounded-2xl" />
+          <Skeleton className="h-96 w-full rounded-2xl" />
+        </AdminPageContainer>
       }
     >
       <AdminProductsContent />
     </Suspense>
   );
 }
-
-
-

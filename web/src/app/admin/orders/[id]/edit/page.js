@@ -7,13 +7,11 @@ import { useAdminOrders } from "@/app/admin/orders/lib/useAdminOrders";
 import { useAdminProducts } from "@/app/admin/products/lib/useAdminProducts";
 import { swalToast, swalError } from "@/utils/swal";
 import Loader from "@/components/common/Loader";
-import { 
-  ChevronLeft, 
-  Save, 
-  Truck
-} from "lucide-react";
+import { Save, Package, Truck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import AdminPageContainer from "@/app/admin/_components/AdminPageContainer";
+import AdminPageHeader, { AdminBackLink } from "@/app/admin/_components/AdminPageHeader";
+import { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardContent } from "@/app/admin/_components/AdminCard";
 
 // Reusable Components
 import OrderItemsEditor from "@/app/admin/orders/components/OrderItemsEditor";
@@ -38,7 +36,6 @@ export default function EditOrderPage() {
     if (order) {
       setItems(order.orderItems || []);
       
-      // Robustly normalize payment method case
       const rawPayment = order.paymentMethod || "COD";
       const normalizedPayment = 
         rawPayment.toUpperCase() === "COD" ? "COD" :
@@ -124,7 +121,7 @@ export default function EditOrderPage() {
       swalToast("Order updated successfully", "success");
       router.push(`/admin/orders/${id}`);
     } catch (err) {
-      swalError("Sync Failed", err.response?.data?.message || err.message);
+      swalError("Update Failed", err.response?.data?.message || err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -132,74 +129,75 @@ export default function EditOrderPage() {
 
   if (orderDetailsLoading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
+      <div className="admin-page-container flex items-center justify-center min-h-[50vh]">
         <Loader />
       </div>
     );
   }
 
   return (
-    <div className="max-w-[1400px] mx-auto space-y-10 pb-32 px-4 sm:px-10 pt-10">
-      {/* Header */}
-      <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-card p-8 rounded-[2.5rem] border border-border shadow-sm">
-        <div className="flex items-center gap-6">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => router.back()}
-            className="w-14 h-14 rounded-2xl border-border bg-muted/30 hover:bg-foreground hover:text-background transition-all"
-          >
-            <ChevronLeft size={20} />
-          </Button>
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <span className="bg-indigo-600/10 text-indigo-600 border-none px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">
-                Edit Order
-              </span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-40">/ Updating Order</span>
-            </div>
-            <h1 className="text-3xl md:text-5xl font-black uppercase italic tracking-tighter text-foreground leading-none">
-              Order #{id.slice(-8)}
-            </h1>
+    <AdminPageContainer maxWidth="max-w-6xl">
+      <AdminBackLink href={`/admin/orders/${id}`} label="Back to Order Details" />
+
+      <AdminPageHeader
+        title={`Edit Order #${id.slice(-8).toUpperCase()}`}
+        description="Update line items, quantities, shipping address, or payment parameters"
+        actions={
+          <div className="flex items-center gap-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => router.back()}
+              disabled={isSubmitting}
+              className="h-10 px-4 rounded-xl text-xs font-medium"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSubmit(onSubmit)}
+              disabled={isSubmitting}
+              className="h-10 px-5 rounded-xl text-xs font-medium gap-2 shadow-xs cursor-pointer"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="size-4" />
+                  Save Changes
+                </>
+              )}
+            </Button>
           </div>
-        </div>
+        }
+      />
 
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            onClick={() => router.back()}
-            className="hidden sm:flex text-[10px] font-black uppercase tracking-widest hover:bg-rose-600/5 hover:text-rose-500"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit(onSubmit)}
-            disabled={isSubmitting}
-            className="h-16 px-10 rounded-2xl bg-foreground text-background hover:bg-indigo-600 hover:text-white transition-all duration-500 font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl shadow-indigo-600/20"
-          >
-            {isSubmitting ? <Loader size="small" className="mr-3" /> : <Save className="mr-3" size={16} />}
-            Save Changes
-          </Button>
-        </div>
-      </header>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left: Line Items & Catalog Search (8 Cols) */}
+        <div className="lg:col-span-8 space-y-6">
+          <AdminCard>
+            <AdminCardHeader>
+              <div className="flex items-center gap-2.5">
+                <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                  <Package className="size-4" />
+                </div>
+                <AdminCardTitle>Order Items & Variations</AdminCardTitle>
+              </div>
+            </AdminCardHeader>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        {/* Workspace */}
-        <div className="lg:col-span-8 space-y-10">
-          <Card className="rounded-[3rem] border border-border bg-card shadow-sm overflow-hidden">
-            <CardHeader className="p-8 pb-4">
-               <CardTitle className="text-[11px] font-black uppercase tracking-[0.5em] text-muted-foreground flex items-center gap-3">
-                 <Truck size={16} className="text-indigo-600" /> Products in Order
-               </CardTitle>
-            </CardHeader>
-            <CardContent className="p-8 pt-4 space-y-6">
+            <AdminCardContent className="space-y-6">
               <OrderItemsEditor
                 items={items}
                 onUpdateQuantity={handleUpdateQuantity}
                 onRemoveItem={handleRemoveItem}
               />
 
-              <div className="mt-10 pt-10 border-t border-border">
+              <div className="pt-6 border-t border-border/40">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Add Product to Order</h4>
                 <OrderProductSearch
                   searchTerm={searchTerm}
                   onSearchChange={setSearchTerm}
@@ -207,25 +205,29 @@ export default function EditOrderPage() {
                   onAddItem={handleAddItem}
                 />
               </div>
-            </CardContent>
-          </Card>
+            </AdminCardContent>
+          </AdminCard>
         </div>
 
-        {/* Logistics */}
-        <div className="lg:col-span-4 space-y-10">
-          <Card className="rounded-[3rem] border border-border bg-card shadow-sm overflow-hidden">
-            <CardHeader className="p-8 pb-4">
-               <CardTitle className="text-[11px] font-black uppercase tracking-[0.5em] text-muted-foreground flex items-center gap-3">
-                 <Truck size={16} className="text-indigo-600" /> Shipping Address
-               </CardTitle>
-            </CardHeader>
-            <CardContent className="p-8 pt-4 space-y-6">
+        {/* Right: Shipping Address & Summary (4 Cols) */}
+        <div className="lg:col-span-4 space-y-6">
+          <AdminCard>
+            <AdminCardHeader>
+              <div className="flex items-center gap-2.5">
+                <div className="size-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <Truck className="size-4" />
+                </div>
+                <AdminCardTitle>Shipping Destination</AdminCardTitle>
+              </div>
+            </AdminCardHeader>
+
+            <AdminCardContent>
               <OrderShippingForm
                 register={register}
                 errors={errors}
               />
-            </CardContent>
-          </Card>
+            </AdminCardContent>
+          </AdminCard>
 
           <OrderSummaryCard
             mode="edit"
@@ -237,6 +239,6 @@ export default function EditOrderPage() {
           />
         </div>
       </div>
-    </div>
+    </AdminPageContainer>
   );
 }

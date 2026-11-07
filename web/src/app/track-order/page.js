@@ -20,9 +20,18 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import OrderDetailsDialog from "@/app/profile/components/OrderDetailsDialog";
 import { useRouter } from "next/navigation";
+import { useAppStore } from "@/store/appStore";
+import { Price } from "@/components/common/Price";
 
 export default function TrackOrderPage() {
   const router = useRouter();
+  const { settings } = useAppStore();
+  const siteName = settings?.branding?.siteName || "Store";
+
+  useEffect(() => {
+    document.title = `Track Order | ${siteName}`;
+  }, [siteName]);
+
   const [orderIdInput, setOrderIdInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
   const [searchTriggered, setSearchTriggered] = useState(false);
@@ -54,7 +63,7 @@ export default function TrackOrderPage() {
 
   return (
     <div className="min-h-screen bg-background pt-32 pb-24 px-4 overflow-hidden relative">
-      {/* 🌌 Animated Background Elements */}
+      {/* Background Elements */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] bg-gradient-to-b from-primary/5 to-transparent -z-10" />
       <div className="absolute top-[20%] -right-24 w-96 h-96 bg-accent/5 blur-[120px] rounded-full -z-10 animate-pulse" />
       
@@ -228,7 +237,10 @@ export default function TrackOrderPage() {
                         <Badge className={cn("px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest border-none", statusColors[order.orderStatus])}>
                           {order.orderStatus}
                         </Badge>
-                        <p className="text-sm font-black italic">৳{order.totalPrice?.toLocaleString()}</p>
+                        <Price
+                          amount={order.totalPrice}
+                          className="text-sm font-black not-italic"
+                        />
                       </div>
                       <ChevronRight size={20} className="text-muted-foreground group-hover:text-foreground group-hover:translate-x-1 transition-all" />
                     </div>

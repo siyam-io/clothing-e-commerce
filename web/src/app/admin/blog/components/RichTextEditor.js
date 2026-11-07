@@ -59,7 +59,7 @@ export default function RichTextEditor({ value, onChange, placeholder = "Initial
     maxHeight: "100vh",
     autofocus: false,
     spellcheck: true,
-    // 🎨 Vanguard Tactical Theme Styling
+    // Editor Theme Styling
     style: {
       background: "#09090b",
       color: "#e4e4e7",
@@ -67,7 +67,7 @@ export default function RichTextEditor({ value, onChange, placeholder = "Initial
       lineHeight: "1.8",
       fontFamily: "var(--font-geist-sans), Inter, sans-serif",
     },
-    // 🛠️ Optimized Toolbar (Source & Fullsize at start)
+    // Optimized Toolbar (Source & Fullsize at start)
     buttons: [
       "source", "preview", "fullsize", "|",
       "bold", "italic", "underline", "strikethrough", "|",

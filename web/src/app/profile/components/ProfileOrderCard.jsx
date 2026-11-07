@@ -3,6 +3,7 @@ import { getImageUrl } from "@/utils/imageUtils";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Tag, CreditCard, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Price } from "@/components/common/Price";
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -56,7 +57,10 @@ export default function ProfileOrderCard({ order, onOpenDetails }) {
                           <span className="w-1 h-1 rounded-full bg-border" />
                           <span>Qty: {product.quantity}</span>
                        </div>
-                       <p className="text-xs font-black text-primary">৳{(product.price || 0).toFixed(0)}</p>
+                       <Price
+                          amount={(product.price || 0).toFixed(0)}
+                          className="text-xs font-black text-primary"
+                       />
                     </div>
                  </div>
                ))}
@@ -76,7 +80,10 @@ export default function ProfileOrderCard({ order, onOpenDetails }) {
                      <p className="text-[8px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                        <Tag size={10} /> Total Value
                      </p>
-                     <p className="text-lg font-black tracking-tighter text-accent-secondary">৳{(order.totalPrice || 0).toFixed(0)}</p>
+                     <Price
+                       amount={(order.totalPrice || 0).toFixed(0)}
+                       className="text-lg font-black text-accent-secondary tracking-normal"
+                     />
                   </div>
                </div>
 

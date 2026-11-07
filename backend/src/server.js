@@ -1,111 +1,122 @@
-import 'dotenv/config';
-import dns from 'dns';
-
-// Force Google DNS locally to bypass Cloudflare WARP DNS resolution errors on Windows
-if (process.env.NODE_ENV !== 'production') {
-  dns.setServers(['8.8.8.8', '8.8.4.4']);
-}
-
-import mongoose from 'mongoose';
-import http from 'http';
-import { Server } from 'socket.io';
+import "dotenv/config";
+import dns from "dns";
+import http from "http";
+import mongoose from "mongoose";
+import { Server } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
-import Redis from "ioredis";
-import app, { isAllowedOrigin } from './app.js';
-import { socketAuth } from './middleware/socketAuth.js'; 
-import { initSocketEvents } from './modules/chat/chat.socket.js'; 
+import app, { isAllowedOrigin } from "./app.js";
+import { socketAuth } from "./middleware/socketAuth.js";
+import { initSocketEvents } from "./modules/chat/chat.socket.js";
 import redisClient from "./config/redis.js";
+import logger from "./utils/logger.js";
+
+// Override DNS servers locally to prevent local interface resolution timeouts on Windows
+if (process.env.NODE_ENV !== "production") {
+  dns.setServers(["8.8.8.8", "8.8.4.4"]);
+}
 
 const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);
 
-// 🚀 Socket.io Setup
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
       if (isAllowedOrigin(origin)) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        callback(new Error("CORS unauthorized"));
       }
     },
     credentials: true,
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST"],
   },
-  transports: ['websocket', 'polling'], // 🛰️ Force transports
-  allowEIO3: true // 🛡️ Backward compatibility
+  transports: ["websocket", "polling"],
+  allowEIO3: true,
 });
 
-// 🚀 Redis Adapter Setup
 if (redisClient) {
   const pubClient = redisClient.duplicate();
   const subClient = redisClient.duplicate();
 
-  pubClient.on("error", (err) => console.error("❌ Redis Pub Error:", err.message));
-  subClient.on("error", (err) => console.error("❌ Redis Sub Error:", err.message));
+  pubClient.on("error", (err) => logger.error("Redis pub client error:", { error: err.message }));
+  subClient.on("error", (err) => logger.error("Redis sub client error:", { error: err.message }));
 
   let isAdapterLinked = false;
-  const trySetupAdapter = () => {
+  const attachAdapter = () => {
     if (isAdapterLinked) return;
-    if (pubClient.status === 'ready' && subClient.status === 'ready') {
+    if (pubClient.status === "ready" && subClient.status === "ready") {
       try {
         io.adapter(createAdapter(pubClient, subClient));
-        console.log("📡 Redis Adapter Linked: Horizontal Scaling Enabled");
+        logger.info("Socket.io Redis adapter attached successfully");
         isAdapterLinked = true;
       } catch (err) {
-        console.error("❌ Failed to link Redis Adapter:", err.message);
+        logger.error("Failed to attach Socket.io Redis adapter:", { error: err.message });
       }
     }
   };
 
-  pubClient.on('ready', trySetupAdapter);
-  subClient.on('ready', trySetupAdapter);
-
-  // Fallback check in case they are already connected
-  trySetupAdapter();
+  pubClient.on("ready", attachAdapter);
+  subClient.on("ready", attachAdapter);
+  attachAdapter();
 }
 
-// 🛡️ Socket Middleware
 io.use(socketAuth);
 
-// 📊 Socket Connection Tracking
-io.on('connection', (socket) => {
-  console.log(`📡 SOCKET CONNECTED: ${socket.id} (Total: ${io.engine.clientsCount})`);
+io.on("connection", (socket) => {
+  logger.info(`Socket client connected: ${socket.id} (Active: ${io.engine.clientsCount})`);
 
-  socket.on('disconnect', (reason) => {
-    console.log(`🔌 SOCKET DISCONNECTED: ${socket.id} - Reason: ${reason} (Total: ${io.engine.clientsCount})`);
+  socket.on("disconnect", (reason) => {
+    logger.info(`Socket client disconnected: ${socket.id} (Reason: ${reason})`);
   });
 
-  socket.on('error', (error) => {
-    console.error(`❌ SOCKET ERROR: ${socket.id} - ${error}`);
+  socket.on("error", (error) => {
+    logger.error(`Socket connection error for ${socket.id}:`, { error });
   });
 });
 
-// ⚡ Keep-alive self-ping mechanism to keep Render instance awake
-const pingSelf = () => {
+const startKeepAlivePing = () => {
   const backendUrl = process.env.BACKEND_URL;
-  if (!backendUrl || process.env.NODE_ENV !== 'production') return;
+  if (!backendUrl || process.env.NODE_ENV !== "production") return;
 
   setInterval(async () => {
     try {
       const res = await fetch(backendUrl);
-      console.log(`📡 Keep-Alive Ping Status: ${res.status} - ${new Date().toISOString()}`);
+      logger.info(`Keep-alive ping response: ${res.status}`);
     } catch (err) {
-      console.error('❌ Keep-Alive Ping Failed:', err.message);
+      logger.error("Keep-alive ping failure:", { error: err.message });
     }
-  }, 10 * 60 * 1000); // every 10 minutes
+  }, 10 * 60 * 1000);
 };
 
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log('✅ Vanguard DB Linked');
-    
-    // 🛰️ Initialize Chat Events
+const startServer = async () => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+    logger.info("Database connection established successfully");
+
     initSocketEvents(io);
-    app.set('io', io);
+    app.set("io", io);
 
     server.listen(PORT, () => {
-      console.log(`🚀 System Live & Socket Ready: ${PORT}`);
-      pingSelf();
+      logger.info(`Server listening on port ${PORT}`);
+      startKeepAlivePing();
     });
+  } catch (error) {
+    logger.error("Failed to start server:", { error: error.message });
+    process.exit(1);
+  }
+};
+
+const handleShutdown = async (signal) => {
+  logger.info(`Received ${signal}. Initiating graceful shutdown.`);
+  server.close(async () => {
+    logger.info("HTTP server closed.");
+    await mongoose.connection.close();
+    logger.info("Database connection closed.");
+    process.exit(0);
   });
+};
+
+process.on("SIGTERM", () => handleShutdown("SIGTERM"));
+process.on("SIGINT", () => handleShutdown("SIGINT"));
+
+startServer();

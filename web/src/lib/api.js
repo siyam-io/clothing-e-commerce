@@ -1,6 +1,7 @@
 // src/lib/api.js
 import axios from 'axios';
 import { getGuestId } from '@/utils/guestId';
+import { getCookie } from '@/utils/cookies';
 import { useUploadStore } from '@/store/uploadStore';
 
 const api = axios.create({
@@ -10,7 +11,9 @@ const api = axios.create({
 
 // Add token, guest ID, and brand context to every request
 api.interceptors.request.use((config) => {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const token = typeof window !== 'undefined'
+    ? (getCookie('vanguard_auth_token') || getCookie('token') || localStorage.getItem('token'))
+    : null;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

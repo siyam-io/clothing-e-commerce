@@ -6,8 +6,8 @@ const objectIdRegex = /^[0-9a-fA-F]{24}$/;
 const shippingAddressSchema = z.object({
     name: z.string().min(2, "Name is too short"),
     email: z.string().email("Invalid email format").optional().or(z.literal("")), // Optional email
-    phone: z.string().min(10, "Invalid phone number"),
-    address: z.string().min(5, "Address is too short"),
+    phone: z.string().min(8, "Invalid phone number"),
+    address: z.string().min(2, "Address is too short"),
 });
 
 const orderItemSchema = z.object({
@@ -28,10 +28,13 @@ export const adminCreateOrderSchema = z.object({
     user: z.string().regex(objectIdRegex).optional().nullable(),
     orderItems: z.array(orderItemSchema).min(1),
     shippingAddress: shippingAddressSchema,
-    paymentMethod: z.enum(['COD', 'SSLCommerz', 'bKash']).optional().default('COD'),
-    orderStatus: z.enum(['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled']).optional().default('Processing'),
-    paymentStatus: z.enum(['Pending', 'Completed', 'Failed', 'Cancelled', 'COD']).optional().default('Pending'),
+    paymentMethod: z.string().optional().default('Cash'),
+    orderStatus: z.enum(['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled']).optional().default('Delivered'),
+    paymentStatus: z.enum(['Pending', 'Completed', 'Failed', 'Cancelled', 'COD']).optional().default('Completed'),
     couponCode: z.string().optional(),
+    shippingPrice: z.number().min(0).optional(),
+    deliveryZone: z.string().optional(),
+    discountAmount: z.number().min(0).optional(),
 });
 
 export const adminUpdateOrderSchema = z.object({

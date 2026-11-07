@@ -5,6 +5,8 @@ import { Eye, Edit2, Trash2 } from "lucide-react";
 import DataTable from "@/app/admin/_components/DataTable";
 import Pagination from "@/components/common/Pagination";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Price } from "@/components/common/Price";
 
 export default function OrdersTable({
   orders,
@@ -17,13 +19,13 @@ export default function OrdersTable({
 }) {
   const columns = [
     {
-      label: "Order ID",
+      label: "Order",
       render: (item) => (
         <Link
           href={`/admin/orders/${item._id}`}
-          className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-3 py-1.5 rounded-lg border border-primary/20 hover:scale-105 transition-all inline-block italic"
+          className="font-mono text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1"
         >
-          #{item?._id?.slice(-8)}
+          #{item?._id?.slice(-8).toUpperCase()}
         </Link>
       ),
     },
@@ -31,33 +33,33 @@ export default function OrdersTable({
       label: "Customer",
       render: (item) => (
         <div>
-          <p className="font-black text-foreground text-sm uppercase tracking-tight">
-            {item?.user?.name || "Guest"}
+          <p className="font-semibold text-foreground text-sm tracking-tight">
+            {item?.user?.name || item?.shippingAddress?.name || "Guest Checkout"}
           </p>
-          <p className="text-[10px] text-muted-foreground font-bold tracking-widest mt-1">
-            {item?.shippingAddress?.phone || "N/A"}
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {item?.shippingAddress?.phone || item?.user?.email || "No phone provided"}
           </p>
         </div>
       ),
     },
     {
-      label: "Date & Time",
+      label: "Date",
       render: (item) => {
         const dateObj = item.createdAt ? new Date(item.createdAt) : null;
         const isValid = dateObj && !isNaN(dateObj.getTime());
         return (
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[11px] font-black text-foreground uppercase tracking-tighter leading-none">
+          <div className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">
               {isValid
                 ? dateObj.toLocaleDateString("en-GB", {
                     day: "2-digit",
                     month: "short",
                     year: "numeric",
                   })
-                : "N/A"}
+                : "—"}
             </span>
             {isValid && (
-              <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.1em]">
+              <span className="block text-[11px] text-muted-foreground">
                 {dateObj.toLocaleTimeString("en-US", {
                   hour: "2-digit",
                   minute: "2-digit",
@@ -70,79 +72,78 @@ export default function OrdersTable({
       },
     },
     {
-      label: "Total",
+      label: "Total Amount",
       render: (item) => (
-        <span className="text-base font-black text-foreground tracking-tighter">
-          ৳{item?.totalPrice?.toLocaleString()}
-        </span>
+        <Price
+          amount={item?.totalPrice || 0}
+          decimals={2}
+          className="text-sm font-semibold text-foreground"
+        />
       ),
     },
     {
-      label: "Delivery Status",
+      label: "Status",
       render: (item) => (
         <select
           value={item.orderStatus}
           onChange={(e) => onQuickStatusUpdate(item._id, e.target.value)}
           className={cn(
-            "h-10 rounded-xl px-4 text-[9px] font-black uppercase tracking-widest border transition-all cursor-pointer outline-none appearance-none bg-background shadow-sm",
-            item.orderStatus === "Delivered" && "text-emerald-600 border-emerald-600/20 bg-emerald-600/5",
-            item.orderStatus === "Cancelled" && "text-rose-600 border-rose-600/20 bg-rose-600/5",
-            item.orderStatus === "Pending" && "text-amber-600 border-amber-600/20 bg-amber-600/5",
-            item.orderStatus === "Processing" && "text-indigo-600 border-indigo-600/20 bg-indigo-600/5",
-            item.orderStatus === "Shipped" && "text-blue-600 border-blue-600/20 bg-blue-600/5"
+            "h-8 rounded-lg px-2.5 text-xs font-medium border transition-colors cursor-pointer outline-none bg-background shadow-2xs",
+            item.orderStatus === "Delivered" && "text-emerald-700 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10",
+            item.orderStatus === "Cancelled" && "text-rose-700 dark:text-rose-400 border-rose-500/30 bg-rose-500/10",
+            item.orderStatus === "Pending" && "text-amber-700 dark:text-amber-400 border-amber-500/30 bg-amber-500/10",
+            item.orderStatus === "Processing" && "text-blue-700 dark:text-blue-400 border-blue-500/30 bg-blue-500/10",
+            item.orderStatus === "Shipped" && "text-blue-700 dark:text-blue-400 border-blue-500/30 bg-blue-500/10"
           )}
         >
           {["Pending", "Processing", "Shipped", "Delivered", "Cancelled"].map((s) => (
-            <option key={s} value={s} className="bg-background text-foreground uppercase tracking-widest">
+            <option key={s} value={s} className="bg-background text-foreground">
               {s}
             </option>
           ))}
         </select>
       ),
     },
-    {
-      label: "Command",
-      render: (item) => (
-        <div className="flex items-center gap-2 justify-end">
-          <Link
-            href={`/admin/orders/${item._id}`}
-            className="p-2.5 bg-muted text-muted-foreground hover:bg-foreground hover:text-background rounded-xl transition-all shadow-sm border border-border/10 group"
-            title="View Details"
-          >
-            <Eye size={16} className="group-hover:scale-110 transition-transform" />
-          </Link>
-          <Link
-            href={`/admin/orders/${item._id}/edit`}
-            className="p-2.5 bg-indigo-600/10 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl transition-all shadow-sm border border-border/10 group"
-            title="Edit Order"
-          >
-            <Edit2 size={16} className="group-hover:scale-110 transition-transform" />
-          </Link>
-          <button
-            onClick={() => onDeleteOrder(item._id)}
-            className="p-2.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white rounded-xl transition-all shadow-sm border border-border/10 group"
-            title="Delete Order"
-          >
-            <Trash2 size={16} className="group-hover:scale-110 transition-transform" />
-          </button>
-        </div>
-      ),
-    },
   ];
 
   return (
-    <div
-      className={`transition-opacity duration-300 ${isAllFetching ? "opacity-50 pointer-events-none" : "opacity-100"}`}
-    >
-      <DataTable columns={columns} data={orders || []} className="border-none rounded-none" />
+    <div className={cn("transition-opacity duration-200", isAllFetching && "opacity-60")}>
+      <DataTable
+        columns={columns}
+        data={orders || []}
+        className="border-none shadow-none rounded-none"
+        actions={(item) => (
+          <div className="flex items-center gap-1.5 justify-end">
+            <Button asChild variant="ghost" size="icon-sm" className="size-8 rounded-lg" title="View Order">
+              <Link href={`/admin/orders/${item._id}`}>
+                <Eye className="size-3.5" />
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" size="icon-sm" className="size-8 rounded-lg" title="Edit Order">
+              <Link href={`/admin/orders/${item._id}/edit`}>
+                <Edit2 className="size-3.5" />
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => onDeleteOrder(item._id)}
+              className="size-8 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-500/10"
+              title="Delete Order"
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
+        )}
+      />
 
       {pages > 1 && (
-        <div className="p-8 border-t border-border/10 bg-background/5">
+        <div className="p-4 border-t border-border/40 bg-muted/10">
           <Pagination
             page={page}
             totalPages={pages}
             onPageChange={onPageChange}
-            className="py-0 sm:py-0 justify-between flex-row-reverse"
           />
         </div>
       )}

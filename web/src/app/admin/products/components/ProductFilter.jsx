@@ -6,7 +6,6 @@ import { useAdminCategories } from "@/app/admin/categories/lib/useAdminCategorie
 import { useSubcategories } from "@/app/admin/subcategories/lib/useSubcategories";
 import { useAdminFlashSales } from "@/app/admin/flash-sales/lib/useAdminFlashSales";
 import { getImageUrl } from "@/utils/imageUtils";
-import FilterBar from "@/components/common/FilterBar";
 import { cn } from "@/lib/utils";
 import { 
   Select, 
@@ -17,10 +16,10 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { FilterX, Layers, Box, Eye, CircleDollarSign, Zap, SlidersHorizontal } from "lucide-react";
+import { Search, RotateCcw, Layers, Box, Eye, CircleDollarSign, Zap, SlidersHorizontal, ChevronRight, ChevronLeft } from "lucide-react";
 
 export default function ProductFilter() {
-  const [showTacticalFilters, setShowTacticalFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const { 
     filters, 
     setSearch, 
@@ -38,9 +37,25 @@ export default function ProductFilter() {
   const { subcategories } = useSubcategories();
   const { flashSales } = useAdminFlashSales();
 
+  const [localSearch, setLocalSearch] = useState(filters.search || "");
   const [localMin, setLocalMin] = useState(filters.minPrice || "");
   const [localMax, setLocalMax] = useState(filters.maxPrice || "");
 
+  // Debounce search
+  useEffect(() => {
+    setLocalSearch(filters.search || "");
+  }, [filters.search]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearch !== filters.search) {
+        setSearch(localSearch);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [localSearch, filters.search, setSearch]);
+
+  // Debounce price range
   useEffect(() => {
     setLocalMin(filters.minPrice || "");
     setLocalMax(filters.maxPrice || "");
@@ -51,14 +66,11 @@ export default function ProductFilter() {
       if (localMin !== filters.minPrice || localMax !== filters.maxPrice) {
         setPriceRange(localMin, localMax);
       }
-    }, 600);
+    }, 400);
     return () => clearTimeout(timer);
   }, [localMin, localMax, setPriceRange, filters.minPrice, filters.maxPrice]);
 
   const sliderRef = useRef(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
 
   const filteredSubcategories = subcategories?.filter(sub => {
     if (filters.category === "all") return true;
@@ -66,275 +78,229 @@ export default function ProductFilter() {
     return sub.category?._id === cat?._id || sub.category === cat?._id;
   }) || [];
 
-  const handleMouseDown = (e) => {
-    setIsDragging(true);
-    setStartX(e.pageX - sliderRef.current.offsetLeft);
-    setScrollLeft(sliderRef.current.scrollLeft);
-  };
-  const handleMouseLeave = () => setIsDragging(false);
-  const handleMouseUp = () => setIsDragging(false);
-  const handleMouseMove = (e) => {
-    if (!isDragging) return;
-    e.preventDefault();
-    const x = e.pageX - sliderRef.current.offsetLeft;
-    const walk = (x - startX) * 2;
-    sliderRef.current.scrollLeft = scrollLeft - walk;
-  };
-
   const clearFilters = () => {
+    setLocalSearch("");
+    setLocalMin("");
+    setLocalMax("");
     resetFilters();
   };
 
+  const hasActiveFilters = Boolean(
+    filters.search || 
+    (filters.category && filters.category !== "all") ||
+    (filters.subcategory && filters.subcategory !== "all") ||
+    (filters.stockStatus && filters.stockStatus !== "all") ||
+    (filters.isActive && filters.isActive !== "all") ||
+    (filters.flashSale && filters.flashSale !== "all") ||
+    filters.minPrice ||
+    filters.maxPrice ||
+    filters.sort !== "newest"
+  );
+
   return (
-    <div className="space-y-8">
-      {/* 1. Main Search & Sort */}
-      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-stretch lg:items-center">
-        <div className="flex-1 w-full flex flex-col sm:flex-row gap-3">
-          <div className="flex-1 min-w-0">
-             <FilterBar
-              search={filters.search}
-              onSearchChange={setSearch}
-              sort={filters.sort}
-              onSortChange={setSort}
-              sortOptions={[
-                { value: "all", label: "🌟 Default Sequence" },
-                { value: "-createdAt", label: "✨ Latest Deployments" },
-                { value: "price", label: "💵 Economy Class" },
-                { value: "-price", label: "💎 Premium Class" },
-                { value: "stockHigh", label: "📈 Maximum Density" },
-                { value: "stockLow", label: "📉 Minimum Density" },
-              ]}
-            />
-          </div>
-          {/* Mobile Filter Toggle Button */}
+    <div className="space-y-4">
+      {/* 1. Main Search & Primary Controls */}
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-lg">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input 
+            placeholder="Search products by name or SKU..."
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            className="pl-9 pr-4 h-10 rounded-xl bg-background/80 border-border/60 text-sm focus-visible:ring-1"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Sort Selection */}
+          <Select value={filters.sort || "newest"} onValueChange={setSort}>
+            <SelectTrigger className="h-10 min-w-[140px] rounded-xl border-border/60 bg-background/80 text-xs font-medium">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl border-border bg-card">
+              <SelectItem value="newest" className="text-xs">Newest Added</SelectItem>
+              <SelectItem value="oldest" className="text-xs">Oldest Added</SelectItem>
+              <SelectItem value="price-asc" className="text-xs">Price: Low to High</SelectItem>
+              <SelectItem value="price-desc" className="text-xs">Price: High to Low</SelectItem>
+              <SelectItem value="name-asc" className="text-xs">Alphabetical (A-Z)</SelectItem>
+              <SelectItem value="stock-desc" className="text-xs">Highest Stock</SelectItem>
+              <SelectItem value="stock-asc" className="text-xs">Lowest Stock</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Toggle More Filters */}
           <Button 
+            type="button"
             variant="outline"
-            onClick={() => setShowTacticalFilters(!showTacticalFilters)}
+            size="sm"
+            onClick={() => setShowFilters(!showFilters)}
             className={cn(
-              "h-14 lg:hidden rounded-full border-border/50 px-6 font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 transition-all shrink-0",
-              showTacticalFilters 
-                ? "bg-foreground text-background border-foreground shadow-lg" 
-                : "bg-background/50 hover:bg-muted"
+              "h-10 px-3.5 rounded-xl text-xs font-medium border-border/60 gap-1.5 transition-colors cursor-pointer",
+              showFilters && "bg-muted border-border font-semibold text-foreground"
             )}
           >
-            <SlidersHorizontal size={14} />
-            {showTacticalFilters ? "Hide Panel" : "Filter Panel"}
+            <SlidersHorizontal className="size-3.5" />
+            {showFilters ? "Hide Filters" : "More Filters"}
           </Button>
+
+          {hasActiveFilters && (
+            <Button 
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="h-10 px-3 rounded-xl text-xs text-muted-foreground hover:text-foreground gap-1.5 cursor-pointer"
+            >
+              <RotateCcw className="size-3.5" />
+              Reset
+            </Button>
+          )}
         </div>
-        <Button 
-          variant="outline" 
-          onClick={clearFilters}
-          className="h-14 lg:h-20 w-full lg:w-auto px-8 rounded-full border-dashed border-muted-foreground/30 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-all gap-3 shrink-0"
-        >
-          <FilterX size={16} />
-          Reset All
-        </Button>
       </div>
 
-      {/* 2. Tactical Filters Grid */}
-      <div className={cn(
-        "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 transition-all duration-300",
-        showTacticalFilters ? "grid animate-in slide-in-from-top-4 duration-300" : "hidden lg:grid"
-      )}>
-        {/* Subcategory Filter */}
-        <div className="space-y-2">
-           <label className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.3em] ml-4 flex items-center gap-2">
-             <Layers size={10} /> Sub-Sector
-           </label>
-           <Select value={filters.subcategory} onValueChange={setSubcategory}>
-             <SelectTrigger className="h-14 bg-background/50 rounded-full border-border/50 text-[10px] font-bold uppercase px-6">
-               <SelectValue placeholder="All Subcategories" />
-             </SelectTrigger>
-             <SelectContent className="rounded-[1.5rem] border-border bg-card">
-               <SelectItem value="all" className="text-[10px] font-bold uppercase">All Sub-Sectors</SelectItem>
-               {filteredSubcategories.map(sub => (
-                 <SelectItem key={sub._id} value={sub._id} className="text-[10px] font-bold uppercase">
-                   {sub.name}
-                 </SelectItem>
-               ))}
-             </SelectContent>
-           </Select>
-        </div>
+      {/* 2. Collapsible Extended Filters Grid */}
+      {showFilters && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 p-4 rounded-xl border border-border/50 bg-muted/20 animate-in fade-in duration-200">
+          {/* Subcategory Filter */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Layers className="size-3.5" /> Subcategory
+            </label>
+            <Select value={filters.subcategory || "all"} onValueChange={setSubcategory}>
+              <SelectTrigger className="h-9 bg-background/80 rounded-lg border-border/60 text-xs">
+                <SelectValue placeholder="All Subcategories" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-border bg-card">
+                <SelectItem value="all" className="text-xs">All Subcategories</SelectItem>
+                {filteredSubcategories.map(sub => (
+                  <SelectItem key={sub._id} value={sub._id} className="text-xs">
+                    {sub.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* Stock Status Filter */}
-        <div className="space-y-2">
-           <label className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.3em] ml-4 flex items-center gap-2">
-             <Box size={10} /> Inventory Status
-           </label>
-           <Select value={filters.stockStatus} onValueChange={setStockStatus}>
-             <SelectTrigger className="h-14 bg-background/50 rounded-full border-border/50 text-[10px] font-bold uppercase px-6">
-               <SelectValue placeholder="All Stock Levels" />
-             </SelectTrigger>
-             <SelectContent className="rounded-[1.5rem] border-border bg-card">
-               <SelectItem value="all" className="text-[10px] font-bold uppercase">Full Inventory</SelectItem>
-               <SelectItem value="inStock" className="text-[10px] font-bold uppercase text-emerald-500">In Stock</SelectItem>
-               <SelectItem value="lowStock" className="text-[10px] font-bold uppercase text-amber-500">Low Stock</SelectItem>
-               <SelectItem value="outOfStock" className="text-[10px] font-bold uppercase text-destructive">Depleted</SelectItem>
-             </SelectContent>
-           </Select>
-        </div>
+          {/* Stock Status Filter */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Box className="size-3.5" /> Stock Status
+            </label>
+            <Select value={filters.stockStatus || "all"} onValueChange={setStockStatus}>
+              <SelectTrigger className="h-9 bg-background/80 rounded-lg border-border/60 text-xs">
+                <SelectValue placeholder="All Stock Levels" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-border bg-card">
+                <SelectItem value="all" className="text-xs">All Stock Levels</SelectItem>
+                <SelectItem value="inStock" className="text-xs text-emerald-600 dark:text-emerald-400">In Stock</SelectItem>
+                <SelectItem value="lowStock" className="text-xs text-amber-600 dark:text-amber-400">Low Stock (&lt; 10)</SelectItem>
+                <SelectItem value="outOfStock" className="text-xs text-rose-600 dark:text-rose-400">Out of Stock</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* Visibility Filter */}
-        <div className="space-y-2">
-           <label className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.3em] ml-4 flex items-center gap-2">
-             <Eye size={10} /> Visibility Status
-           </label>
-           <Select value={filters.isActive} onValueChange={setIsActive}>
-             <SelectTrigger className="h-14 bg-background/50 rounded-full border-border/50 text-[10px] font-bold uppercase px-6">
-               <SelectValue placeholder="All States" />
-             </SelectTrigger>
-             <SelectContent className="rounded-[1.5rem] border-border bg-card">
-               <SelectItem value="all" className="text-[10px] font-bold uppercase">All States</SelectItem>
-               <SelectItem value="true" className="text-[10px] font-bold uppercase text-emerald-500">Public Protocol</SelectItem>
-               <SelectItem value="false" className="text-[10px] font-bold uppercase text-muted-foreground">Shadow Protocol</SelectItem>
-             </SelectContent>
-           </Select>
-        </div>
+          {/* Visibility Filter */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Eye className="size-3.5" /> Visibility
+            </label>
+            <Select value={filters.isActive || "all"} onValueChange={setIsActive}>
+              <SelectTrigger className="h-9 bg-background/80 rounded-lg border-border/60 text-xs">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-border bg-card">
+                <SelectItem value="all" className="text-xs">All Statuses</SelectItem>
+                <SelectItem value="true" className="text-xs text-emerald-600 dark:text-emerald-400">Active / Visible</SelectItem>
+                <SelectItem value="false" className="text-xs text-muted-foreground">Hidden / Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* Flash Sale Filter */}
-        <div className="space-y-2">
-           <label className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.3em] ml-4 flex items-center gap-2">
-             <Zap size={10} className="text-amber-500" /> Flash Campaign
-           </label>
-           <Select value={filters.flashSale || "all"} onValueChange={setFlashSale}>
-             <SelectTrigger className="h-14 bg-background/50 rounded-full border-border/50 text-[10px] font-bold uppercase px-6">
-               <SelectValue placeholder="All Campaigns" />
-             </SelectTrigger>
-             <SelectContent className="rounded-[1.5rem] border-border bg-card">
-               <SelectItem value="all" className="text-[10px] font-bold uppercase">All Campaigns</SelectItem>
-               {flashSales?.map(sale => (
-                 <SelectItem key={sale._id} value={sale._id} className="text-[10px] font-bold uppercase">
-                   {sale.name} ({sale.discount}% Off)
-                 </SelectItem>
-               ))}
-             </SelectContent>
-           </Select>
-        </div>
+          {/* Flash Sale Filter */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Zap className="size-3.5 text-amber-500" /> Flash Sale
+            </label>
+            <Select value={filters.flashSale || "all"} onValueChange={setFlashSale}>
+              <SelectTrigger className="h-9 bg-background/80 rounded-lg border-border/60 text-xs">
+                <SelectValue placeholder="All Campaigns" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-border bg-card">
+                <SelectItem value="all" className="text-xs">All Campaigns</SelectItem>
+                {flashSales?.map(sale => (
+                  <SelectItem key={sale._id} value={sale._id} className="text-xs">
+                    {sale.name} ({sale.discount}% off)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* Price Range Filter */}
-        <div className="space-y-2">
-           <label className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.3em] ml-4 flex items-center gap-2">
-             <CircleDollarSign size={10} /> Price Magnitude
-           </label>
-           <div className="flex items-center gap-2">
-             <Input 
+          {/* Price Range Filter */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <CircleDollarSign className="size-3.5" /> Price Range (৳)
+            </label>
+            <div className="flex items-center gap-2">
+              <Input 
                 type="number" 
-                placeholder="MIN" 
+                placeholder="Min" 
                 value={localMin}
                 onChange={(e) => setLocalMin(e.target.value)}
-                className="h-14 bg-background/50 rounded-l-full border-border/50 text-[10px] font-black uppercase text-center focus:ring-primary/20"
-             />
-             <div className="h-[2px] w-4 bg-muted shrink-0" />
-             <Input 
+                className="h-9 bg-background/80 rounded-lg border-border/60 text-xs text-center"
+              />
+              <span className="text-xs text-muted-foreground">—</span>
+              <Input 
                 type="number" 
-                placeholder="MAX" 
+                placeholder="Max" 
                 value={localMax}
                 onChange={(e) => setLocalMax(e.target.value)}
-                className="h-14 bg-background/50 rounded-r-full border-border/50 text-[10px] font-black uppercase text-center focus:ring-primary/20"
-             />
-           </div>
+                className="h-9 bg-background/80 rounded-lg border-border/60 text-xs text-center"
+              />
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* 3. Category Carousel */}
-      <div className="space-y-3">
-        <label className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.4em] ml-4">
-          Sector Classification
-        </label>
-        <div
-          ref={sliderRef}
-          onMouseDown={handleMouseDown}
-          onMouseLeave={handleMouseLeave}
-          onMouseUp={handleMouseUp}
-          onMouseMove={handleMouseMove}
+      {/* 3. Category Horizontal Pills */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+        <button
+          type="button"
+          onClick={() => setCategory("all")}
           className={cn(
-            "flex overflow-x-auto w-full no-scrollbar gap-4 pb-4 px-1 snap-x snap-mandatory scroll-smooth touch-pan-x transition-all",
-            isDragging ? "cursor-grabbing scale-[0.99] opacity-90" : "cursor-grab"
+            "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 cursor-pointer",
+            (filters.category === "all" || !filters.category)
+              ? "bg-foreground text-background shadow-2xs font-semibold"
+              : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
         >
-          {/* All Categories button */}
-          <button
-            onClick={() => setCategory("all")}
-            className={cn(
-              "flex items-center gap-3 pr-6 pl-2 py-2 rounded-full border transition-all duration-300 shrink-0 snap-start group",
-              filters.category === "all"
-                ? "bg-foreground text-background border-foreground shadow-xl"
-                : "bg-card text-muted-foreground border-border hover:border-foreground"
-            )}
-          >
-            <div
+          All Categories
+        </button>
+        {categories?.map((cat) => {
+          const active = filters.category === cat.slug;
+          return (
+            <button
+              key={cat._id}
+              type="button"
+              onClick={() => setCategory(cat.slug)}
               className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center text-lg",
-                filters.category === "all"
-                  ? "bg-background/25"
-                  : "bg-muted grayscale"
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 cursor-pointer",
+                active
+                  ? "bg-foreground text-background shadow-2xs font-semibold"
+                  : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
-              ♾️
-            </div>
-            <span className="text-[10px] font-black uppercase tracking-widest">
-              All Categories
-            </span>
-          </button>
-
-          {/* Featured Items Button */}
-          <button
-            onClick={() => setCategory("isFeatured")}
-            className={cn(
-              "flex items-center gap-3 pr-6 pl-2 py-2 rounded-full border transition-all duration-300 shrink-0 snap-start group",
-              filters.category === "isFeatured"
-                ? "bg-amber-500 text-white border-amber-600 shadow-[0_0_20px_rgba(245,158,11,0.3)]"
-                : "bg-card text-muted-foreground border-border hover:border-amber-500/50"
-            )}
-          >
-            <div
-              className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center text-lg",
-                filters.category === "isFeatured"
-                  ? "bg-white/20"
-                  : "bg-amber-100 grayscale group-hover:grayscale-0"
+              {cat.image && (
+                <img
+                  src={getImageUrl(cat.image)}
+                  alt=""
+                  className="size-3.5 rounded-full object-cover"
+                />
               )}
-            >
-              ★
-            </div>
-            <span className="text-[10px] font-black uppercase tracking-widest">
-              Featured Items
-            </span>
-          </button>
-
-          {/* Dynamic Category Buttons */}
-          {categories?.map((cat) => {
-            const isSelected = filters.category === cat.slug;
-            return (
-              <button
-                key={cat._id}
-                onClick={() => setCategory(cat.slug)}
-                className={cn(
-                  "flex items-center gap-3 pr-6 pl-2 py-2 rounded-full border transition-all duration-300 shrink-0 snap-start group",
-                  isSelected
-                    ? "bg-foreground text-background border-foreground shadow-xl"
-                    : "bg-card text-muted-foreground border-border hover:border-foreground"
-                )}
-              >
-                <div className="w-10 h-10 rounded-full overflow-hidden bg-muted border border-border">
-                  <img
-                    src={getImageUrl(cat.image)}
-                    alt={cat.name}
-                    className={cn(
-                      "w-full h-full object-cover transition-all duration-500",
-                      isSelected
-                        ? "grayscale-0 scale-110"
-                        : "grayscale group-hover:grayscale-0"
-                    )}
-                  />
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-widest">
-                  {cat.name}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+              {cat.name}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

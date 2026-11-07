@@ -4,8 +4,12 @@ import { motion } from "framer-motion";
 import { MessageCircle, Home, Smartphone, Monitor, Shield } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { useAppStore } from "@/store/appStore";
 
 function ChatIdlePage() {
+  const { settings } = useAppStore();
+  const siteName = settings?.branding?.siteName || "Store";
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-12 text-center h-full">
       {/* Mobile Back Header */}
@@ -15,7 +19,7 @@ function ChatIdlePage() {
             <Home size={20} className="text-[#54656f] dark:text-[#aebac1]" />
           </Button>
         </Link>
-        <h2 className="ml-4 text-base font-medium text-[#111b21] dark:text-[#e9edef]">Vanguard Messenger</h2>
+        <h2 className="ml-4 text-base font-medium text-[#111b21] dark:text-[#e9edef]">{siteName} Messenger</h2>
       </div>
 
       <div className="max-w-md space-y-8 flex flex-col items-center">
@@ -41,17 +45,16 @@ function ChatIdlePage() {
           </motion.div>
         </div>
 
-        <div className="space-y-4">
-          <h1 className="text-3xl font-light text-[#41525d] dark:text-[#e9edef] tracking-tight">Vanguard for Desktop</h1>
-          <p className="text-[14px] text-[#667781] dark:text-[#8696a0] leading-relaxed">
-            Send and receive transmissions without keeping your phone online.<br/>
-            Use Vanguard on up to 4 linked devices and 1 phone at the same time.
+        <div className="space-y-3">
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">{siteName} Live Chat</h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Select a conversation from the sidebar or search for a customer to start chatting. Real-time support messaging is active.
           </p>
         </div>
         
-        <div className="pt-10 border-t border-[#d1d7db] dark:border-[#222d34] w-full">
-           <p className="text-[12px] text-[#8696a0] flex items-center justify-center gap-2">
-             <Shield size={12} /> End-to-end encrypted protocol active
+        <div className="pt-8 border-t border-border/60 w-full">
+           <p className="text-xs text-muted-foreground flex items-center justify-center gap-2">
+             <Shield size={14} className="text-emerald-500" /> Real-time customer messaging connected
            </p>
         </div>
       </div>

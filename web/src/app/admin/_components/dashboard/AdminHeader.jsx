@@ -1,43 +1,52 @@
+"use client";
+
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { TrendingUp } from "lucide-react";
+import { Price } from "@/components/common/Price";
 
 export function AdminHeader({ 
   isFetching, 
-  todayRevenue, 
+  todayRevenue = 0, 
   isLoading
 }) {
   return (
-    <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 animate-in fade-in slide-in-from-top-4 duration-700">
-      <div className="space-y-4">
-        <div>
-          <h1 className="text-4xl md:text-7xl font-black text-foreground tracking-tighter uppercase italic leading-none mb-4">
-            Admin <span className="text-muted-foreground/30">Dashboard</span>
-          </h1>
-          <div className="flex items-center gap-3">
-            <div
-              className={cn(
-                "h-2 w-2 rounded-full transition-all duration-500 bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)]",
-                isLoading && "bg-muted animate-pulse shadow-none"
-              )}
-            />
-            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.4em]">
-              Active & Synced
-            </p>
-          </div>
+    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+          Store Overview
+        </h1>
+        <div className="flex items-center gap-2 mt-1">
+          <span
+            className={cn(
+              "size-2 rounded-full bg-emerald-500",
+              isLoading ? "animate-ping opacity-75" : "shadow-xs"
+            )}
+          />
+          <p className="text-xs text-muted-foreground">
+            {isFetching ? "Syncing real-time store telemetry..." : "Live store data active"}
+          </p>
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="bg-card text-card-foreground border border-border p-6 rounded-[2rem] shadow-xl min-w-[240px] transition-all hover:scale-[1.02]">
-          <p className="text-[9px] font-black text-muted-foreground uppercase mb-1 tracking-[0.2em]">
-            Today's Sales
-          </p>
+      <div className="flex items-center gap-3">
+        <div className="rounded-2xl border border-border/60 bg-card/70 px-4 py-3 shadow-2xs backdrop-blur-md min-w-[200px]">
+          <span className="text-xs font-medium text-muted-foreground block mb-0.5">
+            Today&apos;s Revenue
+          </span>
           {isLoading ? (
-            <Skeleton className="h-9 w-32 bg-emerald-500/10" />
+            <Skeleton className="h-7 w-28 rounded-md" />
           ) : (
-            <p className="text-3xl font-black text-emerald-500 tracking-tighter">
-              ৳{todayRevenue.toLocaleString()}
-            </p>
+            <div className="flex items-baseline gap-2">
+              <Price
+                amount={todayRevenue}
+                decimals={2}
+                className="text-xl sm:text-2xl font-bold text-foreground"
+              />
+              <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 flex items-center">
+                <TrendingUp className="size-3 mr-0.5" /> Live
+              </span>
+            </div>
           )}
         </div>
       </div>

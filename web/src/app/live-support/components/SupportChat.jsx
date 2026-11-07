@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import { getImageUrl } from "@/utils/imageUtils";
+import { Price } from "@/components/common/Price";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -100,13 +101,16 @@ function ProductMatchCard({ product, onAddToCart }) {
           </div>
 
           <div className="flex items-baseline gap-1.5">
-            <span className="text-[14px] font-black text-orange-400">
-              ৳{Math.round(finalPrice)}
-            </span>
+            <Price
+              amount={Math.round(finalPrice)}
+              className="text-[14px] font-black text-orange-400"
+            />
             {discount > 0 && (
-              <span className="text-[10px] text-zinc-400 line-through">
-                ৳{price}
-              </span>
+              <Price
+                amount={price}
+                lineThrough
+                className="text-[10px] text-zinc-400"
+              />
             )}
           </div>
         </div>
@@ -189,7 +193,8 @@ function ProductMatchCard({ product, onAddToCart }) {
 // -----------------------------------------------------------------------------
 export default function SupportChat() {
   const { user } = useAuthStore();
-  const { isChatOpen: isOpen, setChatOpen: setIsOpen } = useAppStore();
+  const { isChatOpen: isOpen, setChatOpen: setIsOpen, settings } = useAppStore();
+  const siteName = settings?.branding?.siteName || "Store";
   const addToCartStore = useProductStore((state) => state.addToCart);
   const pathname = usePathname();
 
@@ -226,7 +231,7 @@ export default function SupportChat() {
       {
         id: "welcome-1",
         role: "assistant",
-        text: "👋 Welcome to Vanguard! I am your AI Shopping Assistant running our custom local multimodal vision model.\n\nUpload a picture of any outfit or ask me about style, sizing, and pricing to find and order products instantly—no login required!",
+        text: `Welcome to ${siteName}! I am your AI Shopping Assistant running our custom local multimodal vision model.\n\nUpload a picture of any outfit or ask me about style, sizing, and pricing to find and order products instantly—no login required!`,
         timestamp: new Date().toISOString(),
       },
     ];
@@ -393,7 +398,7 @@ export default function SupportChat() {
                   </div>
                   <div>
                     <h3 className="text-[13px] font-black tracking-tight text-foreground flex items-center gap-1.5">
-                      {chatMode === "ai" ? "Vanguard AI Assistant" : "Live Customer Support"}
+                      {chatMode === "ai" ? `${siteName} AI Assistant` : "Live Customer Support"}
                       {chatMode === "ai" && (
                         <span className="flex items-center gap-1 rounded-full bg-accent-secondary/10 px-2 py-0.5 text-[8px] font-bold text-accent-secondary">
                           <Sparkles size={9} /> VLM

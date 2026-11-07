@@ -1,21 +1,42 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { getImageUrl } from "@/utils/imageUtils";
-import { usePathname } from "next/navigation";
 import Sidebar from "@/app/admin/_components/Sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppStore } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
-import { Menu, Globe, Sun, Moon, LogOut, BarChart3, ShoppingBag, Package, Layers, Image, Zap, Ticket, FileText, Users } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Menu,
+  Globe,
+  Sun,
+  Moon,
+  LogOut,
+  BarChart3,
+  ShoppingBag,
+  Package,
+  Layers,
+  Image,
+  Zap,
+  Ticket,
+  FileText,
+  Users,
+} from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import api from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/useTheme";
-import { hasPermission, hasAnyAdminPermission } from "@/utils/rbacUtils";
+import { hasAnyAdminPermission } from "@/utils/rbacUtils";
 import { useQueryClient } from "@tanstack/react-query";
 import { swalToast } from "@/utils/swal";
 
@@ -34,9 +55,10 @@ export default function AdminLayout({ children }) {
 
   useEffect(() => {
     if (token) {
-      api.get("/admin/counts")
+      api
+        .get("/admin/counts")
         .then((res) => setCounts(res.data))
-        .catch((err) => console.error("Error fetching admin counts", err));
+        .catch(() => {});
     }
   }, [token]);
 
@@ -45,24 +67,64 @@ export default function AdminLayout({ children }) {
   }, [pathname]);
 
   const statItems = [
-    { label: "Orders", count: counts?.orders, icon: ShoppingBag, color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20 dark:bg-emerald-500/20" },
-    { label: "Products", count: counts?.products, icon: Package, color: "text-blue-500 bg-blue-500/10 border-blue-500/20 dark:bg-blue-500/20" },
-    { label: "Categories", count: counts?.categories, icon: Layers, color: "text-indigo-500 bg-indigo-500/10 border-indigo-500/20 dark:bg-indigo-500/20" },
-    { label: "Banners", count: counts?.banners, icon: Image, color: "text-purple-500 bg-purple-500/10 border-purple-500/20 dark:bg-purple-500/20" },
-    { label: "Flash Sales", count: counts?.flashSales, icon: Zap, color: "text-amber-500 bg-amber-500/10 border-amber-500/20 dark:bg-amber-500/20" },
-    { label: "Coupons", count: counts?.coupons, icon: Ticket, color: "text-rose-500 bg-rose-500/10 border-rose-500/20 dark:bg-rose-500/20" },
-    { label: "Blogs", count: counts?.blogs, icon: FileText, color: "text-cyan-500 bg-cyan-500/10 border-cyan-500/20 dark:bg-cyan-500/20" },
-    { label: "Users", count: counts?.users, icon: Users, color: "text-teal-500 bg-teal-500/10 border-teal-500/20 dark:bg-teal-500/20" },
+    {
+      label: "Orders",
+      count: counts?.orders,
+      icon: ShoppingBag,
+      color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20 dark:bg-emerald-500/20",
+    },
+    {
+      label: "Products",
+      count: counts?.products,
+      icon: Package,
+      color: "text-blue-500 bg-blue-500/10 border-blue-500/20 dark:bg-blue-500/20",
+    },
+    {
+      label: "Categories",
+      count: counts?.categories,
+      icon: Layers,
+      color: "text-indigo-500 bg-indigo-500/10 border-indigo-500/20 dark:bg-indigo-500/20",
+    },
+    {
+      label: "Banners",
+      count: counts?.banners,
+      icon: Image,
+      color: "text-purple-500 bg-purple-500/10 border-purple-500/20 dark:bg-purple-500/20",
+    },
+    {
+      label: "Flash Sales",
+      count: counts?.flashSales,
+      icon: Zap,
+      color: "text-amber-500 bg-amber-500/10 border-amber-500/20 dark:bg-amber-500/20",
+    },
+    {
+      label: "Coupons",
+      count: counts?.coupons,
+      icon: Ticket,
+      color: "text-rose-500 bg-rose-500/10 border-rose-500/20 dark:bg-rose-500/20",
+    },
+    {
+      label: "Blogs",
+      count: counts?.blogs,
+      icon: FileText,
+      color: "text-cyan-500 bg-cyan-500/10 border-cyan-500/20 dark:bg-cyan-500/20",
+    },
+    {
+      label: "Users",
+      count: counts?.users,
+      icon: Users,
+      color: "text-teal-500 bg-teal-500/10 border-teal-500/20 dark:bg-teal-500/20",
+    },
   ];
 
   const isChatRoute = pathname?.startsWith("/admin/chat");
   const isAiChatRoute = pathname === "/admin/ai-chat";
+  const isPosRoute = pathname === "/admin/orders/new" || pathname === "/admin/orders/new/" || pathname === "/admin/pos" || pathname?.startsWith("/admin/pos");
   const showSidebar = true;
-  const showHeader = !isChatRoute && !isAiChatRoute;
-  const isFullPageStyle = isChatRoute || isAiChatRoute;
+  const showHeader = !isChatRoute && !isAiChatRoute && !isPosRoute;
+  const isFullPageStyle = isChatRoute || isAiChatRoute || isPosRoute;
 
-
-  // 🛡️ Redirect non-admins
+  // Enforce administrative permissions
   useEffect(() => {
     const hasAdminAccess = hasAnyAdminPermission(user);
 
@@ -81,84 +143,58 @@ export default function AdminLayout({ children }) {
   }, [user, authLoading, router, token, initSocket, disconnectSocket, fetchUnreadCount]);
 
   useEffect(() => {
-    if (!socket) {
-      console.log('⚠️ SOCKET: Socket not available in admin layout');
-      return;
-    }
-
-    console.log('📌 SOCKET: Registering admin handlers');
+    if (!socket) return;
 
     const handleNewOrder = (order) => {
-      console.log('⚡ SOCKET ADMIN: new_order event received!', order);
-      
-      // Play notification sound
       try {
         const audio = new Audio("/notification.wav");
         audio.volume = 0.5;
-        audio.play().catch((err) => console.log("Audio play blocked/failed:", err));
-      } catch (err) {
-        console.error("Audio playback error:", err);
-      }
+        audio.play().catch(() => {});
+      } catch {}
 
-      // Show Toast Notification
-      swalToast(`New Order Received! #${order._id ? order._id.slice(-8).toUpperCase() : "SUCCESS"}`, "success");
+      swalToast(
+        `New Order Received! #${order._id ? order._id.slice(-8).toUpperCase() : "SUCCESS"}`,
+        "success"
+      );
 
-      // Invalidate React Query
-      console.log('🔄 SOCKET ADMIN: Invalidating React Query keys...');
       queryClient.invalidateQueries({ queryKey: ["adminOrders"] });
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard-recent-orders"] });
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard-stats"] });
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
-      
-      // Update stats counts
-      api.get("/admin/counts")
-        .then((res) => {
-          console.log("⚡ SOCKET ADMIN: Refetched counts:", res.data);
-          setCounts(res.data);
-        })
-        .catch((err) => console.error("Error refreshing counts:", err));
+
+      api
+        .get("/admin/counts")
+        .then((res) => setCounts(res.data))
+        .catch(() => {});
     };
 
     const handleOrderUpdated = (data) => {
-      console.log('⚡ SOCKET ADMIN: order_updated event received!', data);
-      
-      // Invalidate queries
       queryClient.invalidateQueries({ queryKey: ["adminOrders"] });
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard-recent-orders"] });
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard-stats"] });
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
-      if (data.orderId) {
+      if (data?.orderId) {
         queryClient.invalidateQueries({ queryKey: ["adminOrder", data.orderId] });
       }
-      
-      // Update stats counts
-      api.get("/admin/counts")
-        .then((res) => {
-          console.log("⚡ SOCKET ADMIN: Refetched counts after order update:", res.data);
-          setCounts(res.data);
-        })
-        .catch((err) => console.error("Error refreshing counts:", err));
+
+      api
+        .get("/admin/counts")
+        .then((res) => setCounts(res.data))
+        .catch(() => {});
     };
 
-    // Attach listeners
     socket.on("new_order", handleNewOrder);
     socket.on("order_updated", handleOrderUpdated);
 
-    console.log('✅ SOCKET ADMIN: Handlers registered');
-
-    // Cleanup
     return () => {
-      console.log('🧹 SOCKET ADMIN: Removing handlers');
       socket.off("new_order", handleNewOrder);
       socket.off("order_updated", handleOrderUpdated);
     };
   }, [socket, queryClient]);
 
   const handleLogout = () => {
-    // Disconnect socket first
     if (socket) {
       socket.disconnect();
-      console.log('🔌 SOCKET: Disconnected before logout');
     }
     disconnectSocket();
     logout();
@@ -167,13 +203,14 @@ export default function AdminLayout({ children }) {
 
   if (authLoading || !isMounted) {
     return (
-      <div className="flex min-h-[100dvh] lg:h-[100dvh] bg-background transition-colors duration-700">
-        {/* Sidebar Skeleton */}
+      <div className="flex min-h-[100dvh] lg:h-[100dvh] bg-background transition-colors duration-300">
         {showSidebar && (
-          <div className={cn(
-            "hidden lg:flex flex-col border-r border-border p-8 space-y-8 transition-all duration-500",
-            isAdminSidebarCollapsed ? "w-24" : "w-72"
-          )}>
+          <div
+            className={cn(
+              "hidden lg:flex flex-col border-r border-border p-6 space-y-8 transition-all duration-300",
+              isAdminSidebarCollapsed ? "w-20" : "w-72"
+            )}
+          >
             <Skeleton className="h-10 w-10 rounded-xl" />
             <div className="space-y-4">
               {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -184,7 +221,6 @@ export default function AdminLayout({ children }) {
         )}
 
         <div className="flex-1 flex flex-col lg:overflow-hidden">
-          {/* Header Skeleton */}
           {showHeader && (
             <div className="h-20 border-b border-border px-10 flex items-center justify-between">
               <Skeleton className="h-8 w-48 rounded-full" />
@@ -199,20 +235,9 @@ export default function AdminLayout({ children }) {
             </div>
           )}
 
-          {/* Main Content Skeleton */}
           <div className={cn("flex-1 space-y-10", !isFullPageStyle ? "p-10" : "p-0")}>
-            {!isFullPageStyle && (
-              <>
-                <Skeleton className="h-16 w-1/2 rounded-2xl" />
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  {[1, 2, 3, 4].map((i) => (
-                    <Skeleton key={i} className="h-32 rounded-[2rem]" />
-                  ))}
-                </div>
-                <Skeleton className="h-[400px] w-full rounded-[3rem]" />
-              </>
-            )}
-            {isFullPageStyle && <Skeleton className="h-full w-full rounded-none" />}
+            <Skeleton className="h-16 w-1/2 rounded-2xl" />
+            <Skeleton className="h-[400px] w-full rounded-3xl" />
           </div>
         </div>
       </div>
@@ -220,34 +245,43 @@ export default function AdminLayout({ children }) {
   }
 
   const hasAdminAccess = hasAnyAdminPermission(user);
-
   if (!user || !hasAdminAccess) return null;
 
   return (
-    <div className="flex min-h-[100dvh] lg:h-[100dvh] bg-background text-foreground transition-colors duration-700 lg:overflow-hidden">
-      {/* 🖥️ Desktop Sidebar */}
-      {showSidebar && <Sidebar className="hidden lg:flex shrink-0 border-r border-sidebar-border" />}
+    <div className="flex min-h-[100dvh] lg:h-[100dvh] bg-background text-foreground transition-colors duration-300 lg:overflow-hidden">
+      {/* Desktop Sidebar */}
+      {showSidebar && (
+        <Sidebar className="hidden lg:flex shrink-0 border-r border-sidebar-border" />
+      )}
 
       <div className="flex-1 flex flex-col min-w-0 relative lg:h-full">
-        {/* 🛰️ Top Header Bar */}
+        {/* Top Header Bar */}
         {showHeader && (
           <header className="bg-background/70 backdrop-blur-2xl border-b border-border z-40 shrink-0">
             <div className="flex justify-between items-center px-4 md:px-10 py-3 md:py-6">
               <div className="flex items-center gap-3 md:gap-5">
-                {/* 🍔 Mobile Hamburger (Sheet) */}
+                {/* Mobile Drawer Trigger */}
                 <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
                   <SheetTrigger asChild>
-                    <button className="lg:hidden p-2.5 text-foreground bg-muted rounded-xl active:scale-90 transition-all">
+                    <button
+                      className="lg:hidden p-2.5 text-foreground bg-muted rounded-xl active:scale-90 transition-all"
+                      aria-label="Open sidebar navigation"
+                    >
                       <Menu size={18} />
                     </button>
                   </SheetTrigger>
-                  <SheetContent side="left" className="p-0 w-72 bg-sidebar border-r border-sidebar-border [&>button]:hidden">
+                  <SheetContent
+                    side="left"
+                    className="p-0 w-72 bg-sidebar border-r border-sidebar-border [&>button]:hidden"
+                  >
                     <SheetHeader className="sr-only">
                       <SheetTitle>Admin Navigation</SheetTitle>
-                      <SheetDescription>Access administrative control panels and settings.</SheetDescription>
+                      <SheetDescription>
+                        Access administrative control panels and settings.
+                      </SheetDescription>
                     </SheetHeader>
                     <Sidebar
-                      className="border-none"
+                      className="border-none w-full"
                       collapsible={false}
                       onItemClick={() => setIsSidebarOpen(false)}
                     />
@@ -255,13 +289,13 @@ export default function AdminLayout({ children }) {
                 </Sheet>
 
                 <div className="hidden sm:flex items-center gap-3 bg-emerald-500/10 px-4 py-1.5 rounded-full border border-emerald-500/20 shadow-sm">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
                     Active
                   </span>
                 </div>
 
-                {/* 📊 Stats Hub Widget */}
+                {/* Stats Hub Widget */}
                 <div className="relative">
                   <button
                     onClick={() => setShowStatsDropdown(!showStatsDropdown)}
@@ -272,34 +306,49 @@ export default function AdminLayout({ children }) {
                         : "bg-muted/50 text-muted-foreground border-border/50 hover:bg-muted hover:text-foreground"
                     )}
                   >
-                    <BarChart3 size={11} className="animate-bounce" />
+                    <BarChart3 size={11} />
                     <span>Stats Hub</span>
                   </button>
 
                   {showStatsDropdown && (
                     <>
-                      {/* Overlay to close on outside click */}
-                      <div className="fixed inset-0 z-40" onClick={() => setShowStatsDropdown(false)} />
-                      
-                      <div className="absolute left-0 mt-3 w-[290px] sm:w-[360px] bg-card/95 backdrop-blur-3xl border border-border rounded-3xl p-4 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 z-50">
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowStatsDropdown(false)}
+                      />
+                      <div className="absolute left-0 mt-3 w-[290px] sm:w-[360px] bg-card/95 backdrop-blur-3xl border border-border rounded-3xl p-4 shadow-2xl animate-in fade-in duration-150 z-50">
                         <div className="flex items-center justify-between pb-3 border-b border-border/50 mb-3 text-foreground">
-                          <span className="text-[10px] font-black uppercase tracking-wider">Live Database Metrics</span>
+                          <span className="text-[10px] font-black uppercase tracking-wider">
+                            Live Database Metrics
+                          </span>
                           <span className="flex h-2 w-2 relative">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                           </span>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           {statItems.map((item, idx) => {
                             const IconComponent = item.icon;
                             return (
-                              <div key={idx} className="flex items-center gap-3 p-2.5 rounded-2xl bg-muted/30 border border-border/30 hover:bg-muted/50 transition-all text-foreground">
-                                <div className={cn("p-2 rounded-xl border flex items-center justify-center shrink-0", item.color)}>
+                              <div
+                                key={idx}
+                                className="flex items-center gap-3 p-2.5 rounded-2xl bg-muted/30 border border-border/30 hover:bg-muted/50 transition-all text-foreground"
+                              >
+                                <div
+                                  className={cn(
+                                    "p-2 rounded-xl border flex items-center justify-center shrink-0",
+                                    item.color
+                                  )}
+                                >
                                   <IconComponent size={14} />
                                 </div>
                                 <div className="min-w-0">
-                                  <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest truncate">{item.label}</p>
-                                  <p className="text-sm font-black tabular-nums">{item.count ?? 0}</p>
+                                  <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest truncate">
+                                    {item.label}
+                                  </p>
+                                  <p className="text-sm font-black tabular-nums">
+                                    {item.count ?? 0}
+                                  </p>
                                 </div>
                               </div>
                             );
@@ -312,10 +361,10 @@ export default function AdminLayout({ children }) {
               </div>
 
               <div className="flex items-center gap-3 md:gap-8">
-                {/* Theme & Store Protocol */}
                 <div className="flex items-center gap-3 md:gap-6 border-r border-border pr-3 md:pr-8">
                   <Link
                     href="/"
+                    prefetch={true}
                     className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors group"
                   >
                     <Globe size={14} className="opacity-50 group-hover:text-accent-secondary" />
@@ -325,36 +374,36 @@ export default function AdminLayout({ children }) {
                   <button
                     onClick={toggleTheme}
                     className="p-2 rounded-xl bg-muted text-muted-foreground hover:text-foreground transition-all shadow-inner"
+                    aria-label="Toggle theme color mode"
                   >
                     {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
                   </button>
                 </div>
 
-                {/* Identity Hub */}
                 <div className="flex items-center gap-3">
                   <div className="h-8 w-8 md:h-10 md:w-10 rounded-xl md:rounded-2xl overflow-hidden bg-foreground text-background border border-border shadow-xl p-[1.5px] md:p-[2px]">
-                     <div className="w-full h-full rounded-[0.5rem] md:rounded-[0.9rem] overflow-hidden">
-                        {user?.avatar ? (
-                          <img
-                            src={getImageUrl(user.avatar)}
-                            alt={user.name}
-                            className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-muted">
-                            <span className="text-[10px] font-black">
-                              {user?.name?.charAt(0)}
-                            </span>
-                          </div>
-                        )}
-                     </div>
+                    <div className="w-full h-full rounded-[0.5rem] md:rounded-[0.9rem] overflow-hidden">
+                      {user?.avatar ? (
+                        <img
+                          src={getImageUrl(user.avatar)}
+                          alt={user.name}
+                          className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-300"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-muted">
+                          <span className="text-[10px] font-black">
+                            {user?.name?.charAt(0)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="hidden lg:block">
-                    <p className="text-[10px] font-black text-foreground uppercase tracking-wider">
+                    <p className="text-xs font-semibold text-foreground tracking-tight">
                       {user?.name}
                     </p>
-                    <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
+                    <p className="text-[11px] font-medium text-muted-foreground capitalize mt-0.5">
                       {user?.role?.name}
                     </p>
                   </div>
@@ -364,6 +413,7 @@ export default function AdminLayout({ children }) {
                   onClick={handleLogout}
                   className="text-muted-foreground hover:text-destructive transition-all hover:rotate-12"
                   title="Logout"
+                  aria-label="Logout"
                 >
                   <LogOut size={16} />
                 </button>
@@ -372,8 +422,19 @@ export default function AdminLayout({ children }) {
           </header>
         )}
 
-        <main className={cn("flex-1 lg:overflow-y-auto no-scrollbar bg-background/50 lg:overscroll-y-contain", !isFullPageStyle ? "min-h-0" : "p-0 overflow-hidden")}>
-          <div className={cn("mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700", !isFullPageStyle ? "max-w-none" : "max-w-none h-full")}>
+        {/* Content View Area */}
+        <main
+          className={cn(
+            "flex-1 lg:overflow-y-auto no-scrollbar bg-background/50 lg:overscroll-y-contain",
+            !isFullPageStyle ? "min-h-0" : "p-0 overflow-hidden"
+          )}
+        >
+          <div
+            className={cn(
+              "mx-auto animate-in fade-in duration-150",
+              !isFullPageStyle ? "max-w-none" : "max-w-none h-full"
+            )}
+          >
             {children}
           </div>
         </main>
@@ -381,4 +442,3 @@ export default function AdminLayout({ children }) {
     </div>
   );
 }
-

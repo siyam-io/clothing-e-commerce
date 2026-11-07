@@ -15,7 +15,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 const MONGO_URI = process.env.MONGO_URI;
 
 if (!MONGO_URI) {
-  console.error("❌ MONGO_URI is missing from the environment configuration!");
+  console.error(" MONGO_URI is missing from the environment configuration!");
   process.exit(1);
 }
 
@@ -308,9 +308,9 @@ const blogs = [
 
 async function seedBlogs() {
   try {
-    console.log("🔌 Connecting to MongoDB Database...");
+    console.log(" Connecting to MongoDB Database...");
     await mongoose.connect(MONGO_URI);
-    console.log("✅ Successfully connected to MongoDB database!");
+    console.log(" Successfully connected to MongoDB database!");
 
     // Find the eshtiyak ahmmed siyam user or fall back to any admin/user
     let authorUser = await User.findOne({ email: "ssiyam563@gmail.com" });
@@ -319,11 +319,11 @@ async function seedBlogs() {
     }
 
     if (!authorUser) {
-      console.error("❌ No user/author found in the database. Please seed users first!");
+      console.error(" No user/author found in the database. Please seed users first!");
       process.exit(1);
     }
 
-    console.log(`👤 Author assigned: ${authorUser.name} (${authorUser.email})`);
+    console.log(` Author assigned: ${authorUser.name} (${authorUser.email})`);
 
     // Prepare blogs with correct author ID
     const processedBlogs = blogs.map(blog => ({
@@ -331,17 +331,17 @@ async function seedBlogs() {
       author: authorUser._id
     }));
 
-    console.log("🧹 Purging any existing seeded blogs with identical slugs...");
+    console.log(" Purging any existing seeded blogs with identical slugs...");
     const slugs = processedBlogs.map(b => b.slug);
     await Blog.deleteMany({ slug: { $in: slugs } });
 
-    console.log(`🌱 Inserting ${processedBlogs.length} premium blogs...`);
+    console.log(` Inserting ${processedBlogs.length} premium blogs...`);
     const insertedBlogs = await Blog.insertMany(processedBlogs);
-    console.log(`🎉 Successfully seeded ${insertedBlogs.length} premium blogs!`);
+    console.log(` Successfully seeded ${insertedBlogs.length} premium blogs!`);
 
     process.exit(0);
   } catch (error) {
-    console.error("❌ Seeding failed with error:", error);
+    console.error(" Seeding failed with error:", error);
     process.exit(1);
   }
 }

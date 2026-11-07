@@ -1,214 +1,234 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useAdminCoupons } from "@/app/admin/coupons/lib/useAdminCoupons";
-import DataTable from "@/app/admin/_components/DataTable";
-import TableSkeleton from "@/components/common/TableSkeleton";
-import { swalConfirm, swalToast, swalError } from "@/utils/swal";
+import { swalToast, swalError } from "@/utils/swal";
 import { 
   Plus, 
   Trash2, 
-  Edit3, 
+  Edit2, 
   Ticket, 
-  Power,
-  Eye
+  Eye,
+  Power
 } from "lucide-react";
-
-// Shadcn UI Imports
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-
+import { Skeleton } from "@/components/ui/skeleton";
 import { useFilters } from "@/app/admin/_hooks/useFilters";
 import Pagination from "@/components/common/Pagination";
+import AdminPageContainer from "@/app/admin/_components/AdminPageContainer";
 import AdminPageHeader, { AdminHeaderButton } from "@/app/admin/_components/AdminPageHeader";
+import { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardContent } from "@/app/admin/_components/AdminCard";
+import AdminDataTable from "@/app/admin/_components/AdminDataTable";
+import AdminStatusBadge from "@/app/admin/_components/AdminStatusBadge";
+import AdminDeleteModal from "@/app/admin/_components/AdminDeleteModal";
+import { Price } from "@/components/common/Price";
 
 export default function CouponListPage() {
   const { page, setPage, queryParams } = useFilters({ initialLimit: 30 });
   const { coupons, total, pages, isLoading, deleteCoupon, updateCoupon } = useAdminCoupons(queryParams);
 
-  const handleDelete = async (id) => {
-    const confirmed = await swalConfirm(
-      "Deactivate Protocol?",
-      "This coupon will be permanently deleted."
-    );
-    if (confirmed) {
-      try {
-        await deleteCoupon(id);
-        swalToast("Voucher Purged", "success");
-      } catch (err) {
-        swalError("Action Rejected", "Voucher is currently linked to active order sequences.");
-      }
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteCoupon(deleteTarget.id);
+      swalToast("Coupon deleted successfully", "success");
+      setDeleteTarget(null);
+    } catch (err) {
+      swalError("Delete Failed", err.response?.data?.message || "Could not delete coupon.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleToggleActive = async (item) => {
+    try {
+      await updateCoupon({ id: item._id, data: { isActive: !item.isActive } });
+      swalToast(`Coupon ${item.isActive ? "deactivated" : "activated"}`, "success");
+    } catch (err) {
+      swalError("Update Failed", err.response?.data?.message || "Could not update coupon status.");
     }
   };
 
   const columns = [
     {
-      label: "Voucher Identity",
+      label: "Coupon Code",
       render: (item) => (
-        <div className="flex items-center gap-4">
-           <div className={cn(
-             "w-10 h-10 rounded-xl flex items-center justify-center relative",
-             item.isActive ? "bg-emerald-500/10 text-emerald-600" : "bg-rose-500/10 text-rose-600"
-           )}>
-              <Ticket size={20} />
-              <div className={cn(
-                "absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-background",
-                item.isActive ? "bg-emerald-500" : "bg-rose-500"
-              )} />
-           </div>
-           <span className={cn(
-             "font-black px-4 py-2 rounded-xl border uppercase tracking-[0.2em] text-[10px] shadow-sm",
-             item.isActive ? "text-emerald-600 bg-emerald-600/5 border-emerald-600/10" : "text-rose-600 bg-rose-600/5 border-rose-600/10"
-           )}>
+        <div className="flex items-center gap-3">
+          <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+            <Ticket className="size-4" />
+          </div>
+          <div>
+            <span className="font-mono font-semibold text-sm text-foreground tracking-wider uppercase">
               {item.code}
-           </span>
+            </span>
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <span>Min. spend:</span>
+              <Price amount={item.minPurchase || 0} />
+            </span>
+          </div>
         </div>
       ),
     },
     {
-      label: "Benefit Logic",
+      label: "Discount",
       render: (item) => (
-        <div className="flex flex-col">
-          <span className="font-black text-foreground uppercase tracking-tight text-xs">
-            {item.discountType === "percentage"
-              ? `${item.discountValue}% Reduction`
-              : `৳${item.discountValue} Flat Credit`}
+        <div>
+          <span className="font-semibold text-sm text-foreground flex items-center gap-1">
+            {item.discountType === "percentage" ? (
+              `${item.discountValue}% off`
+            ) : (
+              <>
+                <Price amount={item.discountValue || 0} />
+                <span>off</span>
+              </>
+            )}
           </span>
-          <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mt-1">
-            {item.discountType === "percentage" ? "Relative Scale" : "Absolute Value"}
+          <span className="block text-[11px] text-muted-foreground capitalize">
+            {item.discountType} discount
           </span>
         </div>
       ),
     },
     {
-      label: "Neural Load",
+      label: "Usage",
       render: (item) => {
-        const usagePercent = Math.min((item.usedCount / (item.usageLimit || 100)) * 100, 100);
+        const limit = item.usageLimit || 0;
+        const count = item.usedCount || 0;
+        const percent = limit > 0 ? Math.min(Math.round((count / limit) * 100), 100) : 0;
         return (
-          <div className="flex flex-col gap-2 w-32">
-            <div className="flex justify-between items-center">
-               <span className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">
-                 Load: {item.usedCount}/{item.usageLimit || "∞"}
-               </span>
-               <span className="text-[9px] font-bold text-indigo-600 italic">
-                 {Math.round(usagePercent)}%
-               </span>
+          <div className="w-28 space-y-1">
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground tabular-nums">
+                {count} / {limit > 0 ? limit : "∞"}
+              </span>
+              {limit > 0 && (
+                <span className="text-muted-foreground text-[11px] tabular-nums">{percent}%</span>
+              )}
             </div>
-            <div className="w-full h-1.5 bg-accent/20 rounded-full overflow-hidden shadow-inner">
-              <div
-                className={cn(
-                  "h-full transition-all duration-1000 ease-out",
-                  usagePercent > 80 ? "bg-rose-500 shadow-[0_0_10px_rgba(225,29,72,0.5)]" : "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
-                )}
-                style={{ width: `${usagePercent}%` }}
-              />
-            </div>
+            {limit > 0 && (
+              <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary rounded-full transition-all duration-300"
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+            )}
           </div>
         );
       },
     },
     {
-      label: "Command Ops",
+      label: "Expires On",
       render: (item) => (
-        <div className="flex items-center gap-3 justify-end">
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={async () => {
-              try {
-                await updateCoupon({ id: item._id, data: { isActive: !item.isActive } });
-                swalToast(`Voucher ${item.isActive ? 'Deactivated' : 'Activated'}`, "success");
-              } catch (err) {
-                swalError("Action Rejected", "Neural override failed.");
-              }
-            }}
-            className={cn(
-              "h-10 w-10 rounded-xl border-border/10 transition-all active:scale-95 group",
-              item.isActive 
-                ? "bg-rose-500/10 text-rose-600 hover:bg-rose-600 hover:text-white" 
-                : "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-600 hover:text-white"
-            )}
-            title={item.isActive ? "Deactivate Coupon" : "Activate Coupon"}
-          >
-            <Power size={16} className="transition-transform group-hover:scale-110" />
-          </Button>
-          <Button 
-            asChild 
-            variant="outline" 
-            size="icon" 
-            className="h-10 w-10 rounded-xl border-border/10 hover:border-blue-600/50 hover:bg-blue-600 hover:text-white bg-background/50 transition-all active:scale-95 group"
-          >
-            <Link href={`/admin/coupons/${item._id}`}>
-              <Eye size={16} className="group-hover:scale-110 transition-transform" />
-            </Link>
-          </Button>
-          <Button 
-            asChild 
-            variant="outline" 
-            size="icon" 
-            className="h-10 w-10 rounded-xl border-border/10 hover:border-indigo-600/50 hover:bg-indigo-600 hover:text-white bg-background/50 transition-all active:scale-95"
-          >
-            <Link href={`/admin/coupons/${item._id}/edit`}>
-              <Edit3 size={16} />
-            </Link>
-          </Button>
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={() => handleDelete(item._id)}
-            className="h-10 w-10 rounded-xl border-border/10 hover:border-rose-600/50 hover:bg-rose-600 hover:text-white bg-background/50 transition-all active:scale-95"
-          >
-            <Trash2 size={16} />
-          </Button>
-        </div>
+        <span className="text-xs text-muted-foreground">
+          {item.endDate
+            ? new Date(item.endDate).toLocaleDateString()
+            : "No expiry date"}
+        </span>
+      ),
+    },
+    {
+      label: "Status",
+      render: (item) => (
+        <AdminStatusBadge
+          value={item.isActive ? "active" : "inactive"}
+          label={item.isActive ? "Active" : "Inactive"}
+        />
       ),
     },
   ];
 
+  if (isLoading) {
+    return (
+      <AdminPageContainer>
+        <Skeleton className="h-10 w-48 rounded-xl" />
+        <Skeleton className="h-96 w-full rounded-2xl" />
+      </AdminPageContainer>
+    );
+  }
+
   return (
-    <div className="admin-page-container">
+    <AdminPageContainer>
       <AdminPageHeader
         title="Coupons"
-        description={`Manage discount codes · ${total || 0} coupons`}
+        description={`Create and manage discount codes, minimum spend rules, and usage limits · ${total || 0} total`}
         actions={
           <AdminHeaderButton href="/admin/coupons/new" icon={Plus}>
-            Add coupon
+            Add Coupon
           </AdminHeaderButton>
         }
       />
 
-      {/* 📊 Intelligence Ledger */}
-      <div className="admin-table-form">
-        <div className="pt-0">
-          {isLoading ? (
-            <div className="p-8">
-              <TableSkeleton rowCount={6} />
-            </div>
-          ) : (
-            <>
-              <DataTable 
-                columns={columns} 
-                data={coupons} 
-                className="bg-transparent border-none rounded-none" 
-              />
-              
-              {/* Pagination */}
-              <div className="p-8 border-t border-border/10 bg-background/5">
-                <Pagination 
-                  page={page} 
-                  totalPages={pages} 
-                  onPageChange={setPage} 
-                  className="py-0 sm:py-0 justify-between flex-row-reverse" 
-                />
+      <AdminCard>
+        <AdminCardHeader>
+          <AdminCardTitle>Promotional Coupons</AdminCardTitle>
+        </AdminCardHeader>
+        <AdminCardContent className="p-0">
+          <AdminDataTable
+            columns={columns}
+            data={coupons || []}
+            emptyTitle="No coupons found"
+            emptyDescription="Create your first promotional discount coupon to boost conversions."
+            emptyActionLabel="Add Coupon"
+            onEmptyAction={() => window.location.href = "/admin/coupons/new"}
+            actions={(item) => (
+              <div className="flex items-center gap-1 justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => handleToggleActive(item)}
+                  className="size-8 rounded-lg"
+                  title={item.isActive ? "Deactivate coupon" : "Activate coupon"}
+                >
+                  <Power className="size-3.5" />
+                </Button>
+                <Button asChild variant="ghost" size="icon-sm" className="size-8 rounded-lg" title="View details">
+                  <Link href={`/admin/coupons/${item._id}`}>
+                    <Eye className="size-3.5" />
+                  </Link>
+                </Button>
+                <Button asChild variant="ghost" size="icon-sm" className="size-8 rounded-lg" title="Edit coupon">
+                  <Link href={`/admin/coupons/${item._id}/edit`}>
+                    <Edit2 className="size-3.5" />
+                  </Link>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setDeleteTarget({ id: item._id, name: item.code })}
+                  className="size-8 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-500/10"
+                  title="Delete coupon"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
               </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+            )}
+            pagination={{
+              page,
+              totalPages: pages || 1,
+              total,
+              onPageChange: setPage,
+            }}
+          />
+        </AdminCardContent>
+      </AdminCard>
+
+      <AdminDeleteModal
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Coupon"
+        itemName={deleteTarget?.name}
+        description="Are you sure you want to permanently delete this coupon code? Customers will no longer be able to apply it at checkout."
+        isLoading={isDeleting}
+      />
+    </AdminPageContainer>
   );
 }
-
-
-

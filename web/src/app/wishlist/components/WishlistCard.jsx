@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { X, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getImageUrl } from "@/utils/imageUtils";
+import { Price } from "@/components/common/Price";
 
 export default function WishlistCard({ product, onRemove, onMoveToCart, t }) {
   return (
@@ -47,9 +48,10 @@ export default function WishlistCard({ product, onRemove, onMoveToCart, t }) {
         </div>
 
         <div className="flex items-center justify-between">
-          <span className="text-xl sm:text-2xl font-black tracking-tighter">
-            ৳{(product.price - (product.price * (product.discount || 0)) / 100).toFixed(0)}
-          </span>
+          <Price
+            amount={(product.price - (product.price * (product.discount || 0)) / 100).toFixed(0)}
+            className="text-xl sm:text-2xl font-black text-foreground"
+          />
         </div>
 
         <Button

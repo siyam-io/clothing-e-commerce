@@ -64,7 +64,7 @@ const DICTIONARY = {
     updateBtn: "Update Feedback",
     cancelBtn: "Cancel",
     saving: "Processing...",
-    noReviews: "No feedback yet. Be the vanguard.",
+    noReviews: "No feedback yet. Be the first to review.",
     success: "Feedback published successfully!",
     error: "Action failed. Please try again.",
     confirmDelete: "Remove this feedback permanently?",

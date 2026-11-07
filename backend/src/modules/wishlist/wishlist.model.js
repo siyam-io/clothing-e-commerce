@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const wishlistSchema = new mongoose.Schema({
-  // 🌟 FIXED: ObjectId এবং ref: 'User' মুছে String করা হয়েছে
+  // User identifier stored as string to support guest or authenticated session mapping
   user: {
     type: String,
     required: true,

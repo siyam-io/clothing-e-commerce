@@ -28,7 +28,7 @@ userSchema.index({ createdAt: -1 });
 userSchema.index({ name: 1 });
 
 
-// ✅ Correct async pre-save hook (no next)
+// Async pre-save hook for password hashing
 userSchema.pre("save", async function() {
   if (!this.password || !this.isModified("password")) return;
   this.password = await bcrypt.hash(this.password, 10);

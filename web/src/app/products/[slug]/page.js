@@ -13,6 +13,7 @@ import ProductShareButton from "@/app/products/[slug]/components/ProductShareBut
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Price } from "@/components/common/Price";
 import { getTranslation } from "@/utils/typography/handler";
 import { GridSkeleton } from "@/components/common/Skeletons";
 import { getProductDetails } from "@/app/products/[slug]/lib/productDetailsApi";
@@ -34,6 +35,55 @@ export async function generateStaticParams() {
   } catch {
     return [];
   }
+}
+
+export async function generateMetadata({ params }) {
+  const { slug } = await params;
+  const [product, settings] = await Promise.all([
+    getProductDetails(slug),
+    getSettings()
+  ]);
+
+  const siteName = settings?.branding?.siteName || "Store";
+  if (!product || product.error) {
+    return {
+      title: `Product Not Found | ${siteName}`,
+    };
+  }
+
+  const title = `${product.name} | ${siteName}`;
+  const description =
+    product.seo?.metaDescription ||
+    product.description?.replace(/<[^>]*>/g, "").slice(0, 160) ||
+    `Shop ${product.name} at ${siteName}. Premium quality apparel.`;
+
+  const image =
+    Array.isArray(product.images) && product.images.length > 0
+      ? product.images[0]
+      : product.image || "";
+
+  return {
+    title,
+    description,
+    keywords: product.seo?.keywords || [product.name, product.category?.name, siteName].filter(Boolean),
+    alternates: {
+      canonical: `${SITE_URL}/products/${slug}`,
+    },
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      url: `${SITE_URL}/products/${slug}`,
+      siteName,
+      images: image ? [{ url: image, alt: product.name }] : [],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: image ? [image] : [],
+    },
+  };
 }
 
 export default async function ProductDetailsPage({ params }) {
@@ -99,39 +149,39 @@ export default async function ProductDetailsPage({ params }) {
     "@type": "FAQPage",
     "mainEntity": product.faqs && product.faqs.length > 0
       ? product.faqs.map((faq) => ({
+        "@type": "Question",
+        "name": faq.question,
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": faq.answer
+        }
+      }))
+      : [
+        {
           "@type": "Question",
-          "name": faq.question,
+          "name": `What is the material of ${product.name}?`,
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": faq.answer
+            "text": t.compositionDesc
           }
-        }))
-      : [
-          {
-            "@type": "Question",
-            "name": `What is the material of ${product.name}?`,
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": t.compositionDesc
-            }
-          },
-          {
-            "@type": "Question",
-            "name": `How to care for ${product.name}?`,
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": t.maintenanceDesc
-            }
-          },
-          {
-            "@type": "Question",
-            "name": `Is the ${product.name} authentic?`,
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": t.authenticityDesc
-            }
+        },
+        {
+          "@type": "Question",
+          "name": `How to care for ${product.name}?`,
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": t.maintenanceDesc
           }
-        ]
+        },
+        {
+          "@type": "Question",
+          "name": `Is the ${product.name} authentic?`,
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": t.authenticityDesc
+          }
+        }
+      ]
   };
 
   const breadcrumbSchema = {
@@ -215,14 +265,14 @@ export default async function ProductDetailsPage({ params }) {
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  <WishlistButton 
-                    product={product} 
+                  <WishlistButton
+                    product={product}
                     lang={lang}
                     className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center"
                   />
-                  <ProductShareButton 
-                    productName={product.name} 
-                    productDescription={product.description} 
+                  <ProductShareButton
+                    productName={product.name}
+                    productDescription={product.description}
                   />
                 </div>
               </div>
@@ -233,13 +283,16 @@ export default async function ProductDetailsPage({ params }) {
                     {product.name}
                   </h1>
                   <div className="flex items-baseline gap-3">
-                    <span className="text-2xl md:text-4xl font-black tracking-tighter">
-                      ৳{discountedPrice.toFixed(0)}
-                    </span>
+                    <Price
+                      amount={discountedPrice.toFixed(0)}
+                      className="text-2xl md:text-4xl font-black text-foreground"
+                    />
                     {product.discount > 0 && (
-                      <span className="text-lg md:text-xl font-bold text-muted-foreground/40 line-through tracking-tight">
-                        ৳{product.price.toFixed(0)}
-                      </span>
+                      <Price
+                        amount={product.price.toFixed(0)}
+                        lineThrough
+                        className="text-lg md:text-xl font-bold text-muted-foreground/50"
+                      />
                     )}
                   </div>
                 </div>
@@ -307,42 +360,42 @@ export default async function ProductDetailsPage({ params }) {
 
                 {/* Core USP Items */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 lg:pt-8">
-                   <div className="flex flex-col items-center gap-3 text-center group/usp p-3 rounded-2xl hover:bg-accent/10 transition-all duration-500 border border-border/5">
-                     <div className="w-10 h-10 rounded-xl glass flex items-center justify-center text-accent-secondary group-hover/usp:scale-110 group-hover/usp:rotate-6 transition-all duration-500 shadow-md">
-                        <ShieldCheck size={18} />
-                     </div>
-                     <div className="space-y-0.5">
-                        <span className="block text-[9px] font-black uppercase tracking-widest text-foreground">{t.authenticity}</span>
-                        <span className="block text-[7px] font-medium tracking-tight text-muted-foreground/60 leading-tight">{t.authenticityDesc}</span>
-                     </div>
-                   </div>
-                   <div className="flex flex-col items-center gap-3 text-center group/usp p-3 rounded-2xl hover:bg-accent/10 transition-all duration-500 border border-border/5">
-                     <div className="w-10 h-10 rounded-xl glass flex items-center justify-center text-accent-secondary group-hover/usp:scale-110 group-hover/usp:-rotate-6 transition-all duration-500 shadow-md">
-                        <Truck size={18} />
-                     </div>
-                     <div className="space-y-0.5">
-                        <span className="block text-[9px] font-black uppercase tracking-widest text-foreground">{t.express}</span>
-                        <span className="block text-[7px] font-medium tracking-tight text-muted-foreground/60 leading-tight">{t.globalTransit}</span>
-                     </div>
-                   </div>
-                   <div className="flex flex-col items-center gap-3 text-center group/usp p-3 rounded-2xl hover:bg-accent/10 transition-all duration-500 border border-border/5">
-                     <div className="w-10 h-10 rounded-xl glass flex items-center justify-center text-accent-secondary group-hover/usp:scale-110 group-hover/usp:rotate-12 transition-all duration-500 shadow-md">
-                        <RotateCcw size={18} />
-                     </div>
-                     <div className="space-y-0.5">
-                        <span className="block text-[9px] font-black uppercase tracking-widest text-foreground">{t.recovery}</span>
-                        <span className="block text-[7px] font-medium tracking-tight text-muted-foreground/60 leading-tight">{t.secureReturns}</span>
-                     </div>
-                   </div>
-                   <div className="flex flex-col items-center gap-3 text-center group/usp p-3 rounded-2xl hover:bg-accent/10 transition-all duration-500 border border-border/5">
-                     <div className="w-10 h-10 rounded-xl glass flex items-center justify-center text-accent-secondary group-hover/usp:scale-110 group-hover/usp:-rotate-12 transition-all duration-500 shadow-md">
-                        <Star size={18} />
-                     </div>
-                     <div className="space-y-0.5">
-                        <span className="block text-[9px] font-black uppercase tracking-widest text-foreground">{t.expertCuration}</span>
-                        <span className="block text-[7px] font-medium tracking-tight text-muted-foreground/60 leading-tight">{t.expertCurationDesc}</span>
-                     </div>
-                   </div>
+                  <div className="flex flex-col items-center gap-3 text-center group/usp p-3 rounded-2xl hover:bg-accent/10 transition-all duration-500 border border-border/5">
+                    <div className="w-10 h-10 rounded-xl glass flex items-center justify-center text-accent-secondary group-hover/usp:scale-110 group-hover/usp:rotate-6 transition-all duration-500 shadow-md">
+                      <ShieldCheck size={18} />
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="block text-[9px] font-black uppercase tracking-widest text-foreground">{t.authenticity}</span>
+                      <span className="block text-[7px] font-medium tracking-tight text-muted-foreground/60 leading-tight">{t.authenticityDesc}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-center gap-3 text-center group/usp p-3 rounded-2xl hover:bg-accent/10 transition-all duration-500 border border-border/5">
+                    <div className="w-10 h-10 rounded-xl glass flex items-center justify-center text-accent-secondary group-hover/usp:scale-110 group-hover/usp:-rotate-6 transition-all duration-500 shadow-md">
+                      <Truck size={18} />
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="block text-[9px] font-black uppercase tracking-widest text-foreground">{t.express}</span>
+                      <span className="block text-[7px] font-medium tracking-tight text-muted-foreground/60 leading-tight">{t.globalTransit}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-center gap-3 text-center group/usp p-3 rounded-2xl hover:bg-accent/10 transition-all duration-500 border border-border/5">
+                    <div className="w-10 h-10 rounded-xl glass flex items-center justify-center text-accent-secondary group-hover/usp:scale-110 group-hover/usp:rotate-12 transition-all duration-500 shadow-md">
+                      <RotateCcw size={18} />
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="block text-[9px] font-black uppercase tracking-widest text-foreground">{t.recovery}</span>
+                      <span className="block text-[7px] font-medium tracking-tight text-muted-foreground/60 leading-tight">{t.secureReturns}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-center gap-3 text-center group/usp p-3 rounded-2xl hover:bg-accent/10 transition-all duration-500 border border-border/5">
+                    <div className="w-10 h-10 rounded-xl glass flex items-center justify-center text-accent-secondary group-hover/usp:scale-110 group-hover/usp:-rotate-12 transition-all duration-500 shadow-md">
+                      <Star size={18} />
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="block text-[9px] font-black uppercase tracking-widest text-foreground">{t.expertCuration}</span>
+                      <span className="block text-[7px] font-medium tracking-tight text-muted-foreground/60 leading-tight">{t.expertCurationDesc}</span>
+                    </div>
+                  </div>
                 </div>
 
                 <Separator className="bg-border/30" />
@@ -406,7 +459,7 @@ export default async function ProductDetailsPage({ params }) {
         {/* Reviews */}
         {product.showReviews !== false && product.showReviews !== "false" && (
           <Suspense fallback={<div className="h-40 animate-pulse bg-muted rounded-3xl" />}>
-             <ReviewSectionWrapper productId={product._id} />
+            <ReviewSectionWrapper productId={product._id} />
           </Suspense>
         )}
 
@@ -421,72 +474,4 @@ export default async function ProductDetailsPage({ params }) {
       </div>
     </main>
   );
-}
-
-
-export async function generateMetadata({ params }) {
-  const { slug } = await params;
-  try {
-    const [product, settings] = await Promise.all([
-      getProductDetails(slug),
-      getSettings()
-    ]);
-    
-    if (!product || product.error) throw new Error("Product not found");
-    const branding = settings?.branding || {};
-    const siteName = branding.siteName || "Store";
-
-    const discountedPrice =
-      product.price - (product.price * (product.discount || 0)) / 100;
-    const isAvailable = product.sizes?.filter(Boolean).some((s) => s && s.stock > 0) || false;
-    const imageUrl = product.images?.[0]
-      ? product.images[0].startsWith("http")
-        ? product.images[0]
-        : `${SITE_URL}${product.images[0]}`
-      : `${SITE_URL}/og-image.jpg`;
-
-    const metaTitle = product.seo?.metaTitle || `${product.name} | ${siteName} Collection`;
-    const metaDescription = product.seo?.metaDescription || product.description?.slice(0, 160) || `Shop ${product.name} – premium apparel from ${siteName}.`;
-    
-    let keywords = [
-      product.name,
-      product.category?.name,
-      "premium",
-      siteName,
-    ];
-    if (product.seo?.keywords) {
-      keywords = product.seo.keywords.split(",").map(k => k.trim()).filter(Boolean);
-    }
-
-    return {
-      title: metaTitle,
-      description: metaDescription,
-      keywords: keywords,
-      alternates: {
-        canonical: `${SITE_URL}/products/${slug}`,
-      },
-      openGraph: {
-        title: metaTitle,
-        description: metaDescription,
-        images: [
-          { url: imageUrl, width: 1200, height: 630, alt: product.name },
-        ],
-        type: "website",
-        siteName: siteName,
-        url: `${SITE_URL}/products/${slug}`,
-        "og:price:amount": discountedPrice.toString(),
-        "og:price:currency": "BDT",
-        "og:availability": isAvailable ? "instock" : "oos",
-      },
-      twitter: {
-        card: "summary_large_image",
-        title: metaTitle,
-        description: metaDescription,
-        images: [imageUrl],
-      },
-    };
-  } catch (error) {
-    const settings = await getSettings();
-    return { title: `Product Not Found | ${settings?.branding?.siteName || "Store"}` };
-  }
 }

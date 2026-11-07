@@ -10,7 +10,7 @@ export default function SummaryRow({ label, value, highlight }) {
       <span className="flex items-center gap-2">
         {highlight && <Ticket size={12} />} {label}
       </span>
-      <span className={cn(!highlight && "text-foreground")}>{value}</span>
+      <span className={cn("font-price tabular-nums normal-case tracking-normal", !highlight && "text-foreground")}>{value}</span>
     </div>
   );
 }

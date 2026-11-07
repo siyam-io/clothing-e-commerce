@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { useEffect, useState } from "react";
 import { useSubcategories } from "@/app/admin/subcategories/lib/useSubcategories";
 import { useAdminCategories } from "@/app/admin/categories/lib/useAdminCategories";
@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -17,11 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Save, Trash2, Layers, Upload, Image as ImageIcon } from "lucide-react";
+import { Upload, ImageIcon, Loader2 } from "lucide-react";
 import { swalToast, swalError } from "@/utils/swal";
 import { getImageUrl } from "@/utils/imageUtils";
-import { cn } from "@/lib/utils";
+import AdminPageContainer from "@/app/admin/_components/AdminPageContainer";
+import AdminPageHeader, { AdminBackLink } from "@/app/admin/_components/AdminPageHeader";
+import { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardDescription, AdminCardContent } from "@/app/admin/_components/AdminCard";
+import Loader from "@/components/common/Loader";
 
 export default function SubcategoryForm() {
   const { id } = useParams();
@@ -44,6 +45,7 @@ export default function SubcategoryForm() {
     setValue,
     watch,
     reset,
+    control,
     formState: { errors },
   } = useForm({
     defaultValues: {
@@ -55,7 +57,20 @@ export default function SubcategoryForm() {
   });
 
   const [loading, setLoading] = useState(true);
-  const selectedCategory = watch("category");
+  const watchedName = watch("name");
+
+  // Auto-generate slug
+  useEffect(() => {
+    if (!isEdit && watchedName) {
+      const slug = watchedName
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, "")
+        .replace(/[\s_-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      setValue("slug", slug);
+    }
+  }, [isEdit, watchedName, setValue]);
 
   useEffect(() => {
     if (isEdit && subcategories?.length > 0) {
@@ -71,19 +86,11 @@ export default function SubcategoryForm() {
         setLoading(false);
       }
     } else if (!isEdit) {
-      // For new subcategories, just wait for categories to load if needed
       if (!categoriesLoading) {
         setLoading(false);
       }
     }
   }, [isEdit, id, subcategories, categoriesLoading, reset]);
-
-  // Sync presetCategory if it changes or categories load
-  useEffect(() => {
-    if (!isEdit && presetCategory && !selectedCategory) {
-      setValue("category", presetCategory);
-    }
-  }, [isEdit, presetCategory, selectedCategory, setValue]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -102,178 +109,166 @@ export default function SubcategoryForm() {
     formData.append("slug", data.slug.trim());
     formData.append("category", data.category);
     if (data.description) formData.append("description", data.description);
-    
+
     if (selectedFile) {
       formData.append("image", selectedFile);
     }
 
     try {
       if (isEdit) {
-        await updateSubcategory({ id, data: formData });
-        swalToast("Subcategory updated", "success");
+        await updateSubcategory.mutateAsync({ id, data: formData });
+        swalToast("Subcategory updated successfully", "success");
       } else {
-        await createSubcategory(formData);
-        swalToast("Subcategory created", "success");
+        await createSubcategory.mutateAsync(formData);
+        swalToast("Subcategory created successfully", "success");
       }
-      setTimeout(() => router.push("/admin/categories"), 1500);
+      setTimeout(() => router.push("/admin/subcategories"), 1200);
     } catch (err) {
-      swalError("Sync Failed", err.response?.data?.message || "Error processing request.");
+      swalError("Save Failed", err.response?.data?.message || "Could not save subcategory.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (loading)
+  if (loading) {
     return (
-      <div className="max-w-4xl mx-auto p-10 space-y-10">
-        <Skeleton className="h-32 w-full rounded-[2.5rem]" />
-        <Skeleton className="h-[400px] w-full rounded-[2.5rem]" />
+      <div className="admin-page-container flex items-center justify-center min-h-[40vh]">
+        <Loader />
       </div>
     );
+  }
 
   return (
-    <div className="max-w-4xl mx-auto pb-20 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {/* Header */}
-      <Card className="p-8 rounded-[2.5rem] border-border bg-card shadow-xl">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="space-y-1">
-            <h1 className="text-3xl md:text-4xl font-black text-foreground tracking-tighter uppercase italic leading-none">
-              {isEdit ? "Edit Subcategory" : "Create Subcategory"}
-            </h1>
-            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.4em] ml-1">
-              Set up your subcategory details
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            onClick={() => router.push("/admin/categories")}
-            className="text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground rounded-full h-12 px-6"
-          >
-            <ChevronLeft className="mr-2" size={16} /> Cancel
-          </Button>
-        </div>
-      </Card>
+    <AdminPageContainer maxWidth="max-w-3xl">
+      <AdminBackLink href="/admin/subcategories" label="Back to Subcategories" />
+      <AdminPageHeader
+        title={isEdit ? "Edit Subcategory" : "New Subcategory"}
+        description={isEdit ? "Update subcategory name, parent association, and image" : "Create a new subcategory under an existing parent category"}
+      />
 
-      {/* Main Form Card */}
-      <Card className="rounded-[3rem] border-border bg-card shadow-2xl overflow-hidden">
-        <CardContent className="p-10 md:p-14">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-10">
-            <div className="grid md:grid-cols-2 gap-10">
-              <div className="md:col-span-1 space-y-3">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] ml-1">
-                  Main Category *
-                </Label>
-                <Select
-                  value={selectedCategory}
-                  onValueChange={(val) => setValue("category", val)}
-                >
-                  <SelectTrigger className="h-14 bg-muted/30 border-border rounded-2xl px-6 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all">
-                    <SelectValue placeholder="Select Category" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border rounded-2xl">
-                    {categories?.map((cat) => (
-                      <SelectItem key={cat._id} value={cat._id} className="rounded-xl py-3 px-4 font-bold text-xs uppercase tracking-widest focus:bg-primary focus:text-primary-foreground">
-                        {cat.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <AdminCard>
+          <AdminCardHeader>
+            <AdminCardTitle>Subcategory Information</AdminCardTitle>
+            <AdminCardDescription>Assign parent category, define name, and assign URL slug</AdminCardDescription>
+          </AdminCardHeader>
 
-              <div className="hidden md:block"></div>
-
-              <div className="space-y-3">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] ml-1">
-                  Subcategory Name *
-                </Label>
-                <Input
-                  {...register("name", { required: true })}
-                  className="h-14 bg-muted/30 border-border rounded-2xl px-6 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all"
-                  placeholder="e.g. Graphic Tees"
-                />
-              </div>
-
-              <div className="space-y-3">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] ml-1">
-                  Subcategory URL (Slug) *
-                </Label>
-                <Input
-                  {...register("slug", { required: true, pattern: /^[a-z0-9-]+$/ })}
-                  className="h-14 bg-muted/30 border-border rounded-2xl px-6 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all"
-                  placeholder="graphic-tees"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] ml-1">
-                Description
+          <AdminCardContent className="space-y-5">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-foreground">
+                Parent Category <span className="text-rose-500">*</span>
               </Label>
-              <Textarea
-                {...register("description")}
-                rows={4}
-                className="bg-muted/30 border-border rounded-3xl px-6 py-5 text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all resize-none shadow-inner"
-                placeholder="Enter subcategory description..."
+              <Controller
+                name="category"
+                control={control}
+                rules={{ required: true }}
+                render={({ field }) => (
+                  <Select value={field.value || ""} onValueChange={field.onChange}>
+                    <SelectTrigger className="h-10 bg-background/80 border-border/60 rounded-xl text-xs font-medium">
+                      <SelectValue placeholder="Select parent category" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-card border-border rounded-xl">
+                      {categories?.map((cat) => (
+                        <SelectItem key={cat._id} value={cat._id} className="text-xs">
+                          {cat.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               />
             </div>
 
-            <div className="space-y-6 pt-10 border-t border-border/5">
-              <Label className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground ml-1">Subcategory Image</Label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                <label className="relative h-64 rounded-3xl border-2 border-dashed border-border/20 flex flex-col items-center justify-center cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all group overflow-hidden">
-                  <Upload size={32} className="mb-3 text-muted-foreground group-hover:text-primary transition-colors" />
-                  <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground group-hover:text-primary">Add Image</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-foreground">
+                  Subcategory Name <span className="text-rose-500">*</span>
+                </Label>
+                <Input
+                  {...register("name", { required: true })}
+                  placeholder="e.g. Graphic Tees"
+                  className="h-10 rounded-xl bg-background/80 border-border/60 text-sm font-medium"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-foreground">
+                  URL Slug <span className="text-rose-500">*</span>
+                </Label>
+                <Input
+                  {...register("slug", { required: true, pattern: /^[a-z0-9-]+$/ })}
+                  placeholder="e.g. graphic-tees"
+                  className="h-10 rounded-xl bg-background/80 border-border/60 text-sm font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-foreground">Description</Label>
+              <Textarea
+                {...register("description")}
+                rows={3}
+                placeholder="Optional description for store browsing and SEO..."
+                className="bg-background/80 border-border/60 rounded-xl px-3.5 py-2.5 text-sm resize-none"
+              />
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <Label className="text-xs font-medium text-foreground">Subcategory Image</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                <label className="h-44 rounded-xl border-2 border-dashed border-border/80 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-muted/40 transition-colors group p-4 text-center">
+                  <Upload className="size-6 text-muted-foreground group-hover:text-foreground transition-colors mb-2" />
+                  <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground">Click to upload image</span>
+                  <span className="text-[11px] text-muted-foreground/70 mt-1">PNG, JPG, or WEBP up to 5MB</span>
                   <input
-                     type="file"
-                     accept="image/*"
-                     className="hidden"
-                     onChange={handleImageChange}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageChange}
                   />
                 </label>
 
-                <div className="h-64 rounded-3xl bg-muted/20 border border-border/5 overflow-hidden flex items-center justify-center relative group">
+                <div className="h-44 rounded-xl bg-muted/40 border border-border/60 overflow-hidden flex items-center justify-center relative">
                   {imagePreview ? (
-                    <img src={imagePreview} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
+                    <img src={imagePreview} alt="Preview" className="size-full object-cover" />
                   ) : (
-                    <div className="flex flex-col items-center gap-2 opacity-10">
-                      <ImageIcon size={48} strokeWidth={1} />
-                      <p className="text-[8px] font-black uppercase tracking-widest italic text-center">No image selected</p>
+                    <div className="flex flex-col items-center gap-1.5 text-muted-foreground/60">
+                      <ImageIcon className="size-8 stroke-[1.5]" />
+                      <span className="text-xs">No image selected</span>
                     </div>
                   )}
                 </div>
               </div>
             </div>
+          </AdminCardContent>
 
-            <div className="flex flex-col sm:flex-row gap-4 pt-10 border-t border-border mt-10">
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="flex-[2] h-14 bg-foreground text-background hover:bg-primary hover:text-primary-foreground rounded-full font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl transition-all active:scale-95 disabled:opacity-50"
-              >
-                {isSubmitting ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin" />
-                    Saving...
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Save size={16} />
-                    {isEdit ? "Update Subcategory" : "Create Subcategory"}
-                  </div>
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => router.push("/admin/categories")}
-                className="flex-1 h-14 rounded-full border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground font-black uppercase tracking-[0.2em] text-[10px] transition-all"
-              >
-                Discard
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+          <div className="flex items-center justify-end gap-3 p-5 border-t border-border/40 bg-muted/20">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push("/admin/subcategories")}
+              disabled={isSubmitting}
+              className="h-10 px-5 rounded-xl text-xs font-medium"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="h-10 px-6 rounded-xl text-xs font-medium gap-2 shadow-xs cursor-pointer"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                isEdit ? "Update Subcategory" : "Create Subcategory"
+              )}
+            </Button>
+          </div>
+        </AdminCard>
+      </form>
+    </AdminPageContainer>
   );
 }

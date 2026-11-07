@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import BlogDetails from "./BlogDetails";
+import { getSettings } from "@/lib/settings";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 const SITE_URL =
@@ -9,17 +10,20 @@ const SITE_URL =
 export async function generateMetadata({ params }) {
   const { slug } = await params;
   try {
-    const res = await fetch(`${API_URL}/blogs/${slug}`, {
-      next: { revalidate: 3600 },
-    });
+    const [res, settings] = await Promise.all([
+      fetch(`${API_URL}/blogs/${slug}`, { next: { revalidate: 3600 } }),
+      getSettings(),
+    ]);
+
     if (!res.ok) throw new Error("Blog not found");
     const blog = await res.json();
+    const siteName = settings?.branding?.siteName || "Store";
 
     const imageUrl = blog.featuredImage?.startsWith("http")
       ? blog.featuredImage
       : `${SITE_URL}${blog.featuredImage}`;
 
-    const seoTitle = blog.seo?.metaTitle || `${blog.title} | Vanguard Journal`;
+    const seoTitle = blog.seo?.metaTitle || `${blog.title} | ${siteName} Journal`;
     const seoDescription = blog.seo?.metaDescription || blog.excerpt?.slice(0, 160) || blog.title;
     const seoKeywords = blog.seo?.keywords || blog.tags || [];
 
@@ -33,7 +37,7 @@ export async function generateMetadata({ params }) {
         images: [{ url: imageUrl, width: 1200, height: 630, alt: blog.title }],
         type: "article",
         publishedTime: blog.createdAt,
-        authors: [blog.author?.name || "Vanguard Team"],
+        authors: [blog.author?.name || `${siteName} Team`],
         tags: [blog.category, ...seoKeywords],
       },
       twitter: {
@@ -49,9 +53,10 @@ export async function generateMetadata({ params }) {
       },
     };
   } catch (error) {
-    console.error("Metadata fetch failed:", error);
+    const settings = await getSettings();
+    const siteName = settings?.branding?.siteName || "Store";
     return {
-      title: "Blog Not Found | Vanguard",
+      title: `Blog Not Found | ${siteName}`,
     };
   }
 }
@@ -86,6 +91,9 @@ export default async function BlogPage({ params }) {
     notFound();
   }
 
+  const settings = await getSettings();
+  const siteName = settings?.branding?.siteName || "Store";
+
   const blogSchema = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
@@ -97,14 +105,14 @@ export default async function BlogPage({ params }) {
     dateModified: blog.updatedAt || blog.createdAt,
     author: {
       "@type": "Person",
-      name: blog.author?.name || "Vanguard Team",
+      name: blog.author?.name || `${siteName} Team`,
     },
     publisher: {
       "@type": "Organization",
-      name: "Vanguard",
+      name: siteName,
       logo: {
         "@type": "ImageObject",
-        url: `${SITE_URL}/logo.png`,
+        url: settings?.branding?.logo ? `${SITE_URL}${settings.branding.logo}` : `${SITE_URL}/logo.png`,
       },
     },
     description: blog.seo?.metaDescription || blog.excerpt || blog.title,
@@ -145,7 +153,7 @@ export default async function BlogPage({ params }) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
       />
-      <BlogDetails blog={blog} relatedPosts={relatedPosts} siteUrl={SITE_URL} />
+      <BlogDetails blog={blog} relatedPosts={relatedPosts} siteUrl={SITE_URL} siteName={siteName} />
     </>
   );
 }

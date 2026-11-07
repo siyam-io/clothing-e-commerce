@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clientFetchSettings, clientUpdateSettings } from "./settings";
-import { swalSuccess, swalError } from "@/utils/swal";
+import { notify } from "@/utils/swal";
 import { revalidateSettings } from "@/app/actions/revalidate";
 import { useAppStore } from "@/store/appStore";
 
@@ -11,34 +11,40 @@ export const useSettings = () => {
     queryKey: ["site-settings"],
     queryFn: clientFetchSettings,
     staleTime: 1000 * 60 * 60, // 1 hour
-    gcTime: 1000 * 60 * 60 * 24, // Keep in garbage collection for 24 hours
+    gcTime: 1000 * 60 * 60 * 24, // 24 hours
   });
-
-  //  DEBUG: Console log settings for the user
-  if (typeof window !== 'undefined' && settings) {
-    console.log("⚙️ [PROTOCOL SETTINGS]:", settings);
-  }
 
   const updateSettings = useMutation({
     mutationFn: clientUpdateSettings,
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["site-settings"] });
       revalidateSettings();
 
-      // ✅ Sync with Global App Store for instant site-wide theme update
-      const branding = data?.settings?.branding || {};
+      // Extract updated branding from backend response or request payload
+      let branding = data?.settings?.branding;
+      if (!branding && variables instanceof FormData && variables.has("branding")) {
+        try {
+          branding = JSON.parse(variables.get("branding"));
+        } catch (e) {}
+      } else if (!branding && variables?.branding) {
+        branding = typeof variables.branding === "string" ? JSON.parse(variables.branding) : variables.branding;
+      }
+      branding = branding || {};
+
+      // Sync with Global App Store and Cookies for instant site-wide live update
       const store = useAppStore.getState();
       if (branding.defaultTheme) store.setTheme(branding.defaultTheme);
       if (branding.defaultThemeColor) store.setThemeColor(branding.defaultThemeColor);
+      if (branding.defaultThemeFont) store.setThemeFont(branding.defaultThemeFont);
       if (branding.activeTheme) store.setIdentityTheme(branding.activeTheme);
       if (branding.defaultLanguage) store.setLang(branding.defaultLanguage);
 
-      swalSuccess("Success", "Site protocol updated effectively.");
+      notify.success("Settings saved successfully");
     },
     onError: (err) => {
-      swalError(
+      notify.error(
         "Update Failed",
-        err.response?.data?.message || "Something went wrong",
+        err.response?.data?.message || "Something went wrong"
       );
     },
   });

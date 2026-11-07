@@ -2,7 +2,7 @@ import Swal from 'sweetalert2';
 import { toast as sonnerToast } from "sonner";
 
 /**
- * 🎨 VANGUARD Unified Notification System
+ * Unified Notification System
  * Synchronized with globals.css Design Tokens
  */
 

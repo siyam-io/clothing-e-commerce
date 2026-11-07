@@ -3,138 +3,214 @@ import Coupon from "../coupon/coupon.model.js";
 import Cart from "../cart/cart.model.js";
 import PageSetting from "../settings/settings.model.js";
 import { sendOrderConfirmationEmail } from "../../services/email.service.js";
+import logger from "../../utils/logger.js";
 
-// FIX Issue 14: Accept pre-fetched settings to avoid double DB query per order
-export const calculateValidatedOrder = async (orderItems, couponCode, shippingPrice, deliveryZone, preloadedSettings = null) => {
-    // Use passed-in settings or fetch as fallback
-    const settings = preloadedSettings || await PageSetting.findOne();
-    const defaultInside = settings?.shipping?.insideDhaka || 60;
-    const defaultOutside = settings?.shipping?.outsideDhaka || 120;
-    let itemsPrice = 0;
-    const validatedItems = [];
-    
-    // 🚀 SENIOR OPTIMIZATION: Avoid N+1 queries by pre-fetching all products
-    const productIds = orderItems.map(item => item.product);
-    const products = await Product.find({ _id: { $in: productIds } });
-    const productMap = products.reduce((acc, p) => {
-        acc[p._id.toString()] = p;
-        return acc;
-    }, {});
-
-    for (const item of orderItems) {
-        const product = productMap[item.product.toString()];
-        if (!product || !product.isActive) throw new Error(`Artifact unavailable or offline.`);
-        
-        const requestedSizeId = item.size?._id || item.size;
-        
-        if (product.sizes && product.sizes.length > 0) {
-            if (!requestedSizeId) {
-                throw new Error(`Size specification required for ${product.name}`);
-            }
-
-            const sizeStock = product.sizes.find(s => 
-                s.size.toString() === requestedSizeId.toString()
-            );
-            
-            if (!sizeStock || sizeStock.stock < item.quantity) {
-                throw new Error(`Insufficient stock for ${product.name} (Requested size: ${requestedSizeId})`);
-            }
-        }
-        const unitPrice = product.discount > 0 ? product.price * (1 - product.discount / 100) : product.price;
-        itemsPrice += unitPrice * item.quantity;
-        validatedItems.push({
-            product: product._id,
-            name: product.name,
-            size: requestedSizeId,
-            quantity: item.quantity,
-            price: Number(unitPrice.toFixed(2)),
-            image: product.images?.[0] || "",
-        });
-    }
-    // Use provided shipping price or calculate from settings based on zone/courier
-    let finalShippingPrice;
-    const customCourier = settings?.shipping?.couriers?.find(
-        c => c.isActive && (c._id?.toString() === deliveryZone || c.name === deliveryZone)
-    );
-
-    if (customCourier) {
-        finalShippingPrice = customCourier.charge;
-    } else if (deliveryZone) {
-        finalShippingPrice = deliveryZone === "dhaka" ? defaultInside : defaultOutside;
-    } else {
-        finalShippingPrice = Number(shippingPrice) || defaultInside;
-    }
-
-    let discountAmount = 0, finalCoupon = null;
-    if (couponCode) {
-        const coupon = await Coupon.findOne({ code: couponCode.toUpperCase(), isActive: true });
-        const now = new Date();
-        if (coupon && coupon.startDate <= now && (!coupon.endDate || coupon.endDate >= now) && itemsPrice >= coupon.minOrderAmount) {
-            finalCoupon = coupon.code;
-            discountAmount = coupon.discountType === "percentage"
-                ? Math.min((itemsPrice * coupon.discountValue) / 100, coupon.maxDiscount || Infinity)
-                : coupon.discountValue;
-        }
-    }
-    return {
-        itemsPrice: Number(itemsPrice.toFixed(2)),
-        discountAmount: Number(discountAmount.toFixed(2)),
-        shippingPrice: finalShippingPrice,
-        totalPrice: Number((itemsPrice - discountAmount + finalShippingPrice).toFixed(2)),
-        validatedItems,
-        couponCode: finalCoupon
-    };
+/**
+ * Fetch and index product documents by stringified primary key.
+ *
+ * @param {Array<Object>} orderItems - Requested order items.
+ * @returns {Promise<Record<string, Object>>}
+ */
+export const fetchProductMap = async (orderItems) => {
+  const productIds = orderItems.map((item) => item.product);
+  const products = await Product.find({ _id: { $in: productIds } });
+  return products.reduce((acc, product) => {
+    acc[product._id.toString()] = product;
+    return acc;
+  }, {});
 };
 
+/**
+ * Validate item availability, size selection, and stock levels.
+ *
+ * @param {Object} item - Requested line item.
+ * @param {Object} product - Database product record.
+ * @returns {Object} Validated order item.
+ */
+export const validateOrderItem = (item, product) => {
+  if (!product || !product.isActive) {
+    throw new Error(`Product unavailable or inactive: ${item.product}`);
+  }
+
+  const requestedSizeId = item.size?._id || item.size;
+
+  if (product.sizes?.length > 0) {
+    if (!requestedSizeId) {
+      throw new Error(`Size selection required for ${product.name}`);
+    }
+
+    const sizeRecord = product.sizes.find(
+      (entry) => entry.size.toString() === requestedSizeId.toString()
+    );
+
+    if (!sizeRecord || sizeRecord.stock < item.quantity) {
+      throw new Error(`Insufficient inventory for ${product.name}`);
+    }
+  }
+
+  const unitPrice =
+    product.discount > 0 ? product.price * (1 - product.discount / 100) : product.price;
+
+  return {
+    product: product._id,
+    name: product.name,
+    size: requestedSizeId,
+    quantity: item.quantity,
+    price: Number(unitPrice.toFixed(2)),
+    image: product.images?.[0] || "",
+  };
+};
+
+/**
+ * Resolve shipping charge based on configured zone rates or custom courier selection.
+ *
+ * @param {Object} settings - Store settings document.
+ * @param {string} [deliveryZone] - Selected delivery zone or courier identifier.
+ * @param {number|string} [fallbackPrice] - Fallback shipping charge.
+ * @returns {number} Shipping fee.
+ */
+export const resolveShippingPrice = (settings, deliveryZone, fallbackPrice) => {
+  if (deliveryZone === "pos" || deliveryZone === "instore" || deliveryZone === "in_store" || deliveryZone === "none") {
+    return 0;
+  }
+
+  const defaultInside = settings?.shipping?.insideDhaka || 60;
+  const defaultOutside = settings?.shipping?.outsideDhaka || 120;
+
+  const customCourier = settings?.shipping?.couriers?.find(
+    (c) => c.isActive && (c._id?.toString() === deliveryZone || c.name === deliveryZone)
+  );
+
+  if (customCourier) return customCourier.charge;
+  if (deliveryZone === "dhaka") return defaultInside;
+  if (deliveryZone) return defaultOutside;
+  if (fallbackPrice !== undefined && fallbackPrice !== null && !isNaN(Number(fallbackPrice))) {
+    return Number(fallbackPrice);
+  }
+  return defaultInside;
+};
+
+/**
+ * Calculate applicable discount from active coupon code.
+ *
+ * @param {string} couponCode - Coupon identifier.
+ * @param {number} itemsPrice - Order items subtotal.
+ * @returns {Promise<{ discountAmount: number, finalCoupon: string|null }>}
+ */
+export const resolveCouponDiscount = async (couponCode, itemsPrice) => {
+  if (!couponCode) return { discountAmount: 0, finalCoupon: null };
+
+  const coupon = await Coupon.findOne({ code: couponCode.toUpperCase(), isActive: true });
+  const now = new Date();
+
+  if (
+    coupon &&
+    coupon.startDate <= now &&
+    (!coupon.endDate || coupon.endDate >= now) &&
+    itemsPrice >= coupon.minOrderAmount
+  ) {
+    const rawDiscount =
+      coupon.discountType === "percentage"
+        ? (itemsPrice * coupon.discountValue) / 100
+        : coupon.discountValue;
+
+    const discountAmount = Math.min(rawDiscount, coupon.maxDiscount || Infinity);
+    return { discountAmount, finalCoupon: coupon.code };
+  }
+
+  return { discountAmount: 0, finalCoupon: null };
+};
+
+/**
+ * Validate order items, verify stock availability, and compute pricing breakdown.
+ */
+export const calculateValidatedOrder = async (
+  orderItems,
+  couponCode,
+  shippingPrice,
+  deliveryZone,
+  preloadedSettings = null,
+  manualDiscount = 0
+) => {
+  const settings = preloadedSettings || (await PageSetting.findOne());
+  const productMap = await fetchProductMap(orderItems);
+
+  let itemsPrice = 0;
+  const validatedItems = orderItems.map((item) => {
+    const product = productMap[item.product.toString()];
+    const validated = validateOrderItem(item, product);
+    itemsPrice += validated.price * validated.quantity;
+    return validated;
+  });
+
+  const finalShippingPrice = resolveShippingPrice(settings, deliveryZone, shippingPrice);
+  const { discountAmount, finalCoupon } = await resolveCouponDiscount(couponCode, itemsPrice);
+  const totalDiscount = Math.min(itemsPrice, Number(((discountAmount || 0) + (Number(manualDiscount) || 0)).toFixed(2)));
+
+  return {
+    itemsPrice: Number(itemsPrice.toFixed(2)),
+    discountAmount: totalDiscount,
+    shippingPrice: finalShippingPrice,
+    totalPrice: Math.max(0, Number((itemsPrice - totalDiscount + finalShippingPrice).toFixed(2))),
+    validatedItems,
+    couponCode: finalCoupon,
+  };
+};
+
+/**
+ * Format shipping address attributes into standard payload.
+ */
 export const normalizeShippingAddress = (addr) => ({
-    name: addr.name, 
-    email: addr.email, 
-    phone: addr.phone,
-    address: addr.address || [addr.street, addr.city].filter(Boolean).join(", ")
+  name: addr.name,
+  email: addr.email,
+  phone: addr.phone,
+  address: addr.address || [addr.street, addr.city].filter(Boolean).join(", "),
 });
 
+/**
+ * Decrement inventory stock, update coupon usage, and dispatch confirmation email.
+ */
 export const finalizeOrderProcessing = async (order, session = null) => {
-    // 🚀 ATOMIC STOCK DECREMENT: Ensures no negative stock during concurrent load
-    const bulkOps = order.orderItems.map((item) => ({
-      updateOne: {
-        filter: { 
-            _id: item.product, 
-            "sizes.size": item.size,
-            "sizes.stock": { $gte: item.quantity } // Safety check
-        },
-        update: { $inc: { "sizes.$.stock": -item.quantity } },
+  const bulkOps = order.orderItems.map((item) => ({
+    updateOne: {
+      filter: {
+        _id: item.product,
+        "sizes.size": item.size,
+        "sizes.stock": { $gte: item.quantity },
       },
-    }));
-    
-    if (bulkOps.length > 0) {
-        const result = await Product.bulkWrite(bulkOps, { session });
-        if (result.matchedCount < bulkOps.length) {
-            console.error("❌ CONCURRENCY ERROR: Stock depletion between validation and finalization");
-            throw new Error("One or more items in your order are out of stock or have insufficient quantity. Order cancelled.");
-        }
-    }
-    
-    if (order.couponCode) {
-      await Coupon.findOneAndUpdate(
-        { code: order.couponCode },
-        { $inc: { usedCount: 1 } },
-        { session }
-      );
-    }
-  
-    if (!order.isDirectBuy && order.user) {
-      await Cart.findOneAndUpdate(
-        { user: order.user }, 
-        { $set: { items: [] } },
-        { session }
-      );
-    }
+      update: { $inc: { "sizes.$.stock": -item.quantity } },
+    },
+  }));
 
-    // 🚀 AUTOMATED ORDER CONFIRMATION EMAIL
-    try {
-        await sendOrderConfirmationEmail(order);
-        console.log(`📧 Order confirmation email sent to ${order.shippingAddress.email}`);
-    } catch (error) {
-        console.error("❌ Failed to send order confirmation email:", error);
+  if (bulkOps.length > 0) {
+    const result = await Product.bulkWrite(bulkOps, { session });
+    if (result.matchedCount < bulkOps.length) {
+      logger.error("Stock allocation concurrency conflict detected during order finalization", {
+        orderId: order._id,
+      });
+      throw new Error("One or more items in your order are out of stock. Order cancelled.");
     }
+  }
+
+  if (order.couponCode) {
+    await Coupon.findOneAndUpdate(
+      { code: order.couponCode },
+      { $inc: { usedCount: 1 } },
+      { session }
+    );
+  }
+
+  if (!order.isDirectBuy && order.user) {
+    await Cart.findOneAndUpdate(
+      { user: order.user },
+      { $set: { items: [] } },
+      { session }
+    );
+  }
+
+  try {
+    await sendOrderConfirmationEmail(order);
+  } catch (error) {
+    logger.error("Failed to dispatch order confirmation email:", { error: error.message });
+  }
 };

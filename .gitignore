@@ -11,6 +11,7 @@
 # Explicitly allow essential root configuration
 !/.gitignore
 !/README.md
+!/SECURITY.md
 !/render.yaml
 
 # Downloaded data ignores
@@ -21,6 +22,8 @@
 /ai-service/.venv/
 /ai-service/__pycache__/
 /ai-service/weights/
+/ai-service/trained_vlm_adapter/
+/ai-service/dataset/
 /ai-service/cloudflared.exe
 *.exe
 
@@ -34,6 +37,8 @@
 /backend/uploads/
 /backend/dbdata/
 /backend/images/
+/backend/coverage/
+/backend/logs/
 /backend/jsons/**
 /backend/.env
 /backend/scripts/

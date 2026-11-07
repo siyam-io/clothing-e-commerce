@@ -1,87 +1,80 @@
 "use client";
 
 import Link from "next/link";
-import { Settings2, Trash2, FileImage } from "lucide-react";
+import { Edit2, Trash2, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { AdminCard } from "@/app/admin/_components/AdminCard";
+import AdminStatusBadge from "@/app/admin/_components/AdminStatusBadge";
 import { getImageUrl } from "@/utils/imageUtils";
 
 export default function BannerCampaignCard({ campaign, onDelete }) {
+  const mainSlide = campaign.slides?.[0];
+
   return (
-    <Card className="group rounded-[2.5rem] border-border/10 bg-card/30 backdrop-blur-xl shadow-xl hover:shadow-indigo-600/5 transition-all duration-700 overflow-hidden relative">
-      <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/5 blur-3xl rounded-full -mr-16 -mt-16 opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-      
-      <CardHeader className="p-10">
-        <div className="flex justify-between items-start mb-6">
-          <div className="space-y-1">
-            <CardTitle className="text-2xl font-black uppercase tracking-tighter leading-none group-hover:text-indigo-600 transition-colors duration-500">
+    <AdminCard className="flex flex-col justify-between hover:border-border transition-colors">
+      <div className="p-5 space-y-4">
+        <div className="flex justify-between items-start gap-2">
+          <div>
+            <h4 className="text-base font-semibold text-foreground tracking-tight line-clamp-1">
               {campaign.name}
-            </CardTitle>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
-              ID: {campaign._id.slice(-8).toUpperCase()}
-            </p>
+            </h4>
+            <span className="font-mono text-[11px] text-muted-foreground">
+              ID: #{campaign._id.slice(-8).toUpperCase()}
+            </span>
           </div>
-          {campaign.isActive && (
-            <Badge className="bg-indigo-600 text-white border-none rounded-full px-4 py-1 text-[9px] font-bold uppercase tracking-widest">
-              In Use
+
+          <AdminStatusBadge
+            value={campaign.isActive ? "active" : "inactive"}
+            label={campaign.isActive ? "Active on Store" : "Inactive"}
+          />
+        </div>
+
+        {campaign.description && (
+          <p className="text-xs text-muted-foreground line-clamp-2">
+            {campaign.description}
+          </p>
+        )}
+
+        {/* Banner Preview */}
+        <div className="aspect-[21/9] rounded-xl overflow-hidden border border-border/60 bg-muted/30 relative">
+          {mainSlide?.image ? (
+            <img
+              src={getImageUrl(mainSlide.image)}
+              alt={campaign.name}
+              className="size-full object-cover"
+            />
+          ) : (
+            <div className="size-full flex flex-col items-center justify-center text-muted-foreground/60 gap-1.5">
+              <ImageIcon className="size-6 stroke-[1.5]" />
+              <span className="text-[11px]">No banner image</span>
+            </div>
+          )}
+          {campaign.slides?.length > 1 && (
+            <Badge className="absolute bottom-2 right-2 bg-background/80 text-foreground border border-border/60 backdrop-blur-md text-[10px]">
+              {campaign.slides.length} slides
             </Badge>
           )}
         </div>
-        <CardDescription className="text-xs font-medium text-muted-foreground line-clamp-2 leading-relaxed">
-          {campaign.description || "No description provided."}
-        </CardDescription>
-      </CardHeader>
+      </div>
 
-      <CardContent className="p-10 pt-0 space-y-8">
-        {/* Deck Visualization */}
-        <div className="bg-accent/5 border border-border/5 rounded-[1.5rem] p-6 relative">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.3em] flex items-center gap-2">
-              <FileImage size={12} /> Banner Image
-            </span>
-            <span className="text-[10px] font-black text-indigo-600 bg-indigo-600/10 px-3 py-0.5 rounded-full uppercase tracking-widest">
-              Preview
-            </span>
-          </div>
-          <div className="flex overflow-hidden">
-            {campaign.slides.slice(0, 1).map((slide, idx) => (
-              <div
-                key={idx}
-                className="w-full h-32 rounded-2xl overflow-hidden border border-border/10 shadow-lg shrink-0 relative group/img"
-              >
-                {slide.image ? (
-                  <img
-                    src={getImageUrl(slide.image)}
-                    alt="campaign preview"
-                    className="w-full h-full object-cover grayscale group-hover/img:grayscale-0 transition-all duration-700"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-accent/10 flex items-center justify-center">
-                    <FileImage size={24} className="text-muted-foreground/30" />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <Button asChild variant="outline" className="flex-1 h-14 rounded-xl border-border/10 text-[10px] font-black uppercase tracking-widest hover:bg-foreground hover:text-background transition-all">
-            <Link href={`/admin/banner-campaigns/${campaign._id}`}>
-              <Settings2 size={14} className="mr-2" /> Edit Banner
-            </Link>
-          </Button>
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={() => onDelete(campaign._id)}
-            className="h-14 w-14 rounded-xl border-border/10 hover:border-rose-600/50 hover:bg-rose-600 hover:text-white transition-all"
-          >
-            <Trash2 size={16} />
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+      <div className="flex items-center justify-end gap-2 p-4 border-t border-border/40 bg-muted/20">
+        <Button asChild variant="outline" size="sm" className="h-8 px-3 rounded-lg text-xs font-medium gap-1.5">
+          <Link href={`/admin/banner-campaigns/${campaign._id}`}>
+            <Edit2 className="size-3" /> Edit Campaign
+          </Link>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          onClick={() => onDelete(campaign._id)}
+          className="size-8 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 border-border/60"
+          title="Delete campaign"
+        >
+          <Trash2 className="size-3.5" />
+        </Button>
+      </div>
+    </AdminCard>
   );
 }

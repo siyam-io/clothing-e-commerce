@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import api from "@/lib/api";
 import { useProductStore } from "@/store/productStore";
+import { setCookie, getCookie, deleteCookie } from "@/utils/cookies";
 
 export const useAuthStore = create(
   persist(
@@ -16,7 +17,12 @@ export const useAuthStore = create(
         try {
           const { data } = await api.post("/auth/login", { email, password });
 
-          localStorage.setItem("token", data.token);
+          if (data.token) {
+            setCookie("vanguard_auth_token", data.token, 7);
+            setCookie("token", data.token, 7);
+            localStorage.setItem("token", data.token);
+          }
+
           set({
             user: data.user,
             token: data.token,
@@ -33,12 +39,20 @@ export const useAuthStore = create(
         }
       },
 
-      loginWithGoogle: async (idToken) => {
+      loginWithGoogle: async (token) => {
         set({ isLoading: true });
         try {
-          const { data } = await api.post("/auth/google-login", { idToken });
+          const { data } = await api.post("/auth/google-login", {
+            idToken: token,
+            accessToken: token,
+          });
 
-          localStorage.setItem("token", data.token);
+          if (data.token) {
+            setCookie("vanguard_auth_token", data.token, 7);
+            setCookie("token", data.token, 7);
+            localStorage.setItem("token", data.token);
+          }
+
           set({
             user: data.user,
             token: data.token,
@@ -60,7 +74,12 @@ export const useAuthStore = create(
         try {
           const { data } = await api.post("/auth/facebook-login", { accessToken });
 
-          localStorage.setItem("token", data.token);
+          if (data.token) {
+            setCookie("vanguard_auth_token", data.token, 7);
+            setCookie("token", data.token, 7);
+            localStorage.setItem("token", data.token);
+          }
+
           set({
             user: data.user,
             token: data.token,
@@ -78,6 +97,8 @@ export const useAuthStore = create(
       },
 
       logout: () => {
+        deleteCookie("vanguard_auth_token");
+        deleteCookie("token");
         localStorage.removeItem("token");
 
         useProductStore.getState().resetStore();
@@ -91,7 +112,7 @@ export const useAuthStore = create(
       },
 
       checkSession: async () => {
-        const token = localStorage.getItem("token");
+        const token = getCookie("vanguard_auth_token") || getCookie("token") || localStorage.getItem("token");
         if (!token) {
           set({ isLoading: false, isAuthenticated: false });
           return;
@@ -128,6 +149,8 @@ export const useAuthStore = create(
           });
 
           if (data.token) {
+            setCookie("vanguard_auth_token", data.token, 7);
+            setCookie("token", data.token, 7);
             localStorage.setItem("token", data.token);
             set({
               user: data.user,

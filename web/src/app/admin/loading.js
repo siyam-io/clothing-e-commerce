@@ -1,34 +1,33 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
+/**
+ * Lightweight, generic loader for admin transitions preventing disruptive layout shifts.
+ */
 export default function AdminLoading() {
   return (
-    <div className="space-y-10 pb-20 max-w-[1600px] mx-auto px-4 sm:px-10 pt-10 animate-in fade-in duration-700">
-      {/* 1. HEADER SKELETON */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-        <div className="space-y-4">
-          <Skeleton className="h-16 w-[300px] md:w-[500px] rounded-2xl bg-zinc-200 dark:bg-zinc-800" />
-          <Skeleton className="h-4 w-[200px] bg-zinc-100 dark:bg-zinc-800/50" />
+    <div
+      className="p-6 md:p-10 space-y-8 max-w-[1600px] mx-auto animate-in fade-in duration-150"
+      aria-busy="true"
+      aria-label="Loading admin content"
+    >
+      <div className="flex justify-between items-center">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-48 rounded-lg" />
+          <Skeleton className="h-4 w-72 rounded-md" />
         </div>
-        <Skeleton className="h-[120px] w-[240px] rounded-[2rem] bg-zinc-200 dark:bg-zinc-800" />
+        <Skeleton className="h-10 w-28 rounded-lg" />
       </div>
 
-      {/* 2. KPI GRID SKELETON */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} className="h-[160px] rounded-[2.5rem] bg-zinc-100 dark:bg-zinc-900/50" />
-        ))}
-      </div>
-
-      {/* 3. ANALYTICS BLOCK SKELETON */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <Skeleton className="lg:col-span-2 h-[480px] rounded-[3rem] bg-zinc-100 dark:bg-zinc-900/40" />
-        <Skeleton className="h-[480px] rounded-[3rem] bg-zinc-100 dark:bg-zinc-900/40" />
-      </div>
-
-      {/* 4. LOWER BLOCKS SKELETON */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Skeleton className="h-[400px] rounded-[3rem] bg-zinc-100 dark:bg-zinc-900/30" />
-        <Skeleton className="h-[400px] rounded-[3rem] bg-zinc-900 dark:bg-black" />
+      <div className="bg-card/40 border border-border/10 rounded-2xl p-6 space-y-4">
+        <div className="flex justify-between items-center pb-4 border-b border-border/10">
+          <Skeleton className="h-8 w-64 rounded-lg" />
+          <Skeleton className="h-8 w-24 rounded-lg" />
+        </div>
+        <div className="space-y-3 pt-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-12 w-full rounded-xl" />
+          ))}
+        </div>
       </div>
     </div>
   );

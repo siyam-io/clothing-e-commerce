@@ -3,6 +3,7 @@
 import { getImageUrl } from "@/utils/imageUtils";
 import { Plus, Minus, Trash2, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Price } from "@/components/common/Price";
 
 export default function OrderItemsEditor({ items, onUpdateQuantity, onRemoveItem }) {
   return (
@@ -27,9 +28,11 @@ export default function OrderItemsEditor({ items, onUpdateQuantity, onRemoveItem
               <p className="font-black text-base text-foreground uppercase truncate italic tracking-tight">
                 {item.name}
               </p>
-              <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1">
-                {item.sizeName || "Universal Size"} • ৳{item.price}
-              </p>
+              <div className="flex items-center gap-1.5 text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1">
+                <span>{item.sizeName || "Universal Size"}</span>
+                <span>•</span>
+                <Price amount={item.price} className="text-indigo-500" />
+              </div>
             </div>
             <div className="flex items-center gap-6">
               <div className="flex items-center bg-background rounded-xl border border-border/50 overflow-hidden shadow-sm">

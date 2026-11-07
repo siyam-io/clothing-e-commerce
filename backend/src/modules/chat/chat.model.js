@@ -5,7 +5,7 @@ const messageSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId, 
     ref: "Conversation", 
     required: true,
-    index: true // 🚀 Fast lookup for history
+    index: true,
   },
   sender: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: false },
   senderName: { type: String, default: "User" },
@@ -18,7 +18,7 @@ const messageSchema = new mongoose.Schema({
   isEdited: { type: Boolean, default: false },
 }, { timestamps: true });
 
-// 🚀 Compound index for super-fast sorted retrieval
+// Compound indexes for sorted retrieval and unread counts
 messageSchema.index({ conversationId: 1, createdAt: -1 });
 messageSchema.index({ conversationId: 1, isRead: 1 });
 messageSchema.index({ isRead: 1, sender: 1 });

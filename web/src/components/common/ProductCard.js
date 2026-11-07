@@ -13,6 +13,7 @@ import QuickSelectModal from "@/app/products/components/QuickSelectModal";
 import { useAuthStore } from "@/store/authStore";
 import { useAppStore } from "@/store/appStore";
 import { getTranslation } from "@/utils/typography/handler";
+import { Price } from "@/components/common/Price";
 
 export default function ProductCard({ product, className }) {
   const { isAuthenticated } = useAuthStore();
@@ -119,13 +120,16 @@ export default function ProductCard({ product, className }) {
           {/* Price & Actions Row - Always sticks to bottom */}
           <div className="mt-auto flex items-center justify-between gap-2">
             <div className="flex items-baseline gap-1.5 flex-wrap">
-              <span className="text-lg sm:text-xl font-bold tracking-tight">
-                ৳{(discountedPrice || 0).toFixed(0)}
-              </span>
+              <Price
+                amount={(discountedPrice || 0).toFixed(0)}
+                className="text-lg sm:text-xl font-bold text-foreground"
+              />
               {hasDiscount && (
-                <span className="text-xs sm:text-sm text-muted-foreground line-through">
-                  ৳{product.price}
-                </span>
+                <Price
+                  amount={product.price}
+                  lineThrough
+                  className="text-xs sm:text-sm"
+                />
               )}
             </div>
 

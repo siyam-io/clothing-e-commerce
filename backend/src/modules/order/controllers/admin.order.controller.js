@@ -12,6 +12,7 @@ import {
 import pathaoService from '../../../services/pathao.service.js';
 import { sendOrderStatusUpdateEmail } from '../../../services/email.service.js';
 import { cancelOrderWithTransaction } from '../order.service.js';
+import logger from '../../../utils/logger.js';
 
 export const getOrders = asyncHandler(async (req, res) => {
   const { search, status, user, sort, page = 1, limit = 30 } = req.query;
@@ -40,7 +41,7 @@ export const getOrders = asyncHandler(async (req, res) => {
   const skip = (Math.max(1, Number(page)) - 1) * Number(limit);
   const itemsLimit = Number(limit);
 
-  // 🏛️ Dynamic Sorting Logic
+  // Dynamic sorting configuration
   const sortOrder = sort && sort !== "all" ? sort.split(",").join(" ") : "-createdAt";
 
   const ordersRaw = await Order.find(filter)
@@ -95,15 +96,28 @@ export const createOrderAdmin = asyncHandler(async (req, res) => {
     orderItems,
     shippingAddress,
     couponCode,
-    paymentMethod = "COD",
-    orderStatus = "Processing",
-    paymentStatus = "Pending"
+    paymentMethod = "Cash",
+    orderStatus = "Delivered",
+    paymentStatus = "Completed",
+    shippingPrice,
+    deliveryZone,
+    discountAmount = 0,
+    note = "",
+    transactionId,
   } = req.body;
+
+  const resolvedShippingPrice = shippingPrice !== undefined
+    ? Number(shippingPrice)
+    : (shippingAddress?.shippingPrice !== undefined ? Number(shippingAddress.shippingPrice) : undefined);
+  const resolvedDeliveryZone = deliveryZone || shippingAddress?.deliveryZone || (resolvedShippingPrice === 0 ? "pos" : undefined);
 
   const orderData = await calculateValidatedOrder(
     orderItems,
     couponCode,
-    shippingAddress.pathao_city_id
+    resolvedShippingPrice,
+    resolvedDeliveryZone,
+    null,
+    discountAmount
   );
 
   const order = new Order({
@@ -118,31 +132,24 @@ export const createOrderAdmin = asyncHandler(async (req, res) => {
     couponCode: orderData.couponCode,
     paymentMethod,
     orderStatus,
+    note: note?.trim() || "",
     paymentResult: {
-      transactionId: `ADMIN-${new mongoose.Types.ObjectId().toString()}`,
+      transactionId: transactionId?.trim() || req.body.transactionId?.trim() || `POS-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
       status: paymentStatus,
     },
   });
 
   const createdOrder = await order.save();
   
-  // 🚀 Finalize: Deduct stock and initialize post-order logic
+  // Finalize order processing and inventory deductions
   await finalizeOrderProcessing(createdOrder);
   
   clearCache('cache:/api/admin/dashboard*');
   
   const io = req.app.get('io');
-  console.log('🚀 ORDER CREATED: Emitting socket event', {
-    hasIo: !!io,
-    orderId: createdOrder._id,
-    timestamp: new Date().toISOString()
-  });
-  
   if (io) {
     io.emit('new_order', createdOrder);
-    console.log('✅ ORDER CREATED: Socket.io "new_order" event emitted successfully');
-  } else {
-    console.error('❌ ORDER CREATED: Socket.io instance not available!');
+    logger.info('Admin order created, socket emitted', { orderId: createdOrder._id });
   }
   
   res.status(201).json(createdOrder);
@@ -195,7 +202,7 @@ export const updateOrder = asyncHandler(async (req, res) => {
     if (deductOps.length > 0) {
       const deductResult = await Product.bulkWrite(deductOps);
       if (deductResult.matchedCount < deductOps.length) {
-        console.error("❌ updateOrder: Some items had insufficient stock during deduct.");
+        console.error(" updateOrder: Some items had insufficient stock during deduct.");
         // Don't throw — admin-level operation, log and continue
       }
     }
@@ -212,13 +219,6 @@ export const updateOrder = asyncHandler(async (req, res) => {
       .populate("orderItems.product", "name images slug");
 
     const io = req.app.get('io');
-    console.log('🔄 ORDER CANCELLED: Emitting socket event', {
-      hasIo: !!io,
-      orderId: updatedOrder._id,
-      status: updatedOrder.orderStatus,
-      timestamp: new Date().toISOString()
-    });
-    
     if (io) {
       io.emit('order_updated', {
         orderId: updatedOrder._id,
@@ -226,16 +226,14 @@ export const updateOrder = asyncHandler(async (req, res) => {
         paymentStatus: updatedOrder.paymentResult?.status,
         order: updatedOrder
       });
-      console.log('✅ ORDER CANCELLED: Socket.io "order_updated" event emitted successfully');
-    } else {
-      console.error('❌ ORDER CANCELLED: Socket.io instance not available!');
+      logger.info('Order cancellation socket emitted', { orderId: updatedOrder._id });
     }
 
     try {
       await sendOrderStatusUpdateEmail(updatedOrder);
-      console.log(`📧 Status update email sent to ${updatedOrder.shippingAddress.email} (Cancelled)`);
+      logger.info('Status update email sent', { email: updatedOrder.shippingAddress.email, status: 'Cancelled' });
     } catch (error) {
-      console.error("❌ Failed to send status update email:", error);
+      logger.warn('Failed to send status update email, continuing:', { error: error.message });
     }
 
     return res.json(updatedOrder);
@@ -255,13 +253,6 @@ export const updateOrder = asyncHandler(async (req, res) => {
   clearCache('cache:/api/admin/dashboard*');
 
   const io = req.app.get('io');
-  console.log('🔄 ORDER UPDATED: Emitting socket event', {
-    hasIo: !!io,
-    orderId: order._id,
-    status: order.orderStatus,
-    timestamp: new Date().toISOString()
-  });
-  
   if (io) {
     io.emit('order_updated', {
       orderId: order._id,
@@ -269,18 +260,15 @@ export const updateOrder = asyncHandler(async (req, res) => {
       paymentStatus: order.paymentResult?.status,
       order
     });
-    console.log('✅ ORDER UPDATED: Socket.io "order_updated" event emitted successfully');
-  } else {
-    console.error('❌ ORDER UPDATED: Socket.io instance not available!');
+    logger.info('Order update socket emitted', { orderId: order._id });
   }
 
-  // 📧 TRIGGER STATUS UPDATE EMAIL
   if (req.body.orderStatus && req.body.orderStatus !== oldStatus) {
     try {
       await sendOrderStatusUpdateEmail(order);
-      console.log(`📧 Status update email sent to ${order.shippingAddress.email} (${order.orderStatus})`);
+      logger.info('Status update email sent', { email: order.shippingAddress.email, status: order.orderStatus });
     } catch (error) {
-      console.error("❌ Failed to send status update email:", error);
+      logger.warn('Failed to send status update email, continuing:', { error: error.message });
     }
   }
 

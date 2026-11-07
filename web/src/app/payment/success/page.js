@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { downloadOrderReceipt } from "@/utils/orderReceipt";
 import { notify } from "@/utils/swal";
+import { Price } from "@/components/common/Price";
 
 
 function SuccessSkeleton() {
@@ -199,31 +200,35 @@ function SuccessContent() {
                         {isBn ? 'সাইজ' : 'Size'}: {item.size?.name || item.size || "Standard"} • {isBn ? 'পরিমাণ' : 'Qty'}: {item.quantity}
                       </p>
                     </div>
-                    <p className="text-sm font-black">
-                      ৳{(item.price * item.quantity).toLocaleString()}
-                    </p>
+                    <Price
+                      amount={item.price * item.quantity}
+                      className="text-sm font-black"
+                    />
                   </div>
                 ))}
               </div>
 
               <div className="mt-8 pt-6 border-t border-border/10 space-y-3">
-                <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                   <span>{t.subtotal}</span>
-                  <span className="text-foreground">৳{order.itemsPrice?.toLocaleString()}</span>
+                  <Price amount={order.itemsPrice} className="text-foreground" />
                 </div>
                 {order.discountAmount > 0 && (
-                  <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-emerald-500">
+                  <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-emerald-500">
                     <span>{t.discount}</span>
-                    <span>-৳{order.discountAmount?.toLocaleString()}</span>
+                    <span className="inline-flex items-baseline gap-0.5">
+                      <span>-</span>
+                      <Price amount={order.discountAmount} className="text-emerald-500" />
+                    </span>
                   </div>
                 )}
-                <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                   <span>{t.shipping}</span>
-                  <span className="text-foreground">৳{order.shippingPrice?.toLocaleString()}</span>
+                  <Price amount={order.shippingPrice} className="text-foreground" />
                 </div>
-                <div className="success-total-row">
+                <div className="success-total-row flex justify-between items-center">
                   <span className={isBn ? "font-bold" : ""}>{t.total}</span>
-                  <span className="text-3xl">৳{order.totalPrice?.toLocaleString()}</span>
+                  <Price amount={order.totalPrice} className="text-3xl font-black" />
                 </div>
               </div>
             </motion.div>

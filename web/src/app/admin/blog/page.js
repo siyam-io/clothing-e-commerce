@@ -6,300 +6,254 @@ import { useAdminBlogs } from "@/app/admin/blog/lib/useAdminBlogs";
 import {
   Plus,
   Search,
-  Edit3,
+  Edit2,
   Trash2,
   Eye,
-  Filter,
   BookOpen,
   Clock,
   BarChart3,
-  LayoutGrid,
-  List,
-  FileText,
-  Zap,
-  EyeOff
+  Filter,
+  Star,
+  FileText
 } from "lucide-react";
 import { getImageUrl } from "@/utils/imageUtils";
-import { cn } from "@/lib/utils";
-import Loader from "@/components/common/Loader";
-import { swalConfirm } from "@/utils/swal";
-
-// Shadcn UI Imports
+import { swalToast, swalError } from "@/utils/swal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Separator } from "@/components/ui/separator";
-
+import { Skeleton } from "@/components/ui/skeleton";
 import { useFilters } from "@/app/admin/_hooks/useFilters";
 import Pagination from "@/components/common/Pagination";
+import AdminPageContainer from "@/app/admin/_components/AdminPageContainer";
 import AdminPageHeader, { AdminHeaderButton } from "@/app/admin/_components/AdminPageHeader";
+import { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardContent } from "@/app/admin/_components/AdminCard";
+import AdminDataTable from "@/app/admin/_components/AdminDataTable";
+import AdminStatusBadge from "@/app/admin/_components/AdminStatusBadge";
+import AdminDeleteModal from "@/app/admin/_components/AdminDeleteModal";
 
 export default function BlogListPage() {
   const { search, setSearch, page, setPage, queryParams } = useFilters({ initialLimit: 30 });
   const { blogs, total, pages, isLoading, deleteBlog, toggleStatus, toggleFeatured } = useAdminBlogs(queryParams, true);
 
-  const filteredBlogs = blogs;
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const handleDelete = async (id) => {
-    const confirmed = await swalConfirm(
-      "Delete post?",
-      "This post will be permanently removed.",
-    );
-    if (confirmed) {
-      deleteBlog.mutate(id);
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteBlog.mutateAsync(deleteTarget.id);
+      swalToast("Blog post deleted successfully", "success");
+      setDeleteTarget(null);
+    } catch (err) {
+      swalError("Delete Failed", "Could not delete blog post.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  if (isLoading)
+  const publishedCount = blogs?.filter((b) => b.status === "PUBLISHED").length || 0;
+  const draftCount = blogs?.filter((b) => b.status === "DRAFT").length || 0;
+  const totalViews = blogs?.reduce((acc, b) => acc + (b.viewCount || 0), 0) || 0;
+  const categoryCount = new Set(blogs?.map((b) => b.category)).size || 0;
+
+  const columns = [
+    {
+      label: "Article",
+      render: (post) => (
+        <div className="flex items-center gap-3">
+          <div className="size-12 rounded-xl overflow-hidden bg-muted shrink-0 border border-border/60">
+            {post.featuredImage ? (
+              <img
+                src={getImageUrl(post.featuredImage)}
+                className="size-full object-cover"
+                alt=""
+              />
+            ) : (
+              <div className="size-full flex items-center justify-center text-muted-foreground">
+                <FileText className="size-4 opacity-40" />
+              </div>
+            )}
+          </div>
+          <div>
+            <span className="font-semibold text-sm text-foreground tracking-tight line-clamp-1">
+              {post.title}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {new Date(post.createdAt).toLocaleDateString()}
+            </span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      label: "Category",
+      render: (post) => (
+        <Badge variant="outline" className="text-xs font-medium px-2.5 py-0.5 rounded-full border-border/60 bg-muted/30">
+          {post.category || "General"}
+        </Badge>
+      ),
+    },
+    {
+      label: "Status",
+      render: (post) => (
+        <AdminStatusBadge
+          value={post.status === "PUBLISHED" ? "published" : "draft"}
+          label={post.status === "PUBLISHED" ? "Published" : "Draft"}
+        />
+      ),
+    },
+    {
+      label: "Views",
+      render: (post) => (
+        <span className="text-xs font-medium text-foreground tabular-nums">
+          {Number(post.viewCount || 0).toLocaleString()}
+        </span>
+      ),
+    },
+  ];
+
+  if (isLoading) {
     return (
-      <div className="h-[60vh] flex items-center justify-center">
-        <Loader />
-      </div>
+      <AdminPageContainer>
+        <Skeleton className="h-10 w-48 rounded-xl" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-24 rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-96 w-full rounded-2xl" />
+      </AdminPageContainer>
     );
+  }
 
   return (
-    <div className="admin-page-container">
+    <AdminPageContainer>
       <AdminPageHeader
-        title="Blog"
-        description={`Manage blog posts · ${total || 0} posts`}
+        title="Blog & Articles"
+        description={`Publish guides, lifestyle updates, and content marketing articles · ${total || 0} total`}
         actions={
-          <>
+          <div className="flex items-center gap-3">
             <div className="relative w-full sm:w-64">
-              <Search
-                className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
+              <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Search posts..."
+                placeholder="Search articles..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-11 w-full rounded-xl border-border bg-background pl-10"
+                className="h-10 w-full rounded-xl border-border/60 bg-background/80 pl-9 text-xs"
               />
             </div>
             <AdminHeaderButton href="/admin/blog/create" icon={Plus}>
-              New post
+              New Article
             </AdminHeaderButton>
-          </>
+          </div>
         }
       />
 
-      {/* 📊 Intelligence Overview */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatsCard
-          icon={<BookOpen size={20} />}
-          label="Published Sequences"
-          value={blogs?.filter((b) => b.status === "PUBLISHED").length}
-          color="text-emerald-500"
-          bg="bg-emerald-500/5"
-        />
-        <StatsCard
-          icon={<Clock size={20} />}
-          label="Draft Protocols"
-          value={blogs?.filter((b) => b.status === "DRAFT").length}
-          color="text-amber-500"
-          bg="bg-amber-500/5"
-        />
-        <StatsCard
-          icon={<BarChart3 size={20} />}
-          label="Neural Reach (Views)"
-          value={blogs?.reduce((acc, b) => acc + (b.viewCount || 0), 0)}
-          color="text-indigo-500"
-          bg="bg-indigo-500/5"
-        />
-        <StatsCard
-          icon={<Filter size={20} />}
-          label="Domain Clusters"
-          value={new Set(blogs?.map((b) => b.category)).size}
-          color="text-rose-500"
-          bg="bg-rose-500/5"
-        />
+      {/* KPI Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-5 rounded-2xl border border-border/60 bg-card/70 backdrop-blur-md shadow-2xs flex items-center gap-4">
+          <div className="size-11 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+            <BookOpen className="size-5" />
+          </div>
+          <div>
+            <span className="text-xs font-medium text-muted-foreground block">Published Posts</span>
+            <span className="text-2xl font-bold tracking-tight text-foreground tabular-nums">{publishedCount}</span>
+          </div>
+        </div>
+
+        <div className="p-5 rounded-2xl border border-border/60 bg-card/70 backdrop-blur-md shadow-2xs flex items-center gap-4">
+          <div className="size-11 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+            <Clock className="size-5" />
+          </div>
+          <div>
+            <span className="text-xs font-medium text-muted-foreground block">Drafts</span>
+            <span className="text-2xl font-bold tracking-tight text-foreground tabular-nums">{draftCount}</span>
+          </div>
+        </div>
+
+        <div className="p-5 rounded-2xl border border-border/60 bg-card/70 backdrop-blur-md shadow-2xs flex items-center gap-4">
+          <div className="size-11 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+            <BarChart3 className="size-5" />
+          </div>
+          <div>
+            <span className="text-xs font-medium text-muted-foreground block">Total Article Views</span>
+            <span className="text-2xl font-bold tracking-tight text-foreground tabular-nums">{totalViews.toLocaleString()}</span>
+          </div>
+        </div>
+
+        <div className="p-5 rounded-2xl border border-border/60 bg-card/70 backdrop-blur-md shadow-2xs flex items-center gap-4">
+          <div className="size-11 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+            <Filter className="size-5" />
+          </div>
+          <div>
+            <span className="text-xs font-medium text-muted-foreground block">Categories</span>
+            <span className="text-2xl font-bold tracking-tight text-foreground tabular-nums">{categoryCount}</span>
+          </div>
+        </div>
       </div>
 
-      {/* 📁 Central Data Foundry */}
-      <div className="admin-table-form">
-        <div className="p-8 border-b border-border/10 bg-background/20">
-           <div className="flex items-center justify-between">
-              <CardTitle className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-3">
-                 <FileText size={16} className="text-rose-600" /> Narrative Ledger
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                 <Button variant="outline" size="sm" className="rounded-xl h-10 px-4 text-[9px] font-black uppercase tracking-widest border-border/10">
-                    <List size={14} className="mr-2" /> List
-                 </Button>
-                 <Button variant="ghost" size="sm" className="rounded-xl h-10 px-4 text-[9px] font-black uppercase tracking-widest opacity-40">
-                    <LayoutGrid size={14} className="mr-2" /> Grid
-                 </Button>
+      <AdminCard>
+        <AdminCardHeader>
+          <AdminCardTitle>All Articles</AdminCardTitle>
+        </AdminCardHeader>
+        <AdminCardContent className="p-0">
+          <AdminDataTable
+            columns={columns}
+            data={blogs || []}
+            emptyTitle="No blog posts found"
+            emptyDescription="Create your first blog post to engage visitors and improve organic SEO."
+            emptyActionLabel="Create Post"
+            onEmptyAction={() => window.location.href = "/admin/blog/create"}
+            actions={(post) => (
+              <div className="flex items-center gap-1 justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => toggleFeatured(post._id, post.isFeatured)}
+                  className="size-8 rounded-lg"
+                  title={post.isFeatured ? "Remove from featured" : "Mark as featured"}
+                >
+                  <Star className="size-3.5" fill={post.isFeatured ? "currentColor" : "none"} />
+                </Button>
+                <Button asChild variant="ghost" size="icon-sm" className="size-8 rounded-lg" title="Edit post">
+                  <Link href={`/admin/blog/${post._id}`}>
+                    <Edit2 className="size-3.5" />
+                  </Link>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setDeleteTarget({ id: post._id, name: post.title })}
+                  className="size-8 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-500/10"
+                  title="Delete post"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
               </div>
-           </div>
-        </div>
-        <div className="admin-table-container border-none rounded-none">
-          <Table>
-            <TableHeader className="bg-muted/30">
-              <TableRow className="hover:bg-transparent border-border/5">
-                <TableHead className="w-[450px] pl-10 h-16 text-[10px] font-black uppercase tracking-widest">Sequence Identity</TableHead>
-                <TableHead className="h-16 text-[10px] font-black uppercase tracking-widest">Classification</TableHead>
-                <TableHead className="h-16 text-[10px] font-black uppercase tracking-widest text-center">Status</TableHead>
-                <TableHead className="h-16 text-[10px] font-black uppercase tracking-widest text-center">Intelligence</TableHead>
-                <TableHead className="h-16 pr-10 text-[10px] font-black uppercase tracking-widest text-right">Ops</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredBlogs?.length > 0 ? (
-                filteredBlogs.map((post) => (
-                  <TableRow key={post._id} className="group border-border/5 hover:bg-accent/5 transition-colors duration-500">
-                    <TableCell className="pl-10 py-6">
-                      <div className="flex items-center gap-6">
-                        <div className="w-16 h-16 rounded-2xl overflow-hidden bg-muted shrink-0 shadow-inner group-hover:scale-110 transition-transform duration-700">
-                          <img
-                            src={getImageUrl(post.featuredImage)}
-                            className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700"
-                            alt=""
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <h3 className="text-sm font-black uppercase tracking-tight text-foreground leading-tight group-hover:text-rose-600 transition-colors">
-                            {post.title}
-                          </h3>
-                          <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
-                            ID: {post._id.slice(-12).toUpperCase()} • {new Date(post.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-lg border-border/10 bg-background/50">
-                        {post.category}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge 
-                        className={`text-[9px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full border-none shadow-sm ${
-                          post.status === "PUBLISHED"
-                            ? "bg-emerald-500/10 text-emerald-500"
-                            : "bg-zinc-500/10 text-zinc-500"
-                        }`}
-                      >
-                        {post.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                       <div className="flex flex-col items-center gap-1">
-                          <span className="text-xs font-black">{post.viewCount || 0}</span>
-                          <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground">Views</span>
-                       </div>
-                    </TableCell>
-                    <TableCell className="pr-10 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {/* ⚡ Toggle Featured */}
-                        <Button 
-                          variant="outline" 
-                          size="icon" 
-                          onClick={() => toggleFeatured(post._id, post.isFeatured)}
-                          className={cn(
-                            "h-9 w-9 rounded-xl border-border/10 transition-all active:scale-95",
-                            post.isFeatured 
-                              ? "bg-rose-600/10 border-rose-600/30 text-rose-600 hover:bg-rose-600 hover:text-white" 
-                              : "bg-background/50 hover:border-rose-600/50 hover:text-rose-600"
-                          )}
-                          title={post.isFeatured ? "Demote from Featured" : "Promote to Featured"}
-                        >
-                          <Zap size={14} fill={post.isFeatured ? "currentColor" : "none"} />
-                        </Button>
+            )}
+            pagination={{
+              page,
+              totalPages: pages || 1,
+              total,
+              onPageChange: setPage,
+            }}
+          />
+        </AdminCardContent>
+      </AdminCard>
 
-                        {/* 👁️ Toggle Status */}
-                        <Button 
-                          variant="outline" 
-                          size="icon" 
-                          onClick={() => toggleStatus(post._id, post.status)}
-                          className={cn(
-                            "h-9 w-9 rounded-xl border-border/10 transition-all active:scale-95",
-                            post.status === "PUBLISHED"
-                              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500 hover:text-white"
-                              : "bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500 hover:text-white"
-                          )}
-                          title={post.status === "PUBLISHED" ? "Hide (Draft)" : "Show (Publish)"}
-                        >
-                          {post.status === "PUBLISHED" ? <Eye size={14} /> : <EyeOff size={14} />}
-                        </Button>
-
-                        <Separator orientation="vertical" className="h-6 mx-1 opacity-20" />
-
-                        <Button asChild variant="outline" size="icon" className="h-9 w-9 rounded-xl border-border/10 hover:border-foreground/50 hover:bg-foreground hover:text-background bg-background/50 transition-all active:scale-95">
-                          <Link href={`/admin/blog/${post._id}`}>
-                            <Edit3 size={14} />
-                          </Link>
-                        </Button>
-
-                        <Button 
-                          variant="outline" 
-                          size="icon" 
-                          onClick={() => handleDelete(post._id)}
-                          className="h-9 w-9 rounded-xl border-border/10 hover:border-rose-600/50 hover:bg-rose-600 hover:text-white bg-background/50 transition-all active:scale-95"
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-64 text-center">
-                     <div className="flex flex-col items-center justify-center space-y-4 opacity-20">
-                        <FileText size={48} />
-                        <p className="text-[10px] font-black uppercase tracking-[0.5em]">Zero Narrative Sequences Detected</p>
-                     </div>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* Pagination */}
-        <div className="p-8 border-t border-border/10 bg-background/5">
-           <Pagination 
-             page={page} 
-             totalPages={pages} 
-             onPageChange={setPage} 
-             className="py-0 sm:py-0 justify-between flex-row-reverse" 
-           />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// 📊 Intelligence Card Sub-component
-function StatsCard({ icon, label, value, color, bg }) {
-  return (
-    <Card className={`rounded-[2.5rem] border-border/5 bg-card/40 backdrop-blur-xl shadow-xl hover:shadow-rose-600/5 transition-all duration-500 overflow-hidden relative`}>
-      <div className={`absolute top-0 right-0 w-24 h-24 ${bg} blur-3xl rounded-full`} />
-      <CardHeader className="p-8">
-        <div className="flex items-center gap-6">
-          <div className={`p-5 rounded-2xl ${bg} ${color} shadow-sm`}>
-            {icon}
-          </div>
-          <div className="space-y-1">
-            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">
-              {label}
-            </p>
-            <h4 className="text-3xl font-black tracking-tighter dark:text-white leading-none">
-              {value}
-            </h4>
-          </div>
-        </div>
-      </CardHeader>
-    </Card>
+      <AdminDeleteModal
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Blog Post"
+        itemName={deleteTarget?.name}
+        description="Are you sure you want to permanently delete this blog post? It will no longer be visible on your website."
+        isLoading={isDeleting}
+      />
+    </AdminPageContainer>
   );
 }

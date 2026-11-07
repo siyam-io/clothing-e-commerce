@@ -3,20 +3,19 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import RichTextEditor from "./RichTextEditor";
-import { ArrowLeft, Globe, ImageIcon, Loader2, Plus, Save, Zap } from "lucide-react";
+import { ImageIcon, Loader2, Save, Upload, X } from "lucide-react";
 import { swalError } from "@/utils/swal";
 import { getImageUrl } from "@/utils/imageUtils";
 
-// Shadcn UI Imports
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
+import AdminPageContainer from "@/app/admin/_components/AdminPageContainer";
+import AdminPageHeader, { AdminBackLink } from "@/app/admin/_components/AdminPageHeader";
+import { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardContent } from "@/app/admin/_components/AdminCard";
 
 export default function BlogForm({ blog = null, onSubmit, isSubmitting, mode = "create" }) {
   const router = useRouter();
@@ -53,13 +52,13 @@ export default function BlogForm({ blog = null, onSubmit, isSubmitting, mode = "
     if (e) e.preventDefault();
 
     if (!isEdit && !imageFile && !imagePreview) {
-      return swalError("Visual Missing", "Please select a featured image.");
+      return swalError("Featured Image Missing", "Please select a cover image for this article.");
     }
     if (!formData.title.trim()) {
-      return swalError("Missing Title", "Please provide a title.");
+      return swalError("Title Required", "Please provide an article title.");
     }
     if (!formData.content.trim()) {
-      return swalError("Empty Content", "Please write some content before publishing.");
+      return swalError("Content Required", "Please write article content before saving.");
     }
 
     const seoData = {
@@ -81,75 +80,93 @@ export default function BlogForm({ blog = null, onSubmit, isSubmitting, mode = "
   };
 
   return (
-    <div className="max-w-7xl mx-auto pb-24 px-4 sm:px-6">
-      <div className="flex items-center justify-between gap-6 mb-8">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.back()}
-            className="rounded-xl h-12 w-12"
-          >
-            <ArrowLeft size={18} />
-          </Button>
-          <div>
-            <div className="text-xs font-black uppercase tracking-widest text-muted-foreground/60">Blog Studio</div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold">{isEdit ? "Edit Post" : "Create Post"}</h2>
+    <AdminPageContainer maxWidth="max-w-6xl">
+      <AdminBackLink href="/admin/blog" label="Back to Articles" />
+
+      <AdminPageHeader
+        title={isEdit ? `Edit Article: ${blog?.title || ""}` : "Create New Article"}
+        description={isEdit ? "Update blog content, cover photo, category, and SEO metadata" : "Write and publish engaging stories, guides, or announcements"}
+        actions={
+          <div className="flex items-center gap-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => router.push("/admin/blog")}
+              disabled={isSubmitting}
+              className="h-10 px-4 rounded-xl text-xs font-medium"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="h-10 px-5 rounded-xl text-xs font-medium gap-2 shadow-xs cursor-pointer"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="size-4" />
+                  {isEdit ? "Update Article" : "Publish Article"}
+                </>
+              )}
+            </Button>
           </div>
-        </div>
+        }
+      />
 
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => router.push('/admin/blog')}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting} className="font-black">
-            {isSubmitting ? <Loader2 className="animate-spin mr-2" size={16} /> : <Save className="mr-2" size={16} />}
-            {isEdit ? 'Update' : 'Publish'}
-          </Button>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Main Editor (8 cols) */}
         <div className="lg:col-span-8 space-y-6">
-          <div className="bg-card/50 rounded-2xl p-6 border border-border/10 shadow">
-            <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-2">Title</Label>
-            <Input
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              placeholder="Write a compelling title..."
-              className="text-2xl sm:text-3xl font-extrabold border-none bg-transparent p-0"
-            />
-          </div>
+          <AdminCard>
+            <AdminCardContent className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-foreground">
+                  Article Title <span className="text-rose-500">*</span>
+                </Label>
+                <Input
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="Enter a descriptive headline..."
+                  className="h-11 rounded-xl bg-background/80 border-border/60 text-base font-semibold"
+                />
+              </div>
 
-          <div className="bg-card/50 rounded-2xl p-0 border border-border/10 shadow overflow-hidden">
-            <div className="p-6 border-b border-border/5 bg-background/5">
-              <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Content</Label>
-            </div>
-            <div className="p-6 min-h-[520px] bg-background/30 quill-modern-container">
-              <RichTextEditor
-                value={formData.content}
-                onChange={(val) => setFormData({ ...formData, content: val })}
-              />
-            </div>
-          </div>
+              <div className="space-y-1.5 pt-2">
+                <Label className="text-xs font-medium text-foreground">
+                  Body Content <span className="text-rose-500">*</span>
+                </Label>
+                <div className="rounded-xl border border-border/60 overflow-hidden bg-background">
+                  <RichTextEditor
+                    value={formData.content}
+                    onChange={(val) => setFormData({ ...formData, content: val })}
+                  />
+                </div>
+              </div>
+            </AdminCardContent>
+          </AdminCard>
         </div>
 
+        {/* Sidebar Controls (4 cols) */}
         <aside className="lg:col-span-4 space-y-6">
-          <Card className="p-6 rounded-2xl border-border/10 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Featured Image</Label>
-                <div className="text-[11px] text-muted-foreground">Recommended 1200x800px</div>
-              </div>
-              <div className="text-[12px] font-bold text-muted-foreground">{imagePreview ? 'Preview' : 'Empty'}</div>
-            </div>
-
-            <div className="relative mb-4">
-              <div className="aspect-[16/10] rounded-lg overflow-hidden bg-accent/10 border border-border/10 flex items-center justify-center">
+          {/* Featured Image */}
+          <AdminCard>
+            <AdminCardHeader>
+              <AdminCardTitle>Cover Image</AdminCardTitle>
+            </AdminCardHeader>
+            <AdminCardContent className="space-y-3">
+              <div className="aspect-[16/10] rounded-xl overflow-hidden bg-muted/40 border border-border/60 flex items-center justify-center relative">
                 {imagePreview ? (
-                  <img src={imagePreview} alt="preview" className="w-full h-full object-cover" />
+                  <img src={imagePreview} alt="Preview" className="size-full object-cover" />
                 ) : (
-                  <div className="text-center p-6 opacity-60">
-                    <ImageIcon size={48} className="mx-auto mb-2" />
-                    <div className="text-sm font-black uppercase tracking-wide text-muted-foreground">Drop or select image</div>
+                  <div className="flex flex-col items-center justify-center p-4 text-center text-muted-foreground/60 gap-1.5">
+                    <ImageIcon className="size-8 stroke-[1.5]" />
+                    <span className="text-xs">No cover image</span>
                   </div>
                 )}
               </div>
@@ -159,73 +176,137 @@ export default function BlogForm({ blog = null, onSubmit, isSubmitting, mode = "
                 type="file"
                 accept="image/*"
                 onChange={handleImageChange}
-                className="absolute inset-0 opacity-0 cursor-pointer"
+                className="hidden"
               />
-            </div>
 
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="flex-1">Change</Button>
-              <Button variant="ghost" onClick={() => { setImageFile(null); setImagePreview(null); }} className="flex-1">Remove</Button>
-            </div>
-          </Card>
-
-          <Card className="p-6 rounded-2xl border-border/10 shadow-sm">
-            <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-2">Category</Label>
-            <Select
-              value={formData.category}
-              onValueChange={(val) => setFormData({ ...formData, category: val })}
-            >
-              <SelectTrigger className="h-12 rounded-lg">
-                <SelectValue placeholder="Select category" />
-              </SelectTrigger>
-              <SelectContent>
-                {['LIFESTYLE','COLLECTION','FABRIC','CULTURE','NEWS'].map(c => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <div className="mt-4">
-              <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-2">Status</Label>
-              <RadioGroup value={formData.status} onValueChange={(val) => setFormData({ ...formData, status: val })} className="grid grid-cols-2 gap-2">
-                <Label className={`p-3 rounded-lg text-center ${formData.status === 'PUBLISHED' ? 'bg-foreground text-background' : 'bg-background/50'}`}>Live</Label>
-                <Label className={`p-3 rounded-lg text-center ${formData.status === 'DRAFT' ? 'bg-foreground text-background' : 'bg-background/50'}`}>Draft</Label>
-              </RadioGroup>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between">
-              <div>
-                <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Promote</Label>
-                <div className="text-[11px] text-muted-foreground">Feature this post on homepage</div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 h-9 rounded-xl text-xs font-medium"
+                >
+                  <Upload className="size-3.5 mr-1.5" />
+                  {imagePreview ? "Replace" : "Upload"}
+                </Button>
+                {imagePreview && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setImageFile(null); setImagePreview(null); }}
+                    className="h-9 px-3 rounded-xl text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-500/10"
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                )}
               </div>
-              <input type="checkbox" checked={formData.isFeatured} onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })} className="h-5 w-10 rounded-full" />
-            </div>
-          </Card>
+            </AdminCardContent>
+          </AdminCard>
 
-          <Card className="p-6 rounded-2xl border-border/10 shadow-sm bg-zinc-950 text-white">
-            <Label className="text-xs font-black uppercase tracking-widest mb-2 text-zinc-400">SEO Suite</Label>
-            <Input
-              placeholder="Meta title (Ideal: 50-60 chars)"
-              value={formData.seo.metaTitle}
-              onChange={(e) => setFormData({ ...formData, seo: { ...formData.seo, metaTitle: e.target.value } })}
-              className="mb-3 bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-500"
-            />
-            <Textarea
-              placeholder="Meta description (Ideal: 150-160 chars)"
-              rows={3}
-              value={formData.seo.metaDescription}
-              onChange={(e) => setFormData({ ...formData, seo: { ...formData.seo, metaDescription: e.target.value } })}
-              className="mb-3 bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-500"
-            />
-            <Input
-              placeholder="Keywords (comma separated, e.g. denim, fashion)"
-              value={formData.seo.keywords}
-              onChange={(e) => setFormData({ ...formData, seo: { ...formData.seo, keywords: e.target.value } })}
-              className="bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-500"
-            />
-          </Card>
+          {/* Publishing Settings */}
+          <AdminCard>
+            <AdminCardHeader>
+              <AdminCardTitle>Settings & Status</AdminCardTitle>
+            </AdminCardHeader>
+            <AdminCardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-foreground">Category</Label>
+                <Select
+                  value={formData.category}
+                  onValueChange={(val) => setFormData({ ...formData, category: val })}
+                >
+                  <SelectTrigger className="h-10 bg-background/80 border-border/60 rounded-xl text-xs font-medium">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border rounded-xl">
+                    {['LIFESTYLE', 'COLLECTION', 'FABRIC', 'CULTURE', 'NEWS', 'GENERAL'].map((c) => (
+                      <SelectItem key={c} value={c} className="text-xs">
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-foreground">Publishing Status</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(val) => setFormData({ ...formData, status: val })}
+                >
+                  <SelectTrigger className="h-10 bg-background/80 border-border/60 rounded-xl text-xs font-medium">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border rounded-xl">
+                    <SelectItem value="PUBLISHED" className="text-xs text-emerald-600 dark:text-emerald-400">
+                      Published (Public)
+                    </SelectItem>
+                    <SelectItem value="DRAFT" className="text-xs text-amber-600 dark:text-amber-400">
+                      Draft (Hidden)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="pt-2">
+                <label className="flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors">
+                  <Checkbox
+                    id="isFeatured"
+                    checked={formData.isFeatured}
+                    onCheckedChange={(val) => setFormData({ ...formData, isFeatured: Boolean(val) })}
+                    className="rounded-md"
+                  />
+                  <div>
+                    <p className="text-xs font-medium text-foreground">Feature on Homepage</p>
+                    <p className="text-[11px] text-muted-foreground">Highlight in featured stories slider</p>
+                  </div>
+                </label>
+              </div>
+            </AdminCardContent>
+          </AdminCard>
+
+          {/* Search Engine Optimization */}
+          <AdminCard>
+            <AdminCardHeader>
+              <AdminCardTitle>SEO Attributes</AdminCardTitle>
+            </AdminCardHeader>
+            <AdminCardContent className="space-y-3.5">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-foreground">Meta Title</Label>
+                <Input
+                  placeholder="Title for search engine snippets"
+                  value={formData.seo.metaTitle}
+                  onChange={(e) => setFormData({ ...formData, seo: { ...formData.seo, metaTitle: e.target.value } })}
+                  className="h-10 rounded-xl bg-background/80 border-border/60 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-foreground">Meta Description</Label>
+                <Textarea
+                  placeholder="Brief summary for Google search result cards..."
+                  rows={3}
+                  value={formData.seo.metaDescription}
+                  onChange={(e) => setFormData({ ...formData, seo: { ...formData.seo, metaDescription: e.target.value } })}
+                  className="bg-background/80 border-border/60 rounded-xl px-3 py-2 text-xs resize-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-foreground">Keywords (comma-separated)</Label>
+                <Input
+                  placeholder="e.g. style guide, organic cotton, streetwear"
+                  value={formData.seo.keywords}
+                  onChange={(e) => setFormData({ ...formData, seo: { ...formData.seo, keywords: e.target.value } })}
+                  className="h-10 rounded-xl bg-background/80 border-border/60 text-xs"
+                />
+              </div>
+            </AdminCardContent>
+          </AdminCard>
         </aside>
       </form>
-    </div>
+    </AdminPageContainer>
   );
 }

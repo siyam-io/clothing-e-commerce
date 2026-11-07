@@ -11,32 +11,36 @@ export default function FormInput({
   label,
   name,
   register,
-  errors,
+  errors = {},
   type = "text",
   required = false,
   placeholder = "",
   className,
   ...props
 }) {
-  const error = errors[name];
+  const error = errors?.[name];
   const { user } = useAuthStore();
   const isSuperAdmin = user?.role?.name === "superadmin";
 
   const isSecretField = 
     type === "password" || 
-    /key|token|secret|pass|password|id|pixel|credential/i.test(name) ||
-    /key|token|secret|pass|password|id|pixel|credential/i.test(label);
+    /key|token|secret|pass|password|credential/i.test(name) ||
+    /key|token|secret|pass|password|credential/i.test(label || "");
 
   const [showSecret, setShowSecret] = useState(false);
 
   const inputType = isSecretField ? (showSecret && isSuperAdmin ? "text" : "password") : type;
 
+  const registration = register ? register(name, {
+    required: required ? `${label || name} is required` : false,
+  }) : {};
+
   return (
-    <div className={cn("space-y-2", className)}>
+    <div className={cn("space-y-1.5", className)}>
       {label && (
         <Label 
           htmlFor={name}
-          className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/80 ml-1"
+          className="text-xs font-medium text-muted-foreground ml-0.5 inline-block"
         >
           {label} {required && <span className="text-rose-500">*</span>}
         </Label>
@@ -46,14 +50,12 @@ export default function FormInput({
         <Input
           id={name}
           type={inputType}
-          {...register(name, {
-            required: required ? `${label} is required` : false,
-          })}
+          {...registration}
           placeholder={placeholder}
           className={cn(
-            "bg-background/50 border-border/10 h-12 rounded-xl text-[11px] font-bold uppercase tracking-wider focus-visible:ring-rose-600/20 focus:border-rose-600 transition-all shadow-inner w-full pr-12",
-            isSecretField && "font-mono normal-case tracking-normal",
-            error && "border-rose-600/50 bg-rose-600/5 focus:border-rose-600"
+            "bg-background/80 border-border/60 h-10 rounded-xl text-sm font-normal text-foreground focus-visible:ring-1 focus-visible:ring-primary focus:border-primary transition-colors shadow-2xs w-full",
+            isSecretField && "font-mono normal-case tracking-normal pr-10",
+            error && "border-rose-500 bg-rose-500/5 focus:border-rose-500 focus-visible:ring-rose-500/20"
           )}
           {...props}
         />
@@ -61,15 +63,16 @@ export default function FormInput({
           <button
             type="button"
             onClick={() => setShowSecret(!showSecret)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground transition-colors p-1"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground transition-colors p-1"
+            title={showSecret ? "Hide secret" : "Show secret"}
           >
-            {showSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+            {showSecret ? <EyeOff size={15} /> : <Eye size={15} />}
           </button>
         )}
       </div>
       
       {error && (
-        <p className="text-[9px] font-black uppercase tracking-widest text-rose-500 ml-1 animate-in fade-in slide-in-from-top-1">
+        <p className="text-xs font-normal text-rose-500 ml-0.5 animate-in fade-in slide-in-from-top-1">
           {error.message}
         </p>
       )}

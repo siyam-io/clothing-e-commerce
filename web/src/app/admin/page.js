@@ -18,7 +18,7 @@ import { useAuthStore } from "@/store/authStore";
 import { getFirstAllowedRoute } from "@/utils/adminRoutes";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Loader from "@/components/common/Loader";
+import { AdminPageContainer } from "@/app/admin/_components/AdminPageContainer";
 
 // Dynamically import heavy components for better first load performance
 const RevenueChart = dynamic(() => import("@/app/admin/_components/dashboard/RevenueChart").then(mod => mod.RevenueChart), {
@@ -117,7 +117,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="admin-page-container space-y-8 pb-12">
+    <AdminPageContainer className="space-y-6 pb-12">
       {/* 1. HEADER */}
       <AdminHeader 
         isFetching={statsFetching} 
@@ -185,6 +185,6 @@ export default function Dashboard() {
 
       {/* 6. INVENTORY ALERTS */}
       <InventoryAlerts inventory={inventory} isLoading={inventoryAlertsLoading} />
-    </div>
+    </AdminPageContainer>
   );
 }

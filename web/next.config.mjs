@@ -63,7 +63,6 @@ const nextConfig = {
 
   experimental: {
     optimizePackageImports: ['lucide-react', 'framer-motion', 'swiper', '@tanstack/react-query'],
-    optimisticClientCache: true,
   },
 };
 

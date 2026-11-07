@@ -44,7 +44,7 @@ import { getSettings } from "@/lib/settings";
 
 export async function generateMetadata() {
   const settings = await getSettings();
-  const siteName = settings?.branding?.siteName || "Vanguard";
+  const siteName = settings?.branding?.siteName || "Store";
   const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://clothing-e-commerce-web.vercel.app";
 
   let salesCount = 0;

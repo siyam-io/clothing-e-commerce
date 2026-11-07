@@ -1,475 +1,103 @@
-import { asyncHandler } from '../../middleware/asyncHandler.js';
-import Order from '../order/order.model.js';
-import Product from '../product/product.model.js';
-import User from '../user/user.model.js';
-import Role from '../role/role.model.js';
-import Category from '../category/category.model.js';
-import BannerCampaign from '../bannerCampaign/bannerCampaign.model.js';
-import FlashSale from '../flashSale/flashSale.model.js';
-import Coupon from '../coupon/coupon.model.js';
-import Blog from '../blog/blog.model.js';
-import mongoose from 'mongoose';
+import dashboardService from "./dashboard.service.js";
+import { asyncHandler } from "../../middleware/asyncHandler.js";
 
-export const getDashboardData = asyncHandler(async (req, res) => {
+/**
+ * Controller handling executive administrative aggregations and analytical metrics.
+ */
+export class AdminController {
+  /**
+   * @param {import("./dashboard.service.js").DashboardService} [service]
+   */
+  constructor(service = dashboardService) {
+    this.service = service;
+  }
+
+  /**
+   * Get full dashboard analytical overview.
+   */
+  getDashboardData = asyncHandler(async (req, res) => {
     const { year, month } = req.query;
-    const targetYear = year ? parseInt(year) : new Date().getFullYear();
-    const targetMonth = month && month !== 'all' ? parseInt(month) : null;
+    const data = await this.service.getDashboardOverview({ year, month });
+    res.status(200).json(data);
+  });
 
-    let startDate, endDate, groupByFormat;
+  /**
+   * Get system entity count counters.
+   */
+  getAdminCounts = asyncHandler(async (req, res) => {
+    const counts = await this.service.getSystemCounts();
+    res.status(200).json(counts);
+  });
 
-    if (targetMonth) {
-        // 📅 যদি নির্দিষ্ট মাস সিলেক্ট করা থাকে (Show Daily)
-        startDate = new Date(targetYear, targetMonth - 1, 1);
-        endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999);
-        groupByFormat = "%Y-%m-%d"; // প্রতিদিনের ডাটা
-    } else {
-        // 📅 যদি শুধু বছর সিলেক্ট থাকে (Show Monthly)
-        startDate = new Date(targetYear, 0, 1);
-        endDate = new Date(targetYear, 11, 31, 23, 59, 59, 999);
-        groupByFormat = "%Y-%m"; // প্রতি মাসের ডাটা
-    }
+  /**
+   * Get high-level summary cards.
+   */
+  getDashboardStats = asyncHandler(async (req, res) => {
+    const stats = await this.service.getDashboardStats();
+    res.status(200).json(stats);
+  });
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  /**
+   * Get enriched recent customer orders.
+   */
+  getDashboardRecentOrders = asyncHandler(async (req, res) => {
+    const orders = await this.service.getRecentOrders(5);
+    res.status(200).json(orders);
+  });
 
-    const statsResult = await Order.aggregate([
-        {
-            $facet: {
-                totalStats: [
-                    { $match: { 'paymentResult.status': { $in: ['Completed', 'COD'] } } },
-                    {
-                        $group: {
-                            _id: null,
-                            revenue: { $sum: { $toDouble: '$totalPrice' } },
-                            count: { $sum: 1 },
-                            avgTicketSize: { $avg: { $toDouble: '$totalPrice' } }
-                        }
-                    }
-                ],
-                todayStats: [
-                    { $addFields: { convertedDate: { $toDate: "$createdAt" } } },
-                    { $match: { convertedDate: { $gte: today }, 'paymentResult.status': { $in: ['Completed', 'COD'] } } },
-                    { $group: { _id: null, revenue: { $sum: { $toDouble: '$totalPrice' } }, count: { $sum: 1 } } }
-                ],
-                monthlyTrend: [
-                    { $addFields: { convertedDate: { $toDate: "$createdAt" } } },
-                    { 
-                        $match: { 
-                            convertedDate: { $gte: startDate, $lte: endDate },
-                            'paymentResult.status': { $in: ['Completed', 'COD'] } 
-                        } 
-                    },
-                    {
-                        $group: {
-                            _id: { $dateToString: { format: groupByFormat, date: "$convertedDate" } },
-                            revenue: { $sum: { $toDouble: "$totalPrice" } },
-                            orderCount: { $sum: 1 }
-                        }
-                    },
-                    { $sort: { "_id": 1 } }
-                ],
-                retentionStats: [
-                    { $match: { user: { $exists: true, $ne: null } } },
-                    { $group: { _id: "$user", orderCount: { $sum: 1 } } },
-                    {
-                        $group: {
-                            _id: null,
-                            totalCustomers: { $sum: 1 },
-                            repeatCustomers: { $sum: { $cond: [{ $gt: ["$orderCount", 1] }, 1, 0] } }
-                        }
-                    }
-                ],
-                soldCategories: [
-                    { $match: { 'paymentResult.status': { $in: ['Completed', 'COD'] } } },
-                    { $unwind: "$orderItems" },
-                    { $lookup: { from: 'products', localField: 'orderItems.product', foreignField: '_id', as: 'product' } },
-                    { $unwind: "$product" },
-                    { $group: { _id: "$product.category", sales: { $sum: "$orderItems.quantity" }, revenue: { $sum: { $multiply: ["$orderItems.quantity", "$orderItems.price"] } } } },
-                    { $lookup: { from: 'categories', localField: '_id', foreignField: '_id', as: 'cat' } },
-                    { $unwind: "$cat" },
-                    { $project: { name: "$cat.name", sales: 1, revenue: 1 } },
-                    { $sort: { sales: -1 } },
-                    { $limit: 5 }
-                ]
-            }
-        }
-    ], { allowDiskUse: true });
+  /**
+   * Get inventory stock threshold warnings.
+   */
+  getDashboardInventoryAlerts = asyncHandler(async (req, res) => {
+    const alerts = await this.service.getInventoryAlerts();
+    res.status(200).json(alerts);
+  });
 
-    const stats = statsResult[0] || {};
-
-    // 🔮 Revenue Forecast Logic
-    let revenueForecast = 0;
-    if (targetMonth === (new Date().getMonth() + 1)) {
-        const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
-        const currentDay = new Date().getDate();
-        const revenueSoFar = stats.monthlyTrend?.reduce((acc, curr) => acc + curr.revenue, 0) || 0;
-        revenueForecast = Math.round((revenueSoFar / currentDay) * daysInMonth);
-    }
-
-    const retentionRate = stats.retentionStats?.[0] 
-        ? Math.round((stats.retentionStats[0].repeatCustomers / stats.retentionStats[0].totalCustomers) * 100) 
-        : 0;
-
-    // 📦 Inventory, Categories, User Stats
-    const inventoryStats = await Product.aggregate([
-        { $project: { name: 1, totalStock: { $sum: "$sizes.stock" } } },
-        { $group: { _id: null, totalProducts: { $sum: 1 }, outOfStockCount: { $sum: { $cond: [{ $eq: ["$totalStock", 0] }, 1, 0] } }, lowStockCount: { $sum: { $cond: [{ $and: [{ $gt: ["$totalStock", 0] }, { $lt: ["$totalStock", 10] }] }, 1, 0] } }, criticalItems: { $push: { $cond: [{ $lt: ["$totalStock", 10] }, { name: "$name", stock: "$totalStock", status: { $cond: [{ $eq: ["$totalStock", 0] }, "OUT", "LOW"] } }, "$$REMOVE"] } } } }
-    ]);
-
-    const categoryStats = await Product.aggregate([
-        { $group: { _id: "$category", count: { $sum: 1 } } },
-        { $lookup: { from: 'categories', localField: '_id', foreignField: '_id', as: 'catInfo' } },
-        { $unwind: { path: "$catInfo", preserveNullAndEmptyArrays: true } },
-        { $project: { name: { $ifNull: ["$catInfo.name", "Uncategorized"] }, count: 1 } }
-    ]);
-
-    const recentOrdersRaw = await Order.find({}).sort('-createdAt').limit(5).lean();
-    const userIds = recentOrdersRaw.map(o => o.user).filter(uid => uid != null); 
-    const users = await User.find({ _id: { $in: userIds } }).select('name email avatar').lean();
-    const userMap = users.reduce((acc, u) => { acc[String(u._id)] = u; return acc; }, {});
-
-    const enrichedOrders = recentOrdersRaw.map(order => ({
-        ...order,
-        user: order.user ? userMap[String(order.user)] : { name: order.shippingAddress?.name || 'Guest User' }
-    }));
-
-    const customerRole = await Role.findOne({ name: 'customer' });
-    const customerRoleId = customerRole ? customerRole._id : null;
-
-    const userGrowth = await User.aggregate([
-        { 
-            $match: { 
-                role: customerRoleId,
-                createdAt: { $gte: startDate, $lte: endDate }
-            } 
-        },
-        {
-            $group: {
-                _id: { $dateToString: { format: groupByFormat, date: "$createdAt" } },
-                count: { $sum: 1 }
-            }
-        },
-        { $sort: { "_id": 1 } }
-    ]);
-
-    const recentCustomers = await User.find({ role: customerRoleId })
-        .sort('-createdAt')
-        .limit(5)
-        .select('name email avatar createdAt')
-        .lean();
-
-    res.json({
-        revenue: {
-            total: stats.totalStats?.[0]?.revenue || 0,
-            avgOrder: stats.totalStats?.[0]?.avgTicketSize || 0,
-            today: stats.todayStats?.[0]?.revenue || 0,
-            trend: stats.monthlyTrend || [],
-            forecast: revenueForecast
-        },
-        inventory: {
-            totalProducts: inventoryStats[0]?.totalProducts || 0,
-            outOfStock: inventoryStats[0]?.outOfStockCount || 0,
-            criticalItems: inventoryStats[0]?.criticalItems?.slice(0, 5) || []
-        },
-        analytics: {
-            mostSoldCategories: stats.soldCategories || [],
-            retentionRate: retentionRate
-        },
-        categories: categoryStats,
-        customers: {
-            total: await User.countDocuments({ role: customerRoleId }),
-            newThisMonth: await User.countDocuments({ role: customerRoleId, createdAt: { $gte: new Date(today.getFullYear(), today.getMonth(), 1) } }),
-            growth: userGrowth,
-            recent: recentCustomers
-        },
-        recentOrders: enrichedOrders
-    });
-});
-
-export const getAdminCounts = asyncHandler(async (req, res) => {
-    const [
-        orders,
-        products,
-        categories,
-        banners,
-        flashSales,
-        coupons,
-        blogs,
-        users
-    ] = await Promise.all([
-        Order.countDocuments(),
-        Product.countDocuments(),
-        Category.countDocuments(),
-        BannerCampaign.countDocuments(),
-        FlashSale.countDocuments(),
-        Coupon.countDocuments(),
-        Blog.countDocuments(),
-        User.countDocuments()
-    ]);
-
-    res.json({
-        orders,
-        products,
-        categories,
-        banners,
-        flashSales,
-        coupons,
-        blogs,
-        users
-    });
-});
-
-// 🚀 Highly Optimized Segmented Sub-endpoints for Admin Dashboard
-
-export const getDashboardStats = asyncHandler(async (req, res) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const statsResult = await Order.aggregate([
-        {
-            $facet: {
-                totalStats: [
-                    { $match: { 'paymentResult.status': { $in: ['Completed', 'COD'] } } },
-                    {
-                        $group: {
-                            _id: null,
-                            revenue: { $sum: { $toDouble: '$totalPrice' } },
-                            count: { $sum: 1 },
-                            avgTicketSize: { $avg: { $toDouble: '$totalPrice' } }
-                        }
-                    }
-                ],
-                todayStats: [
-                    { $addFields: { convertedDate: { $toDate: "$createdAt" } } },
-                    { $match: { convertedDate: { $gte: today }, 'paymentResult.status': { $in: ['Completed', 'COD'] } } },
-                    { $group: { _id: null, revenue: { $sum: { $toDouble: '$totalPrice' } }, count: { $sum: 1 } } }
-                ],
-                monthlyTrend: [
-                    { $addFields: { convertedDate: { $toDate: "$createdAt" } } },
-                    { 
-                        $match: { 
-                            convertedDate: { $gte: new Date(new Date().getFullYear(), 0, 1), $lte: new Date(new Date().getFullYear(), 11, 31, 23, 59, 59, 999) },
-                            'paymentResult.status': { $in: ['Completed', 'COD'] } 
-                        } 
-                    },
-                    {
-                        $group: {
-                            _id: { $dateToString: { format: "%Y-%m", date: "$convertedDate" } },
-                            revenue: { $sum: { $toDouble: "$totalPrice" } }
-                        }
-                    }
-                ]
-            }
-        }
-    ]);
-
-    const stats = statsResult[0] || {};
-    
-    // Forecast logic
-    const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
-    const currentDay = new Date().getDate();
-    const currentMonthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-    const revenueSoFar = stats.monthlyTrend?.filter(t => t._id === currentMonthStr)[0]?.revenue || 0;
-    const revenueForecast = Math.round((revenueSoFar / (currentDay || 1)) * daysInMonth);
-
-    const inventoryStats = await Product.aggregate([
-        { $project: { totalStock: { $sum: "$sizes.stock" } } },
-        { $group: { _id: null, totalProducts: { $sum: 1 }, outOfStockCount: { $sum: { $cond: [{ $eq: ["$totalStock", 0] }, 1, 0] } } } }
-    ]);
-
-    const customerRole = await Role.findOne({ name: 'customer' });
-    const customerRoleId = customerRole ? customerRole._id : null;
-    
-    const totalCustomers = await User.countDocuments({ role: customerRoleId });
-    const newThisMonth = await User.countDocuments({ role: customerRoleId, createdAt: { $gte: new Date(today.getFullYear(), today.getMonth(), 1) } });
-
-    res.json({
-        revenue: {
-            total: stats.totalStats?.[0]?.revenue || 0,
-            avgOrder: stats.totalStats?.[0]?.avgTicketSize || 0,
-            today: stats.todayStats?.[0]?.revenue || 0,
-            forecast: revenueForecast
-        },
-        inventory: {
-            totalProducts: inventoryStats[0]?.totalProducts || 0,
-            outOfStock: inventoryStats[0]?.outOfStockCount || 0
-        },
-        customers: {
-            total: totalCustomers,
-            newThisMonth: newThisMonth
-        }
-    });
-});
-
-export const getDashboardRecentOrders = asyncHandler(async (req, res) => {
-    const recentOrdersRaw = await Order.find({}).sort('-createdAt').limit(5).lean();
-    const userIds = recentOrdersRaw.map(o => o.user).filter(uid => uid != null); 
-    const users = await User.find({ _id: { $in: userIds } }).select('name email avatar').lean();
-    const userMap = users.reduce((acc, u) => { acc[String(u._id)] = u; return acc; }, {});
-
-    const enrichedOrders = recentOrdersRaw.map(order => ({
-        ...order,
-        user: order.user ? userMap[String(order.user)] : { name: order.shippingAddress?.name || 'Guest User' }
-    }));
-
-    res.json(enrichedOrders);
-});
-
-export const getDashboardInventoryAlerts = asyncHandler(async (req, res) => {
-    const inventoryStats = await Product.aggregate([
-        { $project: { name: 1, totalStock: { $sum: "$sizes.stock" } } },
-        { 
-            $group: { 
-                _id: null, 
-                criticalItems: { 
-                    $push: { 
-                        $cond: [
-                            { $lt: ["$totalStock", 10] }, 
-                            { name: "$name", stock: "$totalStock", status: { $cond: [{ $eq: ["$totalStock", 0] }, "OUT", "LOW"] } }, 
-                            "$$REMOVE"
-                        ] 
-                    } 
-                } 
-            } 
-        }
-    ]);
-
-    res.json({
-        criticalItems: inventoryStats[0]?.criticalItems?.slice(0, 5) || []
-    });
-});
-
-export const getDashboardRevenueTrend = asyncHandler(async (req, res) => {
+  /**
+   * Get revenue trajectory points.
+   */
+  getDashboardRevenueTrend = asyncHandler(async (req, res) => {
     const { year, month } = req.query;
-    const targetYear = year ? parseInt(year) : new Date().getFullYear();
-    const targetMonth = month && month !== 'all' ? parseInt(month) : null;
+    const trend = await this.service.getRevenueTrend({ year, month });
+    res.status(200).json(trend);
+  });
 
-    let startDate, endDate, groupByFormat;
+  /**
+   * Get category sales and catalog distribution.
+   */
+  getDashboardCategoryStats = asyncHandler(async (req, res) => {
+    const stats = await this.service.getCategoryStats();
+    res.status(200).json(stats);
+  });
 
-    if (targetMonth) {
-        startDate = new Date(targetYear, targetMonth - 1, 1);
-        endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999);
-        groupByFormat = "%Y-%m-%d";
-    } else {
-        startDate = new Date(targetYear, 0, 1);
-        endDate = new Date(targetYear, 11, 31, 23, 59, 59, 999);
-        groupByFormat = "%Y-%m";
-    }
-
-    const trend = await Order.aggregate([
-        { $addFields: { convertedDate: { $toDate: "$createdAt" } } },
-        { 
-            $match: { 
-                convertedDate: { $gte: startDate, $lte: endDate },
-                'paymentResult.status': { $in: ['Completed', 'COD'] } 
-            } 
-        },
-        {
-            $group: {
-                _id: { $dateToString: { format: groupByFormat, date: "$convertedDate" } },
-                revenue: { $sum: { $toDouble: "$totalPrice" } },
-                orderCount: { $sum: 1 }
-            }
-        },
-        { $sort: { "_id": 1 } }
-    ], { allowDiskUse: true });
-
-    res.json(trend);
-});
-
-export const getDashboardCategoryStats = asyncHandler(async (req, res) => {
-    const categoryStats = await Product.aggregate([
-        { $group: { _id: "$category", count: { $sum: 1 } } },
-        { $lookup: { from: 'categories', localField: '_id', foreignField: '_id', as: 'catInfo' } },
-        { $unwind: { path: "$catInfo", preserveNullAndEmptyArrays: true } },
-        { $project: { name: { $ifNull: ["$catInfo.name", "Uncategorized"] }, count: 1 } }
-    ]);
-
-    const soldCategories = await Order.aggregate([
-        { $match: { 'paymentResult.status': { $in: ['Completed', 'COD'] } } },
-        { $unwind: "$orderItems" },
-        { $lookup: { from: 'products', localField: 'orderItems.product', foreignField: '_id', as: 'product' } },
-        { $unwind: "$product" },
-        { $group: { _id: "$product.category", sales: { $sum: "$orderItems.quantity" }, revenue: { $sum: { $multiply: ["$orderItems.quantity", "$orderItems.price"] } } } },
-        { $lookup: { from: 'categories', localField: '_id', foreignField: '_id', as: 'cat' } },
-        { $unwind: "$cat" },
-        { $project: { name: "$cat.name", sales: 1, revenue: 1 } },
-        { $sort: { sales: -1 } },
-        { $limit: 5 }
-    ]);
-
-    res.json({
-        categories: categoryStats,
-        mostSoldCategories: soldCategories
-    });
-});
-
-export const getDashboardCustomerGrowth = asyncHandler(async (req, res) => {
+  /**
+   * Get customer acquisition progression.
+   */
+  getDashboardCustomerGrowth = asyncHandler(async (req, res) => {
     const { year, month } = req.query;
-    const targetYear = year ? parseInt(year) : new Date().getFullYear();
-    const targetMonth = month && month !== 'all' ? parseInt(month) : null;
+    const growth = await this.service.getCustomerGrowth({ year, month });
+    res.status(200).json(growth);
+  });
 
-    let startDate, endDate, groupByFormat;
+  /**
+   * Get customer repeat purchase retention rate.
+   */
+  getDashboardRetention = asyncHandler(async (req, res) => {
+    const retention = await this.service.getRetentionRate();
+    res.status(200).json(retention);
+  });
+}
 
-    if (targetMonth) {
-        startDate = new Date(targetYear, targetMonth - 1, 1);
-        endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999);
-        groupByFormat = "%Y-%m-%d";
-    } else {
-        startDate = new Date(targetYear, 0, 1);
-        endDate = new Date(targetYear, 11, 31, 23, 59, 59, 999);
-        groupByFormat = "%Y-%m";
-    }
+const adminController = new AdminController();
 
-    const customerRole = await Role.findOne({ name: 'customer' });
-    const customerRoleId = customerRole ? customerRole._id : null;
+export const getDashboardData = adminController.getDashboardData;
+export const getAdminCounts = adminController.getAdminCounts;
+export const getDashboardStats = adminController.getDashboardStats;
+export const getDashboardRecentOrders = adminController.getDashboardRecentOrders;
+export const getDashboardInventoryAlerts = adminController.getDashboardInventoryAlerts;
+export const getDashboardRevenueTrend = adminController.getDashboardRevenueTrend;
+export const getDashboardCategoryStats = adminController.getDashboardCategoryStats;
+export const getDashboardCustomerGrowth = adminController.getDashboardCustomerGrowth;
+export const getDashboardRetention = adminController.getDashboardRetention;
 
-    const userGrowth = await User.aggregate([
-        { 
-            $match: { 
-                role: customerRoleId,
-                createdAt: { $gte: startDate, $lte: endDate }
-            } 
-        },
-        {
-            $group: {
-                _id: { $dateToString: { format: groupByFormat, date: "$createdAt" } },
-                count: { $sum: 1 }
-            }
-        },
-        { $sort: { "_id": 1 } }
-    ]);
-
-    const recentCustomers = await User.find({ role: customerRoleId })
-        .sort('-createdAt')
-        .limit(5)
-        .select('name email avatar createdAt')
-        .lean();
-
-    res.json({
-        growth: userGrowth,
-        recent: recentCustomers
-    });
-});
-
-export const getDashboardRetention = asyncHandler(async (req, res) => {
-    const stats = await Order.aggregate([
-        { $match: { user: { $exists: true, $ne: null } } },
-        { $group: { _id: "$user", orderCount: { $sum: 1 } } },
-        {
-            $group: {
-                _id: null,
-                totalCustomers: { $sum: 1 },
-                repeatCustomers: { $sum: { $cond: [{ $gt: ["$orderCount", 1] }, 1, 0] } }
-            }
-        }
-    ]);
-
-    const retentionRate = stats[0] 
-        ? Math.round((stats[0].repeatCustomers / stats[0].totalCustomers) * 100) 
-        : 0;
-
-    res.json({
-        retentionRate
-    });
-});
+export default adminController;

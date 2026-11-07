@@ -2,111 +2,252 @@ import nodemailer from "nodemailer";
 import ApiKey from "../modules/settings/apiKey.model.js";
 import PageSetting from "../modules/settings/settings.model.js";
 import { decrypt } from "../utils/encryption.js";
+import logger from "../utils/logger.js";
 
-const getTransporter = async () => {
-  const apiKeys = await ApiKey.findOne();
-  if (!apiKeys || !apiKeys.mailHost) {
-    // Fallback to env if DB not configured
-    return nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT),
-      secure: process.env.SMTP_SECURE === "true",
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
+const SETTINGS_CACHE_TTL_MS = 60 * 1000;
+
+/**
+ * Service managing transactional email templates and SMTP transport.
+ */
+export class EmailService {
+  /**
+   * @param {Object} [dependencies]
+   * @param {typeof ApiKey} [dependencies.apiKeyModel]
+   * @param {typeof PageSetting} [dependencies.pageSettingModel]
+   * @param {Function} [dependencies.transportFactory]
+   */
+  constructor(dependencies = {}) {
+    this.apiKeyModel = dependencies.apiKeyModel || ApiKey;
+    this.pageSettingModel = dependencies.pageSettingModel || PageSetting;
+    this.transportFactory = dependencies.transportFactory || nodemailer.createTransport;
+
+    this.cachedConfig = null;
+    this.cacheTimestamp = 0;
+  }
+
+  /**
+   * Retrieve and decrypt SMTP configuration, cached for 60 seconds.
+   *
+   * @returns {Promise<Object>} SMTP configuration settings.
+   */
+  async getConfiguration() {
+    const now = Date.now();
+    if (this.cachedConfig && now - this.cacheTimestamp < SETTINGS_CACHE_TTL_MS) {
+      return this.cachedConfig;
+    }
+
+    try {
+      const [apiKeys, settings] = await Promise.all([
+        this.apiKeyModel.findOne().exec(),
+        this.pageSettingModel.findOne().exec(),
+      ]);
+
+      const siteName = settings?.branding?.siteName || "Store";
+
+      if (apiKeys?.mailHost) {
+        this.cachedConfig = {
+          host: apiKeys.mailHost,
+          port: parseInt(apiKeys.mailPort, 10),
+          secure: Number(apiKeys.mailPort) === 465,
+          auth: {
+            user: apiKeys.mailUser,
+            pass: decrypt(apiKeys.mailPass),
+          },
+          from: apiKeys.mailFrom && apiKeys.mailUser
+            ? `"${apiKeys.mailFrom}" <${apiKeys.mailUser}>`
+            : `"${siteName}" <${apiKeys.mailUser}>`,
+          siteName,
+        };
+      } else {
+        this.cachedConfig = {
+          host: process.env.SMTP_HOST,
+          port: parseInt(process.env.SMTP_PORT || "587", 10),
+          secure: process.env.SMTP_SECURE === "true",
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          },
+          from: `"${process.env.EMAIL_FROM_NAME || siteName}" <${process.env.EMAIL_FROM_ADDRESS || "noreply@store.com"}>`,
+          siteName,
+        };
+      }
+
+      this.cacheTimestamp = now;
+      return this.cachedConfig;
+    } catch (error) {
+      logger.error("Failed to load email configuration, falling back to environment variables:", {
+        error: error.message,
+      });
+
+      return {
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT || "587", 10),
+        secure: process.env.SMTP_SECURE === "true",
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+        from: `"${process.env.EMAIL_FROM_NAME || "Store"}" <${process.env.EMAIL_FROM_ADDRESS || "noreply@store.com"}>`,
+        siteName: "Store",
+      };
+    }
+  }
+
+  /**
+   * Reset configuration cache on settings mutation.
+   */
+  bustCache() {
+    this.cachedConfig = null;
+    this.cacheTimestamp = 0;
+  }
+
+  /**
+   * Build Nodemailer transporter from current configuration.
+   *
+   * @param {Object} config
+   * @returns {import("nodemailer").Transporter}
+   */
+  createTransporter(config) {
+    return this.transportFactory({
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      auth: config.auth,
     });
   }
 
-  return nodemailer.createTransport({
-    host: apiKeys.mailHost,
-    port: parseInt(apiKeys.mailPort),
-    secure: apiKeys.mailPort == 465, // Use SSL for port 465
-    auth: {
-      user: apiKeys.mailUser,
-      pass: decrypt(apiKeys.mailPass),
-    },
-  });
-};
+  /**
+   * Dispatches email message through SMTP transporter.
+   *
+   * @param {Object} mailOptions
+   * @param {string} mailOptions.to
+   * @param {string} mailOptions.subject
+   * @param {string} mailOptions.html
+   * @returns {Promise<Object>}
+   */
+  async sendMail({ to, subject, html }) {
+    const config = await this.getConfiguration();
+    const transporter = this.createTransporter(config);
 
-const getMailFrom = async () => {
-  const apiKeys = await ApiKey.findOne();
-  if (apiKeys && apiKeys.mailFrom && apiKeys.mailUser) {
-    return `"${apiKeys.mailFrom}" <${apiKeys.mailUser}>`;
+    const result = await transporter.sendMail({
+      from: config.from,
+      to,
+      subject,
+      html,
+    });
+
+    logger.info(`Email dispatched: ${subject} to ${to}`);
+    return result;
   }
-  return `"${process.env.EMAIL_FROM_NAME}" <${process.env.EMAIL_FROM_ADDRESS}>`;
-}
 
-const getSiteName = async () => {
-  const settings = await PageSetting.findOne();
-  return settings?.branding?.siteName || "Vanguard";
-}
+  /**
+   * Send account verification link.
+   *
+   * @param {string} email
+   * @param {string} verificationUrl
+   * @returns {Promise<Object>}
+   */
+  async sendVerificationEmail(email, verificationUrl) {
+    const config = await this.getConfiguration();
+    return this.sendMail({
+      to: email,
+      subject: `Verify your email - ${config.siteName}`,
+      html: this.renderVerificationHtml(config.siteName, verificationUrl),
+    });
+  }
 
-export const sendVerificationEmail = async (email, url) => {
-  const transporter = await getTransporter();
-  const from = await getMailFrom();
-  const siteName = await getSiteName();
-  
-  await transporter.sendMail({
-    from,
-    to: email,
-    subject: `Verify your email - ${siteName}`,
-    html: `
+  /**
+   * Send password reset link.
+   *
+   * @param {string} email
+   * @param {string} resetUrl
+   * @returns {Promise<Object>}
+   */
+  async sendPasswordResetEmail(email, resetUrl) {
+    const config = await this.getConfiguration();
+    return this.sendMail({
+      to: email,
+      subject: `Reset your password - ${config.siteName}`,
+      html: this.renderPasswordResetHtml(config.siteName, resetUrl),
+    });
+  }
+
+  /**
+   * Send order placement confirmation invoice.
+   *
+   * @param {Object} order
+   * @returns {Promise<Object>}
+   */
+  async sendOrderConfirmationEmail(order) {
+    const config = await this.getConfiguration();
+    const shortOrderId = order._id.toString().slice(-6).toUpperCase();
+
+    return this.sendMail({
+      to: order.shippingAddress.email,
+      subject: `Order Confirmation #${shortOrderId} - ${config.siteName}`,
+      html: this.renderOrderConfirmationHtml(config.siteName, order, shortOrderId),
+    });
+  }
+
+  /**
+   * Send order status progression notice.
+   *
+   * @param {Object} order
+   * @returns {Promise<Object>}
+   */
+  async sendOrderStatusUpdateEmail(order) {
+    const config = await this.getConfiguration();
+    const shortOrderId = order._id.toString().slice(-6).toUpperCase();
+
+    return this.sendMail({
+      to: order.shippingAddress.email,
+      subject: `Order Update: #${shortOrderId} is now ${order.orderStatus} - ${config.siteName}`,
+      html: this.renderOrderStatusUpdateHtml(config.siteName, order, shortOrderId),
+    });
+  }
+
+  renderVerificationHtml(siteName, url) {
+    return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Welcome to ${siteName}!</h2>
-        <p>Please verify your email address by clicking the link below:</p>
+        <h2>Welcome to ${siteName}</h2>
+        <p>Please verify your email address by selecting the button below:</p>
         <a href="${url}" style="display: inline-block; padding: 10px 20px; background-color: #000; color: #fff; text-decoration: none; border-radius: 5px;">Verify Email</a>
-        <p>Or copy and paste this link: ${url}</p>
-        <p>This link expires in 24 hours.</p>
+        <p>Or paste this link into your browser: ${url}</p>
+        <p>This verification link expires in 24 hours.</p>
       </div>
-    `,
-  });
-};
+    `;
+  }
 
-export const sendPasswordResetEmail = async (email, url) => {
-  const transporter = await getTransporter();
-  const from = await getMailFrom();
-  const siteName = await getSiteName();
-
-  await transporter.sendMail({
-    from,
-    to: email,
-    subject: `Reset your password - ${siteName}`,
-    html: `
+  renderPasswordResetHtml(siteName, url) {
+    return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2>Password Reset Request</h2>
-        <p>Click the link below to reset your password:</p>
+        <p>Select the link below to set a new password:</p>
         <a href="${url}" style="display: inline-block; padding: 10px 20px; background-color: #000; color: #fff; text-decoration: none; border-radius: 5px;">Reset Password</a>
-        <p>Or copy and paste this link: ${url}</p>
-        <p>This link expires in 1 hour.</p>
-        <p>If you didn't request this, please ignore this email.</p>
+        <p>Or paste this link into your browser: ${url}</p>
+        <p>This link expires in 15 minutes.</p>
+        <p>If you did not initiate this request, no action is needed.</p>
       </div>
-    `,
-  });
-};
+    `;
+  }
 
-export const sendOrderConfirmationEmail = async (order) => {
-  const transporter = await getTransporter();
-  const from = await getMailFrom();
-  const siteName = await getSiteName();
-  
-  const itemsHtml = order.orderItems.map(item => `
-    <tr>
-      <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.name} x ${item.quantity}</td>
-      <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">৳${item.price * item.quantity}</td>
-    </tr>
-  `).join('');
+  renderOrderConfirmationHtml(siteName, order, shortOrderId) {
+    const itemsHtml = (order.orderItems || [])
+      .map(
+        (item) => `
+        <tr>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.name} x ${item.quantity}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">${item.price * item.quantity}</td>
+        </tr>
+      `
+      )
+      .join("");
 
-  await transporter.sendMail({
-    from,
-    to: order.shippingAddress.email,
-    subject: `Order Confirmation #${order._id.toString().slice(-6).toUpperCase()} - ${siteName}`,
-    html: `
+    return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-        <h2 style="color: #000;">Thank you for your order!</h2>
-        <p>Hi ${order.shippingAddress.name},</p>
-        <p>We've received your order and are getting it ready. Your order ID is <strong>#${order._id.toString().slice(-6).toUpperCase()}</strong>.</p>
-        
+        <h2 style="color: #000;">Order Confirmation</h2>
+        <p>Hello ${order.shippingAddress?.name || "Customer"},</p>
+        <p>Your order <strong>#${shortOrderId}</strong> has been received and is being processed.</p>
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
           <thead>
             <tr style="background-color: #f9f9f9;">
@@ -114,74 +255,56 @@ export const sendOrderConfirmationEmail = async (order) => {
               <th style="padding: 10px; text-align: right; border-bottom: 2px solid #eee;">Total</th>
             </tr>
           </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
+          <tbody>${itemsHtml}</tbody>
           <tfoot>
             <tr>
               <td style="padding: 10px; font-weight: bold;">Subtotal</td>
-              <td style="padding: 10px; text-align: right; font-weight: bold;">৳${order.itemsPrice}</td>
+              <td style="padding: 10px; text-align: right; font-weight: bold;">${order.itemsPrice}</td>
             </tr>
             <tr>
               <td style="padding: 10px;">Shipping</td>
-              <td style="padding: 10px; text-align: right;">৳${order.shippingPrice}</td>
+              <td style="padding: 10px; text-align: right;">${order.shippingPrice}</td>
             </tr>
-            ${order.discountAmount > 0 ? `
-            <tr>
-              <td style="padding: 10px; color: #e11d48;">Discount</td>
-              <td style="padding: 10px; text-align: right; color: #e11d48;">-৳${order.discountAmount}</td>
-            </tr>
-            ` : ''}
+            ${
+              order.discountAmount > 0
+                ? `<tr><td style="padding: 10px; color: #e11d48;">Discount</td><td style="padding: 10px; text-align: right; color: #e11d48;">-${order.discountAmount}</td></tr>`
+                : ""
+            }
             <tr style="font-size: 18px;">
               <td style="padding: 10px; font-weight: bold; border-top: 2px solid #000;">Total</td>
-              <td style="padding: 10px; text-align: right; font-weight: bold; border-top: 2px solid #000;">৳${order.totalPrice}</td>
+              <td style="padding: 10px; text-align: right; font-weight: bold; border-top: 2px solid #000;">${order.totalPrice}</td>
             </tr>
           </tfoot>
         </table>
-
         <div style="margin-top: 30px; padding: 20px; background-color: #f9f9f9; border-radius: 10px;">
-          <h4 style="margin-top: 0;">Shipping Address:</h4>
-          <p style="margin-bottom: 0;">${order.shippingAddress.address}<br>Phone: ${order.shippingAddress.phone}</p>
+          <h4 style="margin-top: 0;">Shipping Details:</h4>
+          <p style="margin-bottom: 0;">${order.shippingAddress?.address || ""}<br>Phone: ${order.shippingAddress?.phone || ""}</p>
         </div>
-
-        <p style="margin-top: 30px;">If you have any questions, reply to this email or contact our support.</p>
-        <p>Best regards,<br><strong>${siteName} Team</strong></p>
       </div>
-    `,
-  });
-};
+    `;
+  }
 
-export const sendOrderStatusUpdateEmail = async (order) => {
-  const transporter = await getTransporter();
-  const from = await getMailFrom();
-  const siteName = await getSiteName();
-
-  await transporter.sendMail({
-    from,
-    to: order.shippingAddress.email,
-    subject: `Order Update: #${order._id.toString().slice(-6).toUpperCase()} is now ${order.orderStatus} - ${siteName}`,
-    html: `
+  renderOrderStatusUpdateHtml(siteName, order, shortOrderId) {
+    return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-        <h2 style="color: #000;">Order Status Updated!</h2>
-        <p>Hi ${order.shippingAddress.name},</p>
-        <p>The status of your order <strong>#${order._id.toString().slice(-6).toUpperCase()}</strong> has been updated to:</p>
-        
-        <div style="margin: 30px 0; padding: 20px; background-color: #000; color: #fff; border-radius: 10px; text-align: center; font-size: 24px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">
+        <h2 style="color: #000;">Order Status Update</h2>
+        <p>Hello ${order.shippingAddress?.name || "Customer"},</p>
+        <p>The status of your order <strong>#${shortOrderId}</strong> has been updated to:</p>
+        <div style="margin: 25px 0; padding: 15px; background-color: #000; color: #fff; border-radius: 8px; text-align: center; font-size: 20px; font-weight: bold; text-transform: uppercase;">
           ${order.orderStatus}
         </div>
-
-        <p>You can track your order or view details by logging into your account.</p>
-        
-        <div style="margin-top: 30px; border-top: 1px solid #eee; pt-20px;">
-          <p style="font-size: 12px; color: #666;">
-            Order ID: ${order._id}<br>
-            Updated at: ${new Date().toLocaleString()}
-          </p>
-        </div>
-
-        <p style="margin-top: 30px;">If you have any questions, reply to this email or contact our support.</p>
-        <p>Best regards,<br><strong>${siteName} Team</strong></p>
+        <p>You can track shipment progress from your customer account dashboard.</p>
       </div>
-    `,
-  });
-};
+    `;
+  }
+}
+
+const defaultEmailService = new EmailService();
+
+export const sendVerificationEmail = (email, url) => defaultEmailService.sendVerificationEmail(email, url);
+export const sendPasswordResetEmail = (email, url) => defaultEmailService.sendPasswordResetEmail(email, url);
+export const sendOrderConfirmationEmail = (order) => defaultEmailService.sendOrderConfirmationEmail(order);
+export const sendOrderStatusUpdateEmail = (order) => defaultEmailService.sendOrderStatusUpdateEmail(order);
+export const bustEmailConfigCache = () => defaultEmailService.bustCache();
+
+export default defaultEmailService;

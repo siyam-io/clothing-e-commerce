@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import Loader from "@/components/common/Loader";
 import SummaryRow from "@/app/cart/components/SummaryRow";
 import PaymentMethodItem from "@/app/cart/components/PaymentMethodItem";
+import { Price } from "@/components/common/Price";
 
 export default function CartFinancialSummary({
   t,
@@ -37,17 +38,22 @@ export default function CartFinancialSummary({
         <Card className="rounded-[2.5rem] border-none shadow-2xl overflow-hidden glass-card">
           <CardContent className="p-8 sm:p-12 space-y-6">
             <div className="space-y-4 sm:space-y-5">
-              <SummaryRow label={t.subtotal || "Subtotal"} value={`৳${subtotal.toFixed(0)}`} />
+              <SummaryRow label={t.subtotal || "Subtotal"} value={<Price amount={subtotal} />} />
               
               {appliedCoupon && (
                 <SummaryRow 
                   label={`${t.voucher || "Voucher"} (${appliedCoupon.coupon?.code})`} 
-                  value={`- ৳${appliedCoupon.discountAmount.toFixed(0)}`} 
+                  value={
+                    <span className="inline-flex items-baseline gap-0.5">
+                      <span>-</span>
+                      <Price amount={appliedCoupon.discountAmount} />
+                    </span>
+                  } 
                   highlight
                 />
               )}
 
-              <SummaryRow label={t.transitFee || "Transit Fee"} value={`৳${shippingCharge}`} />
+              <SummaryRow label={t.transitFee || "Transit Fee"} value={<Price amount={shippingCharge} showFree />} />
             </div>
 
             <Separator className="bg-border/20" />
@@ -57,9 +63,10 @@ export default function CartFinancialSummary({
                 {t.totalInvestment || "Total Investment"}
               </span>
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tighter text-gradient leading-none">
-                  ৳{finalTotal.toFixed(0)}
-                </span>
+                <Price
+                  amount={finalTotal.toFixed(0)}
+                  className="text-3xl sm:text-5xl md:text-6xl font-black text-gradient leading-none tracking-normal"
+                />
                 <span className="text-[8px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-widest">BDT</span>
               </div>
             </div>

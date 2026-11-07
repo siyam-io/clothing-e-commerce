@@ -50,7 +50,7 @@ export default function AdminAiChatPage() {
   const [messages, setMessages] = useState([
     {
       role: "model",
-      content: "System Initialized. I am your Command AI assistant. I have direct telemetry access to your MongoDB catalog, orders, and promo engines. How can I assist you today?",
+      content: "Hello! I am your AI store assistant. I have direct access to your catalog, orders, and promotion tools. How can I assist you today?",
     },
   ]);
   const [inputValue, setInputValue] = useState("");

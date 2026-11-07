@@ -43,13 +43,13 @@ const seedRoles = async () => {
         roleData,
         { upsert: true, new: true }
       );
-      console.log(`✅ Seeded role: ${roleData.name}`);
+      console.log(` Seeded role: ${roleData.name}`);
     }
 
-    console.log("🚀 All roles seeded successfully!");
+    console.log(" All roles seeded successfully!");
     process.exit();
   } catch (error) {
-    console.error("❌ Seeding failed:", error);
+    console.error(" Seeding failed:", error);
     process.exit(1);
   }
 };

@@ -1,13 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import { Save, Server, Cloud } from "lucide-react";
 import { useSettings } from "@/app/admin/settings/lib/useSettings";
-import { Card, CardContent } from "@/components/ui/card";
+import { 
+  AdminCard, 
+  AdminCardHeader, 
+  AdminCardTitle, 
+  AdminCardDescription, 
+  AdminCardContent, 
+  AdminCardFooter 
+} from "@/app/admin/_components/AdminCard";
 import { Button } from "@/components/ui/button";
 import FormInput from "@/app/admin/_components/FormInput";
 import ImageUpload from "@/app/admin/_components/ImageUpload";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 export default function BrandingPage() {
@@ -34,7 +41,6 @@ export default function BrandingPage() {
     cloudinaryApiSecret: "",
   });
 
-  // Sync state with React Query cache instantly on mount/update
   useEffect(() => {
     if (settings) {
       if (settings.branding) {
@@ -69,14 +75,11 @@ export default function BrandingPage() {
     const payload = new FormData();
     payload.append("branding", JSON.stringify(mergedBranding));
 
-    // Update config storageMethod
     const mergedConfig = {
       ...settings?.config,
       storageMethod: storageMethod
     };
     payload.append("config", JSON.stringify(mergedConfig));
-
-    // Update Cloudinary API keys
     payload.append("cloudinary", JSON.stringify(cloudinaryKeys));
 
     if (files.logo) payload.append("logo", files.logo);
@@ -87,51 +90,59 @@ export default function BrandingPage() {
   };
 
   if (isLoading && !settings) {
-    return <div className="animate-pulse space-y-8"><div className="h-40 bg-muted rounded-3xl" /></div>;
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-64 w-full rounded-2xl" />
+        <Skeleton className="h-64 w-full rounded-2xl" />
+      </div>
+    );
   }
 
   return (
-    <Card className="rounded-[2rem] md:rounded-[3rem] border-border/10 bg-card/30 backdrop-blur-2xl shadow-2xl overflow-hidden">
-      <CardContent className="p-6 md:p-16">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-12"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+    <div className="space-y-6">
+      <AdminCard>
+        <AdminCardHeader className="border-b border-border/60 pb-4">
+          <AdminCardTitle className="text-base font-semibold">Store Identity</AdminCardTitle>
+          <AdminCardDescription className="text-xs text-muted-foreground mt-0.5">
+            Basic store naming and search engine meta descriptions.
+          </AdminCardDescription>
+        </AdminCardHeader>
+
+        <AdminCardContent className="space-y-5 pt-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <FormInput
-              label="Website Name"
+              label="Store Name"
               name="siteName"
               register={() => ({})}
               value={formData.siteName}
               onChange={(e) => setFormData({ ...formData, siteName: e.target.value })}
               errors={{}}
-              placeholder="e.g. Vanguard Store"
+              placeholder="e.g. Urban Attire"
             />
             <FormInput
-              label="Page Title"
+              label="Page Title Tag"
               name="siteTitle"
               register={() => ({})}
               value={formData.siteTitle}
               onChange={(e) => setFormData({ ...formData, siteTitle: e.target.value })}
               errors={{}}
-              placeholder="e.g. Premium Clothing"
+              placeholder="e.g. Urban Attire - Premium Clothing Brand"
             />
           </div>
 
           <FormInput
-            label="Site Description"
+            label="Store Description (SEO)"
             name="description"
             register={() => ({})}
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             errors={{}}
-            placeholder="Enter a short description about your shop..."
+            placeholder="Short description for search engine listings..."
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 pt-12 border-t border-border/5">
-             <ImageUpload
-              label="Primary Logo"
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 pt-4 border-t border-border/50">
+            <ImageUpload
+              label="Primary Logo (Light)"
               name="logo"
               register={() => ({})}
               currentImage={formData.logo}
@@ -161,130 +172,110 @@ export default function BrandingPage() {
               }}
             />
           </div>
+        </AdminCardContent>
+      </AdminCard>
 
-          <div className="pt-12 border-t border-border/5 space-y-8">
-            <div className="space-y-2">
-              <h3 className="text-md font-bold text-foreground">Media Storage Strategy</h3>
-              <p className="text-xs text-muted-foreground">
-                Choose where to store uploaded images (e.g. logos, product photos, banners).
-              </p>
-            </div>
+      <AdminCard>
+        <AdminCardHeader className="border-b border-border/60 pb-4">
+          <AdminCardTitle className="text-base font-semibold">Media Storage Strategy</AdminCardTitle>
+          <AdminCardDescription className="text-xs text-muted-foreground mt-0.5">
+            Choose where store product photos, banners, and icons are permanently saved.
+          </AdminCardDescription>
+        </AdminCardHeader>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {/* Local Storage Option */}
-              <button
-                type="button"
-                onClick={() => setStorageMethod("server")}
-                className={cn(
-                  "group relative p-6 rounded-3xl border-2 transition-all duration-500 text-left flex items-start gap-4",
-                  storageMethod === "server"
-                    ? "border-accent-secondary bg-accent-secondary/5 shadow-2xl"
-                    : "border-border/5 hover:border-border/20 bg-muted/20"
-                )}
-              >
-                <div className={cn(
-                  "p-3 rounded-xl bg-background border border-border/10 transition-colors",
-                  storageMethod === "server" ? "text-accent-secondary" : "text-muted-foreground"
-                )}>
-                  <Server size={20} />
-                </div>
-                <div className="space-y-1">
-                  <h4 className="text-xs font-bold text-foreground">Local Server Storage</h4>
-                  <p className="text-[10px] text-muted-foreground leading-normal">
-                    Save directly to the server's uploads folder. Local images are erased on platforms like Render or Vercel on redeployment.
-                  </p>
-                </div>
-                {storageMethod === "server" && (
-                  <div className="absolute top-4 right-4 w-1.5 h-1.5 rounded-full bg-accent-secondary animate-pulse" />
-                )}
-              </button>
+        <AdminCardContent className="space-y-5 pt-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button
+              type="button"
+              onClick={() => setStorageMethod("server")}
+              className={cn(
+                "p-4 rounded-xl border text-left flex items-start gap-3 transition-all",
+                storageMethod === "server"
+                  ? "border-primary bg-primary/5 shadow-2xs"
+                  : "border-border/60 hover:border-border bg-card"
+              )}
+            >
+              <div className={cn("p-2 rounded-lg border", storageMethod === "server" ? "border-primary/20 text-primary bg-primary/10" : "text-muted-foreground")}>
+                <Server className="size-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-semibold text-foreground">Local Server Storage</h4>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  Saved inside the node server directory. Best for dedicated or VPS hosting.
+                </p>
+              </div>
+            </button>
 
-              {/* Cloudinary Storage Option */}
-              <button
-                type="button"
-                onClick={() => setStorageMethod("cloudinary")}
-                className={cn(
-                  "group relative p-6 rounded-3xl border-2 transition-all duration-500 text-left flex items-start gap-4",
-                  storageMethod === "cloudinary"
-                    ? "border-accent-secondary bg-accent-secondary/5 shadow-2xl"
-                    : "border-border/5 hover:border-border/20 bg-muted/20"
-                )}
-              >
-                <div className={cn(
-                  "p-3 rounded-xl bg-background border border-border/10 transition-colors",
-                  storageMethod === "cloudinary" ? "text-accent-secondary" : "text-muted-foreground"
-                )}>
-                  <Cloud size={20} />
-                </div>
-                <div className="space-y-1">
-                  <h4 className="text-xs font-bold text-foreground">Cloudinary Storage</h4>
-                  <p className="text-[10px] text-muted-foreground leading-normal">
-                    Securely upload to Cloudinary. Provides instant page loads, CDN delivery, and automatic compression. Recommended.
-                  </p>
-                </div>
-                {storageMethod === "cloudinary" && (
-                  <div className="absolute top-4 right-4 w-1.5 h-1.5 rounded-full bg-accent-secondary animate-pulse" />
-                )}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setStorageMethod("cloudinary")}
+              className={cn(
+                "p-4 rounded-xl border text-left flex items-start gap-3 transition-all",
+                storageMethod === "cloudinary"
+                  ? "border-primary bg-primary/5 shadow-2xs"
+                  : "border-border/60 hover:border-border bg-card"
+              )}
+            >
+              <div className={cn("p-2 rounded-lg border", storageMethod === "cloudinary" ? "border-primary/20 text-primary bg-primary/10" : "text-muted-foreground")}>
+                <Cloud className="size-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-semibold text-foreground">Cloudinary CDN (Recommended)</h4>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  Global CDN caching, auto WebP compression, and persistent storage across deploys.
+                </p>
+              </div>
+            </button>
+          </div>
 
-            {/* Cloudinary API inputs */}
-            {storageMethod === "cloudinary" && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-4"
-              >
+          {storageMethod === "cloudinary" && (
+            <div className="pt-4 border-t border-border/50 space-y-4">
+              <h4 className="text-xs font-semibold text-foreground">Cloudinary Credentials</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <FormInput
-                  label="Cloudinary Cloud Name"
+                  label="Cloud Name"
                   name="cloudinaryCloudName"
                   register={() => ({})}
                   value={cloudinaryKeys.cloudinaryCloudName}
-                  onChange={(e) =>
-                    setCloudinaryKeys({ ...cloudinaryKeys, cloudinaryCloudName: e.target.value })
-                  }
+                  onChange={(e) => setCloudinaryKeys({ ...cloudinaryKeys, cloudinaryCloudName: e.target.value })}
                   errors={{}}
-                  placeholder="e.g. ds4hwq3hb"
+                  placeholder="e.g. dxyz123"
                 />
                 <FormInput
-                  label="Cloudinary API Key"
+                  label="API Key"
                   name="cloudinaryApiKey"
                   register={() => ({})}
                   value={cloudinaryKeys.cloudinaryApiKey}
-                  onChange={(e) =>
-                    setCloudinaryKeys({ ...cloudinaryKeys, cloudinaryApiKey: e.target.value })
-                  }
+                  onChange={(e) => setCloudinaryKeys({ ...cloudinaryKeys, cloudinaryApiKey: e.target.value })}
                   errors={{}}
-                  placeholder="e.g. 615465272372143"
+                  placeholder="e.g. 1234567890"
                 />
                 <FormInput
-                  label="Cloudinary API Secret"
+                  label="API Secret"
                   name="cloudinaryApiSecret"
                   type="password"
                   register={() => ({})}
                   value={cloudinaryKeys.cloudinaryApiSecret}
-                  onChange={(e) =>
-                    setCloudinaryKeys({ ...cloudinaryKeys, cloudinaryApiSecret: e.target.value })
-                  }
+                  onChange={(e) => setCloudinaryKeys({ ...cloudinaryKeys, cloudinaryApiSecret: e.target.value })}
                   errors={{}}
-                  placeholder="Enter API Secret"
+                  placeholder="••••••••••••"
                 />
-              </motion.div>
-            )}
-          </div>
+              </div>
+            </div>
+          )}
+        </AdminCardContent>
 
-          <div className="pt-12 border-t border-border/5 flex justify-end">
-            <Button
-              onClick={handleSave}
-              disabled={isUpdating}
-              className="bg-foreground text-background hover:bg-accent-secondary hover:text-white px-10 h-14 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl transition-all active:scale-95 group"
-            >
-              <Save size={16} className={cn("mr-2", isUpdating && "animate-pulse")} />
-              {isUpdating ? "Updating Identity..." : "Save Identity"}
-            </Button>
-          </div>
-        </motion.div>
-      </CardContent>
-    </Card>
+        <AdminCardFooter className="border-t border-border/60 pt-4 flex justify-end">
+          <Button
+            onClick={handleSave}
+            disabled={isUpdating}
+            className="h-10 text-xs gap-2"
+          >
+            <Save className="size-4" />
+            {isUpdating ? "Saving..." : "Save Changes"}
+          </Button>
+        </AdminCardFooter>
+      </AdminCard>
+    </div>
   );
 }

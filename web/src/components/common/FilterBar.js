@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { Price } from "@/components/common/Price";
 
 export default function FilterBar({
   search,
@@ -274,9 +275,10 @@ export default function FilterBar({
                   </div>
                   {/* Price & Go link */}
                   <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-[10px] font-black text-accent-secondary">
-                      ৳{suggestion.price}
-                    </span>
+                    <Price
+                      amount={suggestion.price}
+                      className="text-[10px] font-black text-accent-secondary"
+                    />
                     <Link
                       href={`/products/${suggestion.slug}`}
                       onClick={(e) => {

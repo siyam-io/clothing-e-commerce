@@ -104,8 +104,14 @@ export default function SocialAuthButtons({ onSuccessRedirect }) {
   const [isFacebookLoading, setIsFacebookLoading] = useState(false);
   const [isHttps, setIsHttps] = useState(false);
 
-  const googleClientId = settings?.auth?.googleClientId || "";
-  const facebookAppId = settings?.auth?.facebookAppId || "";
+  const googleClientId =
+    settings?.auth?.googleClientId ||
+    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
+    "";
+  const facebookAppId =
+    settings?.auth?.facebookAppId ||
+    process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
+    "";
 
   useEffect(() => {
     if (typeof window !== "undefined") {

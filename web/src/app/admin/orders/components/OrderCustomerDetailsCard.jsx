@@ -1,8 +1,9 @@
-import { Card } from "@/components/ui/card";
+"use client";
+
+import { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardContent } from "@/app/admin/_components/AdminCard";
 import { Badge } from "@/components/ui/badge";
 import { getImageUrl } from "@/utils/imageUtils";
-import { Mail, Phone, MapPin } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Mail, Phone, MapPin, User } from "lucide-react";
 
 export default function OrderCustomerDetailsCard({
   order,
@@ -12,80 +13,72 @@ export default function OrderCustomerDetailsCard({
 }) {
   if (!order) return null;
 
-  return (
-    <Card className="rounded-[2.5rem] border-border bg-card p-8 shadow-sm">
-      <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.4em] mb-8">
-        02. Account Holder
-      </h3>
-      <div className="flex items-center gap-5 mb-10">
-        <div className="h-20 w-20 rounded-[2rem] bg-muted flex items-center justify-center font-black text-muted-foreground border border-border text-3xl shadow-inner overflow-hidden uppercase">
-          {order.user?.avatar ? (
-            <img
-              src={getImageUrl(order.user.avatar)}
-              className="w-full h-full object-cover grayscale"
-              alt="Avatar"
-            />
-          ) : (
-            customerName.charAt(0)
-          )}
-        </div>
-        <div>
-          <p className="font-black text-2xl text-foreground uppercase tracking-tighter italic leading-tight">
-            {customerName}
-          </p>
-          <Badge
-            variant="outline"
-            className={cn(
-              "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border mt-1",
-              isRegistered
-                ? "bg-primary/10 text-primary border-primary/20"
-                : "bg-muted text-muted-foreground border-border"
-            )}
-          >
-            {isRegistered ? "Registered User" : "Guest User"}
-          </Badge>
-        </div>
-      </div>
+  const phone = order.shippingAddress?.phone || "N/A";
+  const address = order.shippingAddress?.address || order.shippingAddress?.street || "No address provided";
+  const city = order.shippingAddress?.city || "";
+  const postalCode = order.shippingAddress?.postalCode || "";
 
-      <div className="space-y-6">
-        <div className="flex items-start gap-4">
-          <Mail size={16} className="text-muted-foreground mt-1" />
+  return (
+    <AdminCard>
+      <AdminCardHeader>
+        <div className="flex items-center gap-2.5">
+          <div className="size-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
+            <User className="size-4" />
+          </div>
+          <AdminCardTitle>Customer Details</AdminCardTitle>
+        </div>
+      </AdminCardHeader>
+
+      <AdminCardContent className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="size-11 rounded-full bg-muted flex items-center justify-center font-semibold text-muted-foreground border border-border/60 overflow-hidden shrink-0">
+            {order.user?.avatar ? (
+              <img
+                src={getImageUrl(order.user.avatar)}
+                className="size-full object-cover"
+                alt={customerName}
+              />
+            ) : (
+              <span className="text-sm font-bold uppercase">{customerName.charAt(0)}</span>
+            )}
+          </div>
           <div>
-            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">
-              Email Address
+            <p className="font-semibold text-sm text-foreground tracking-tight leading-snug">
+              {customerName}
             </p>
-            <p className="text-xs font-bold text-foreground break-all">
-              {customerEmail}
-            </p>
+            <Badge
+              variant="outline"
+              className="text-[10px] font-medium px-2 py-0.2 rounded-full border border-border/60 mt-0.5"
+            >
+              {isRegistered ? "Registered Member" : "Guest Checkout"}
+            </Badge>
           </div>
         </div>
-        <div className="flex items-start gap-4">
-          <Phone size={16} className="text-muted-foreground mt-1" />
-          <div>
-            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">
-              Phone Number
-            </p>
-            <p className="text-xs font-bold text-foreground">
-              {order.shippingAddress?.phone}
-            </p>
+
+        <div className="pt-2 border-t border-border/40 space-y-2.5 text-xs">
+          <div className="flex items-start gap-2.5 text-muted-foreground">
+            <Mail className="size-3.5 mt-0.5 shrink-0" />
+            <span className="text-foreground break-all">{customerEmail}</span>
+          </div>
+
+          <div className="flex items-start gap-2.5 text-muted-foreground">
+            <Phone className="size-3.5 mt-0.5 shrink-0" />
+            <span className="text-foreground font-mono">{phone}</span>
+          </div>
+
+          <div className="flex items-start gap-2.5 text-muted-foreground">
+            <MapPin className="size-3.5 mt-0.5 shrink-0" />
+            <span className="text-foreground">
+              {address}
+              {(city || postalCode) && (
+                <span className="block text-muted-foreground text-[11px] mt-0.5">
+                  {[city, postalCode].filter(Boolean).join(", ")}
+                </span>
+              )}
+            </span>
           </div>
         </div>
-        <div className="flex items-start gap-4">
-          <MapPin size={16} className="text-muted-foreground mt-1" />
-          <div>
-            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">
-              Delivery Address
-            </p>
-            <p className="text-xs font-bold text-foreground leading-relaxed uppercase">
-              <span className="text-[10px] text-muted-foreground mr-2 font-black italic underline decoration-blue-600/30">Recipient:</span>{" "}
-              {order.shippingAddress?.name}
-            </p>
-            <p className="text-xs font-bold text-foreground leading-relaxed uppercase mt-1">
-              {order.shippingAddress?.address}
-            </p>
-          </div>
-        </div>
-      </div>
-    </Card>
+      </AdminCardContent>
+    </AdminCard>
   );
 }

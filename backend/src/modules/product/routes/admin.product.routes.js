@@ -17,7 +17,7 @@ import upload from '../../../middleware/upload.js';
 
 const router = express.Router();
 
-// 🛡️ Base protection for all admin routes
+// Base protection for all admin routes
 router.use(protect);
 
 router.post('/generate-ai-content', authorize('products:update'), generateProductAiContent);

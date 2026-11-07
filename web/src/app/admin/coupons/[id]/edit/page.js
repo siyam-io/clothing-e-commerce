@@ -2,20 +2,25 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { useAdminCoupons } from "@/app/admin/coupons/lib/useAdminCoupons";
 import Loader from "@/components/common/Loader";
-import { Badge } from "@/components/ui/badge";
 import { swalToast, swalError } from "@/utils/swal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Save,
-  ShieldAlert,
-  ArrowRight,
-  History
-} from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { History, Loader2 } from "lucide-react";
+import AdminPageContainer from "@/app/admin/_components/AdminPageContainer";
 import AdminPageHeader, { AdminBackLink } from "@/app/admin/_components/AdminPageHeader";
+import { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardDescription, AdminCardContent } from "@/app/admin/_components/AdminCard";
 
 export default function CouponEditPage() {
   const { id } = useParams();
@@ -28,6 +33,8 @@ export default function CouponEditPage() {
     register,
     handleSubmit,
     setValue,
+    control,
+    watch,
     formState: { errors },
   } = useForm();
 
@@ -43,155 +50,180 @@ export default function CouponEditPage() {
     }
   }, [coupon, setValue]);
 
-  const onUpdateLogic = async (data) => {
+  const onUpdateCoupon = async (data) => {
     setIsSubmitting(true);
     try {
       await updateCoupon({ id, data });
-      swalToast("Voucher Logic Synchronized", "success");
+      swalToast("Coupon updated successfully", "success");
       router.push("/admin/coupons");
     } catch (err) {
-      swalError("Logic Conflict", err.response?.data?.message || "Failed to commit protocol changes.");
+      swalError("Update Failed", err.response?.data?.message || "Failed to update coupon.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (isCouponLoading)
+  if (isCouponLoading) {
     return (
-      <div className="admin-page-container">
+      <div className="admin-page-container flex items-center justify-center min-h-[50vh]">
         <Loader />
       </div>
     );
+  }
 
   return (
-    <div className="admin-page-container max-w-5xl">
-      <AdminBackLink href="/admin/coupons" label="Back to coupons" />
+    <AdminPageContainer maxWidth="max-w-3xl">
+      <AdminBackLink href="/admin/coupons" label="Back to Coupons" />
 
       <AdminPageHeader
-        title="Edit coupon"
-        description={coupon?.code ? `Code: ${coupon.code}` : "Update discount rules and limits."}
+        title={`Edit Coupon: ${coupon?.code || ""}`}
+        description="Modify discount parameters, usage quota, and expiry date"
         actions={
           <Button
+            type="button"
             variant="outline"
+            size="sm"
             onClick={() => router.push(`/admin/coupons/${id}`)}
-            className="h-11 rounded-xl text-sm font-medium"
+            className="h-10 px-4 rounded-xl text-xs font-medium gap-1.5"
           >
-            <History size={16} className="mr-2" />
-            View history
+            <History className="size-3.5" />
+            View Usage History
           </Button>
         }
       />
 
-      <form
-        onSubmit={handleSubmit(onUpdateLogic)}
-        className="space-y-12"
-      >
-        <div className="admin-table-form p-8 md:p-14 space-y-12">
-          <div className="flex items-center justify-between border-b border-border/5 pb-8">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.5em] text-muted-foreground flex items-center gap-3">
-              <ShieldAlert size={14} className="text-rose-500" /> Voucher_Logic_Module
-            </h3>
-            <Badge variant="outline" className="text-[8px] uppercase tracking-widest border-rose-500/20 text-rose-500 px-3 py-1">Active Encryption</Badge>
-          </div>
+      <form onSubmit={handleSubmit(onUpdateCoupon)} className="space-y-6">
+        <AdminCard>
+          <AdminCardHeader>
+            <AdminCardTitle>Coupon Rules</AdminCardTitle>
+            <AdminCardDescription>Update discount calculation, threshold, and limits</AdminCardDescription>
+          </AdminCardHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            <div className="space-y-4">
-              <label className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground ml-1">
-                Voucher Identity *
-              </label>
+          <AdminCardContent className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-foreground">
+                  Coupon Code <span className="text-rose-500">*</span>
+                </Label>
+                <Input
+                  {...register("code", { required: true })}
+                  placeholder="e.g. DISCOUNT25"
+                  className="h-10 rounded-xl bg-background/80 border-border/60 text-sm font-mono font-semibold uppercase"
+                />
+                {errors.code && <p className="text-xs text-rose-500">Coupon code is required</p>}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-foreground">
+                  Discount Type <span className="text-rose-500">*</span>
+                </Label>
+                <Controller
+                  name="discountType"
+                  control={control}
+                  rules={{ required: true }}
+                  render={({ field }) => (
+                    <Select value={field.value || "fixed"} onValueChange={field.onChange}>
+                      <SelectTrigger className="h-10 bg-background/80 border-border/60 rounded-xl text-xs font-medium">
+                        <SelectValue placeholder="Select discount type" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-card border-border rounded-xl">
+                        <SelectItem value="fixed" className="text-xs">Fixed Amount (৳ Discount)</SelectItem>
+                        <SelectItem value="percentage" className="text-xs">Percentage (% Off)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-foreground">
+                  Discount Value <span className="text-rose-500">*</span>
+                </Label>
+                <Input
+                  type="number"
+                  step="any"
+                  placeholder="0"
+                  {...register("discountValue", { required: true, min: 1, valueAsNumber: true })}
+                  className="h-10 rounded-xl bg-background/80 border-border/60 text-sm font-semibold tabular-nums"
+                />
+                {errors.discountValue && <p className="text-xs text-rose-500">Value must be &gt; 0</p>}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-foreground">Minimum Spend (৳)</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  {...register("minPurchase", { valueAsNumber: true })}
+                  className="h-10 rounded-xl bg-background/80 border-border/60 text-sm tabular-nums"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-foreground">Usage Limit</Label>
+                <Input
+                  type="number"
+                  placeholder="100"
+                  {...register("usageLimit", { valueAsNumber: true })}
+                  className="h-10 rounded-xl bg-background/80 border-border/60 text-sm tabular-nums"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-foreground">Expiry Date</Label>
               <Input
-                {...register("code", { required: true })}
-                className="h-16 bg-muted/30 border-border/10 rounded-2xl px-6 font-black uppercase tracking-widest focus:ring-2 focus:ring-rose-500/20"
-              />
-            </div>
-
-            <div className="space-y-4">
-              <label className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground ml-1">
-                Discount Strategy
-              </label>
-              <select
-                {...register("discountType")}
-                className="w-full h-16 bg-muted/30 border border-border/10 rounded-2xl px-6 font-black uppercase tracking-widest focus:ring-2 focus:ring-rose-500/20 outline-none cursor-pointer appearance-none"
-              >
-                <option value="fixed" className="bg-background">Fixed Reduction (৳ Amount)</option>
-                <option value="percentage" className="bg-background">Percentage Yield (% Off)</option>
-              </select>
-            </div>
-
-            <div className="space-y-4">
-              <label className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground ml-1">
-                Reduction Magnitude *
-              </label>
-              <Input
-                type="number"
-                {...register("discountValue", { required: true })}
-                className="h-16 bg-muted/30 border-border/10 rounded-2xl px-6 font-black focus:ring-2 focus:ring-rose-500/20"
-              />
-            </div>
-
-            <div className="space-y-4">
-              <label className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground ml-1">
-                Activation Threshold (Min Purchase)
-              </label>
-              <Input
-                type="number"
-                {...register("minPurchase")}
-                className="h-16 bg-muted/30 border-border/10 rounded-2xl px-6 font-black focus:ring-2 focus:ring-rose-500/20"
-              />
-            </div>
-
-            <div className="space-y-4">
-              <label className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground ml-1">
-                Deployment Limit (Usage)
-              </label>
-              <Input
-                type="number"
-                {...register("usageLimit")}
-                placeholder="∞"
-                className="h-16 bg-muted/30 border-border/10 rounded-2xl px-6 font-black focus:ring-2 focus:ring-rose-500/20"
-              />
-            </div>
-
-            <div className="space-y-4">
-              <label className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground ml-1">
-                Expiry Protocol (Temporal End)
-              </label>
-              <input
                 type="date"
                 {...register("endDate")}
-                className="w-full h-16 bg-muted/30 border border-border/10 rounded-2xl px-6 font-black uppercase tracking-widest focus:ring-2 focus:ring-rose-500/20 outline-none"
+                className="h-10 rounded-xl bg-background/80 border-border/60 text-xs font-medium"
               />
             </div>
-          </div>
 
-          <div className="flex items-center gap-6 bg-rose-500/5 p-8 rounded-[2.5rem] border border-rose-500/10">
-            <input
-              type="checkbox"
-              {...register("isActive")}
-              className="w-8 h-8 rounded-xl bg-background border-border/20 text-rose-600 focus:ring-0 cursor-pointer"
-            />
-            <div className="space-y-1">
-               <p className="text-[10px] font-black uppercase tracking-widest text-foreground">
-                 Operative Status: Active Deployment
-               </p>
-               <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest opacity-60">Master override for voucher accessibility in checkout</p>
+            <div className="pt-2">
+              <label className="flex items-center gap-3 p-3.5 rounded-xl border border-border/60 bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors">
+                <Checkbox
+                  id="isActive"
+                  checked={watch("isActive")}
+                  onCheckedChange={(val) => setValue("isActive", val)}
+                  className="rounded-md"
+                />
+                <div>
+                  <p className="text-xs font-medium text-foreground">Enable Coupon</p>
+                  <p className="text-[11px] text-muted-foreground">Customers can apply this coupon code at checkout</p>
+                </div>
+              </label>
             </div>
-          </div>
-        </div>
+          </AdminCardContent>
 
-        <Button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full h-24 bg-foreground text-background py-8 rounded-[2.5rem] font-black uppercase tracking-[0.5em] text-[12px] shadow-2xl hover:bg-rose-600 hover:text-white transition-all disabled:opacity-50 flex items-center justify-center gap-4 group"
-        >
-          <Save size={20} className="group-hover:scale-110 transition-transform" />
-          {isSubmitting ? "Synchronizing Logic..." : "Commit Protocol Changes"}
-          <ArrowRight size={20} className="group-hover:translate-x-2 transition-transform" />
-        </Button>
+          <div className="flex items-center justify-end gap-3 p-5 border-t border-border/40 bg-muted/20">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push("/admin/coupons")}
+              disabled={isSubmitting}
+              className="h-10 px-5 rounded-xl text-xs font-medium"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="h-10 px-6 rounded-xl text-xs font-medium gap-2 shadow-xs cursor-pointer"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </div>
+        </AdminCard>
       </form>
-    </div>
+    </AdminPageContainer>
   );
 }
-
-
-

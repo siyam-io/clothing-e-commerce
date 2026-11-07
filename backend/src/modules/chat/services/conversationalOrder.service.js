@@ -1,139 +1,150 @@
-import Product from '../../product/product.model.js';
-import Size from '../../size/size.model.js';
-import Cart from '../../cart/cart.model.js';
-import Order from '../../order/order.model.js';
+import Product from "../../product/product.model.js";
+import Cart from "../../cart/cart.model.js";
 
+/**
+ * Service translating structured conversational assistant actions into cart mutations and order drafts.
+ */
 export class ConversationalOrderService {
   /**
-   * Processes structured actions emitted by the VLM model.
+   * Dispatches incoming action payload to its designated execution handler.
    *
-   * @param {Object} actionPayload - e.g. { action: "ADD_TO_CART", sku: "SKU-1", size: "L", quantity: 1 }
-   * @param {string} userIdentifier - User ObjectId string or Guest Session ID
-   * @param {Object} [userInfo] - Optional authenticated user object
-   * @returns {Promise<{ success: boolean, message: string, cart?: Object, orderDraft?: Object, product?: Object }>}
+   * @param {Object} actionPayload
+   * @param {string} userIdentifier - User ObjectId string or Guest Session identifier.
+   * @param {Object} [userInfo=null] - Optional authenticated user document.
+   * @returns {Promise<Object>} Execution status and resulting payload.
    */
   static async handleAction(actionPayload, userIdentifier, userInfo = null) {
-    if (!actionPayload || !actionPayload.action) {
-      return { success: false, message: 'No executable action detected' };
+    if (!actionPayload?.action) {
+      return { success: false, message: "No executable action detected" };
     }
 
     const actionType = actionPayload.action.toUpperCase();
 
     switch (actionType) {
-      case 'ADD_TO_CART':
-        return await this.executeAddToCart(actionPayload, userIdentifier);
-
-      case 'CREATE_ORDER':
-      case 'ORDER_CONFIRM':
-      case 'PREPARE_CHECKOUT':
-        return await this.executePrepareOrder(actionPayload, userIdentifier, userInfo);
-
-      case 'CHECK_STOCK':
-        return await this.executeCheckStock(actionPayload);
-
+      case "ADD_TO_CART":
+        return this.executeAddToCart(actionPayload, userIdentifier);
+      case "CREATE_ORDER":
+      case "ORDER_CONFIRM":
+      case "PREPARE_CHECKOUT":
+        return this.executePrepareOrder(actionPayload, userIdentifier, userInfo);
+      case "CHECK_STOCK":
+        return this.executeCheckStock(actionPayload);
       default:
-        return {
-          success: false,
-          message: `Unknown action type: ${actionType}`,
-        };
+        return { success: false, message: `Unsupported action type: ${actionType}` };
     }
   }
 
   /**
-   * Adds matched item to user/guest cart in MongoDB.
+   * Find product matching SKU or product name.
    */
-  static async executeAddToCart(payload, userIdentifier) {
-    const { sku, size: requestedSize, quantity = 1, product_name } = payload;
+  static async resolveProduct(sku, productName) {
+    const query = sku
+      ? { sku: new RegExp(`^${sku.trim()}$`, "i") }
+      : { name: new RegExp(productName?.trim() || "", "i") };
 
-    // 1. Resolve product by SKU, name, or slug
-    const productQuery = sku
-      ? { sku: new RegExp(`^${sku.trim()}$`, 'i') }
-      : { name: new RegExp(product_name?.trim() || '', 'i') };
+    return Product.findOne(query).populate("sizes.size", "name");
+  }
 
-    const product = await Product.findOne(productQuery).populate('sizes.size', 'name');
-    if (!product) {
-      return {
-        success: false,
-        message: `Product matching SKU "${sku || product_name}" could not be located in our inventory.`,
-      };
-    }
-
-    // 2. Resolve size
-    const availableSizes = product.sizes || [];
-    let matchedSizeEntry = null;
-
+  /**
+   * Match requested size against available product variations.
+   */
+  static resolveSizeEntry(availableSizes = [], requestedSize) {
     if (requestedSize) {
-      const cleanSizeReq = requestedSize.trim().toLowerCase();
-      matchedSizeEntry = availableSizes.find(
-        (entry) => entry.size && entry.size.name.trim().toLowerCase() === cleanSizeReq
+      const target = requestedSize.trim().toLowerCase();
+      return availableSizes.find(
+        (entry) => entry.size && entry.size.name.trim().toLowerCase() === target
       );
-    } else if (availableSizes.length === 1) {
-      // Default to single available size
-      matchedSizeEntry = availableSizes[0];
     }
-
-    if (!matchedSizeEntry) {
-      const sizeOptions = availableSizes
-        .filter((s) => s.stock > 0 && s.size)
-        .map((s) => s.size.name);
-
-      return {
-        success: false,
-        message: `Please specify a valid size for **${product.name}**. Available in-stock sizes: ${sizeOptions.join(', ') || 'None'}.`,
-        product: { id: product._id, name: product.name, sku: product.sku },
-      };
+    if (availableSizes.length === 1) {
+      return availableSizes[0];
     }
+    return null;
+  }
 
-    // 3. Stock validation
-    const requestedQty = Math.max(1, parseInt(quantity, 10) || 1);
-    if (matchedSizeEntry.stock < requestedQty) {
-      return {
-        success: false,
-        message: `Insufficient stock for size **${matchedSizeEntry.size.name}**. Only ${matchedSizeEntry.stock} units available.`,
-      };
-    }
-
-    const sizeId = matchedSizeEntry.size._id;
-    const productId = product._id;
-
-    // 4. Update or Create Cart in MongoDB
-    let cart = await Cart.findOne({ user: userIdentifier });
-    if (!cart) {
-      cart = await Cart.create({ user: userIdentifier, items: [] });
-    }
-
+  /**
+   * Update or append item in cart while enforcing maximum stock limits.
+   */
+  static applyCartItemMutation(cart, productId, sizeId, requestedQty, maxStock) {
     const existingIndex = cart.items.findIndex(
-      (item) => item.product.toString() === productId.toString() && item.size.toString() === sizeId.toString()
+      (item) =>
+        item.product.toString() === productId.toString() &&
+        item.size.toString() === sizeId.toString()
     );
 
     if (existingIndex > -1) {
       const newQty = cart.items[existingIndex].quantity + requestedQty;
-      if (newQty > matchedSizeEntry.stock) {
+      if (newQty > maxStock) {
         return {
           success: false,
-          message: `Cannot add ${requestedQty} more. You already have ${cart.items[existingIndex].quantity} in your cart, and our total stock is ${matchedSizeEntry.stock}.`,
+          message: `Cannot add ${requestedQty} more. Cart contains ${cart.items[existingIndex].quantity}, stock is ${maxStock}.`,
         };
       }
       cart.items[existingIndex].quantity = newQty;
     } else {
-      cart.items.push({
-        product: productId,
-        size: sizeId,
-        quantity: requestedQty,
-      });
+      cart.items.push({ product: productId, size: sizeId, quantity: requestedQty });
     }
 
-    await cart.save();
+    return { success: true };
+  }
 
-    // Populate for clean client representation
-    await cart.populate('items.product', 'name price discount images slug sku isActive');
-    await cart.populate('items.size', 'name');
+  /**
+   * Adds specified product SKU and size to user or guest cart.
+   */
+  static async executeAddToCart(payload, userIdentifier) {
+    const { sku, size: requestedSize, quantity = 1, product_name: productName } = payload;
+    const product = await this.resolveProduct(sku, productName);
+
+    if (!product) {
+      return {
+        success: false,
+        message: `Product matching "${sku || productName}" was not found in catalog.`,
+      };
+    }
+
+    const matchedSize = this.resolveSizeEntry(product.sizes, requestedSize);
+    if (!matchedSize) {
+      const options = (product.sizes || [])
+        .filter((s) => s.stock > 0 && s.size)
+        .map((s) => s.size.name);
+      return {
+        success: false,
+        message: `Please specify a valid size for ${product.name}. In-stock options: ${options.join(", ") || "None"}.`,
+        product: { id: product._id, name: product.name, sku: product.sku },
+      };
+    }
+
+    const requestedQty = Math.max(1, parseInt(quantity, 10) || 1);
+    if (matchedSize.stock < requestedQty) {
+      return {
+        success: false,
+        message: `Insufficient stock for size ${matchedSize.size.name}. Available: ${matchedSize.stock}.`,
+      };
+    }
+
+    let cart = await Cart.findOne({ user: userIdentifier });
+    if (!cart) cart = await Cart.create({ user: userIdentifier, items: [] });
+
+    const mutationResult = this.applyCartItemMutation(
+      cart,
+      product._id,
+      matchedSize.size._id,
+      requestedQty,
+      matchedSize.stock
+    );
+
+    if (!mutationResult.success) return mutationResult;
+
+    await cart.save();
+    await cart.populate("items.product", "name price discount images slug sku isActive");
+    await cart.populate("items.size", "name");
 
     const totals = await cart.calculateTotals();
+    const unitPrice =
+      product.discount > 0 ? product.price * (1 - product.discount / 100) : product.price;
 
     return {
       success: true,
-      message: `✅ Added **${product.name}** (Size: ${matchedSizeEntry.size.name}, Qty: ${requestedQty}) to your cart!`,
+      message: `Added ${product.name} (Size: ${matchedSize.size.name}, Qty: ${requestedQty}) to your cart.`,
       cart: {
         id: cart._id,
         items: cart.items,
@@ -144,18 +155,18 @@ export class ConversationalOrderService {
         id: product._id,
         name: product.name,
         sku: product.sku,
-        size: matchedSizeEntry.size.name,
+        size: matchedSize.size.name,
         quantity: requestedQty,
-        unitPrice: product.discount > 0 ? product.price - (product.price * product.discount / 100) : product.price,
+        unitPrice,
       },
     };
   }
 
   /**
-   * Prepares a pending order or checkout draft from conversational intent.
+   * Prepares an order draft for immediate checkout from chat dialog.
    */
   static async executePrepareOrder(payload, userIdentifier, userInfo) {
-    const { sku, size: requestedSize, quantity = 1 } = payload;
+    const { quantity = 1 } = payload;
     const cartResult = await this.executeAddToCart(payload, userIdentifier);
 
     if (!cartResult.success) {
@@ -180,31 +191,33 @@ export class ConversationalOrderService {
         },
       ],
       totalAmount,
-      currency: 'BDT',
-      status: 'Draft',
+      currency: "BDT",
+      status: "Draft",
     };
 
     return {
       success: true,
-      message: `Your order draft for **${cartResult.product.name}** is ready. Total: ৳${totalAmount.toFixed(2)}. Click below to complete checkout!`,
+      message: `Order draft for ${cartResult.product.name} is ready. Total: BDT ${totalAmount.toFixed(2)}. Proceed to checkout to finalize.`,
       cart: cartResult.cart,
       orderDraft,
     };
   }
 
   /**
-   * Checks inventory stock levels for a specific SKU and optional size.
+   * Query inventory stock levels for a specific SKU.
    */
   static async executeCheckStock(payload) {
     const { sku } = payload;
-    const product = await Product.findOne({ sku: new RegExp(`^${sku?.trim()}$`, 'i') }).populate('sizes.size', 'name');
+    const product = await Product.findOne({
+      sku: new RegExp(`^${sku?.trim()}$`, "i"),
+    }).populate("sizes.size", "name");
 
     if (!product) {
       return { success: false, message: `Product with SKU "${sku}" not found.` };
     }
 
     const sizesStock = (product.sizes || []).map((s) => ({
-      size: s.size?.name || 'Standard',
+      size: s.size?.name || "Standard",
       stock: s.stock,
       inStock: s.stock > 0,
     }));

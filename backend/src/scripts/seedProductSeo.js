@@ -75,17 +75,17 @@ const seedProductSeo = async () => {
         { new: true }
       );
 
-      console.log(`✅ Updated product [${product.name}] with SEO Metadata:`);
+      console.log(` Updated product [${product.name}] with SEO Metadata:`);
       console.log(`   - Title: "${metaTitle}"`);
       console.log(`   - Desc: "${metaDescription}"`);
       console.log(`   - Keywords: "${keywords}"\n`);
       updatedCount++;
     }
 
-    console.log(`🚀 Done! Successfully populated SEO/AEO fields for ${updatedCount} products.`);
+    console.log(` Done! Successfully populated SEO/AEO fields for ${updatedCount} products.`);
     process.exit(0);
   } catch (error) {
-    console.error("❌ Migration failed:", error);
+    console.error(" Migration failed:", error);
     process.exit(1);
   }
 };

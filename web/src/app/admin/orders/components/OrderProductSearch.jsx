@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { getImageUrl } from "@/utils/imageUtils";
+import { Price } from "@/components/common/Price";
 
 export default function OrderProductSearch({
   searchTerm,
@@ -49,9 +50,10 @@ export default function OrderProductSearch({
                     <span className="text-[10px] font-black uppercase tracking-tight truncate block text-foreground">
                       {product.name}
                     </span>
-                    <span className="text-[9px] font-bold text-indigo-500 mt-0.5 block">
-                      ৳{product.price}
-                    </span>
+                    <Price
+                      amount={product.price}
+                      className="text-[9px] font-bold text-indigo-500 mt-0.5 block"
+                    />
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">

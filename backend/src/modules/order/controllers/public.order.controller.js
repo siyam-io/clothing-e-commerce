@@ -18,19 +18,30 @@ import PageSetting from "../../settings/settings.model.js";
 import ApiKey from "../../settings/apiKey.model.js";
 import { decrypt } from "../../../utils/encryption.js";
 import PDFDocument from "pdfkit";
+import SSLCommerzPayment from "sslcommerz-lts";
+import logger from "../../../utils/logger.js";
 
 const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
+// Sanitizer to enforce strict alphanumeric UUID/ID formats on guest session headers
+export const sanitizeGuestId = (rawId) => {
+  if (typeof rawId !== "string") return null;
+  const trimmed = rawId.trim();
+  const isValidFormat = /^(guest_)?[a-zA-Z0-9_-]{10,64}$/.test(trimmed);
+  return isValidFormat ? trimmed : null;
+};
+
 const getUserIdFromReq = (req) => {
-  const id = req.user?._id || req.user?.id || req.headers["x-guest-id"];
-  return id ? id.toString() : null;
+  if (req.user?._id) return req.user._id.toString();
+  if (req.user?.id) return req.user.id.toString();
+  return sanitizeGuestId(req.headers["x-guest-id"]);
 };
 
 export const initPayment = asyncHandler(async (req, res) => {
-  console.log("🚀 ORDER INITIATION PROTOCOL STARTED", {
+  logger.info("Order initiation requested", {
     userId: getUserIdFromReq(req),
     itemsCount: req.body.orderItems?.length,
-    paymentMethod: req.body.paymentMethod
+    paymentMethod: req.body.paymentMethod,
   });
 
   const {
@@ -43,21 +54,22 @@ export const initPayment = asyncHandler(async (req, res) => {
     paymentMethod = "ssl",
   } = req.body;
   
-  const userId = getUserIdFromReq(req);
+  const isRegisteredUser = Boolean(req.user && req.user._id);
+  const registeredUserId = isRegisteredUser ? req.user._id : undefined;
+  const guestId = !isRegisteredUser ? sanitizeGuestId(req.headers["x-guest-id"]) : undefined;
 
-  if (!userId) {
+  if (!isRegisteredUser && !guestId) {
     return res.status(401).json({
       success: false,
       message: "Identity required. Please provide a Guest Session or Login.",
     });
   }
 
-  const isRegisteredUser = mongoose.Types.ObjectId.isValid(userId);
   const settings = await PageSetting.findOne();
   const apiKeys = await ApiKey.findOne();
   
   if (!settings) {
-     console.error("❌ SETTINGS NOT INITIALIZED");
+     console.error(" SETTINGS NOT INITIALIZED");
      throw new Error("Settings not initialized.");
   }
 
@@ -82,9 +94,9 @@ export const initPayment = asyncHandler(async (req, res) => {
     );
 
     const orderPayload = {
-      user: isRegisteredUser ? userId : undefined, 
+      user: registeredUserId, 
       isGuest: !isRegisteredUser,
-      guestId: !isRegisteredUser ? userId : undefined,
+      guestId: guestId,
       orderItems: orderData.validatedItems,
       shippingAddress: normalizeShippingAddress(shippingAddress),
       itemsPrice: orderData.itemsPrice,
@@ -105,18 +117,9 @@ export const initPayment = asyncHandler(async (req, res) => {
       clearCache('cache:/api/admin/dashboard*');
       
       const io = req.app.get('io');
-      console.log('🚀 COD ORDER CREATED: Emitting socket event', {
-        hasIo: !!io,
-        orderId: order._id,
-        paymentMethod: 'COD',
-        timestamp: new Date().toISOString()
-      });
-      
       if (io) {
         io.emit('new_order', order);
-        console.log('✅ COD ORDER: Socket.io "new_order" event emitted');
-      } else {
-        console.error('❌ COD ORDER: Socket.io instance not available!');
+        logger.info('COD order created, socket emitted', { orderId: order._id });
       }
       
       res.json(await handleCODGateway(order));
@@ -125,18 +128,9 @@ export const initPayment = asyncHandler(async (req, res) => {
       clearCache('cache:/api/admin/dashboard*');
       
       const io = req.app.get('io');
-      console.log('🚀 bKASH ORDER CREATED: Emitting socket event', {
-        hasIo: !!io,
-        orderId: order._id,
-        paymentMethod: 'bKash',
-        timestamp: new Date().toISOString()
-      });
-      
       if (io) {
         io.emit('new_order', order);
-        console.log('✅ bKASH ORDER: Socket.io "new_order" event emitted');
-      } else {
-        console.error('❌ bKASH ORDER: Socket.io instance not available!');
+        logger.info('bKash order created, socket emitted', { orderId: order._id });
       }
       
       const bkashData = await initiateBkash(order, bkashCreds);
@@ -148,25 +142,18 @@ export const initPayment = asyncHandler(async (req, res) => {
       clearCache('cache:/api/admin/dashboard*');
       
       const io = req.app.get('io');
-      console.log('🚀 SSL ORDER CREATED: Emitting socket event', {
-        hasIo: !!io,
-        orderId: order._id,
-        paymentMethod: 'SSLCommerz',
-        timestamp: new Date().toISOString()
-      });
-      
       if (io) {
         io.emit('new_order', order);
-        console.log('✅ SSL ORDER: Socket.io "new_order" event emitted');
+        logger.info('SSLCommerz order created, socket emitted', { orderId: order._id });
       } else {
-        console.error('❌ SSL ORDER: Socket.io instance not available!');
+        logger.warn('SSL ORDER: Socket.io instance not available');
       }
       
       const sslUrl = await initiateSSLCommerz(order, sslCreds);
       res.json({ url: sslUrl });
     }
   } catch (err) {
-    console.error("❌ ORDER PROCESSING ERROR:", err);
+    console.error(" ORDER PROCESSING ERROR:", err);
     res.status(400).json({ 
         success: false, 
         message: err.message || "Order protocol failure." 
@@ -178,14 +165,59 @@ export const paymentSuccess = asyncHandler(async (req, res) => {
   const { tran_id } = req.params;
   const { val_id } = req.body;
 
-  // FIX Bug 4: Guard against null order before processing or redirecting
   const order = await Order.findOne({ "paymentResult.transactionId": tran_id });
   if (!order) {
-    console.error(`❌ paymentSuccess: Order not found for tran_id=${tran_id}`);
-    return res.redirect(`${frontendUrl}/payment/failed?reason=Order not found`);
+    console.error(` paymentSuccess: Order not found for tran_id=${tran_id}`);
+    return res.redirect(`${frontendUrl}/payment/failed?reason=Order%20not%20found`);
   }
 
-  if (order.paymentResult.status === "Pending") {
+  // Idempotency: Return early if already completed
+  if (order.paymentResult.status === "Completed") {
+    return res.redirect(`${frontendUrl}/payment/success?orderId=${order._id}`);
+  }
+
+  if (order.paymentResult.status !== "Pending") {
+    return res.redirect(`${frontendUrl}/payment/failed?reason=Invalid%20order%20state`);
+  }
+
+  if (!val_id) {
+    console.error(` paymentSuccess: Missing val_id for tran_id=${tran_id}`);
+    return res.redirect(`${frontendUrl}/payment/failed?reason=Missing%20validation%20token`);
+  }
+
+  // Fetch Gateway Credentials
+  const apiKeys = await ApiKey.findOne();
+  const storeId = apiKeys?.sslStoreId || process.env.SSL_STORE_ID;
+  const rawStorePass = apiKeys?.sslStorePassword ? decrypt(apiKeys.sslStorePassword) : process.env.SSL_STORE_PASSWORD;
+  const isLive = apiKeys?.sslIsTest === false || process.env.NODE_ENV === "production";
+
+  if (!storeId || !rawStorePass) {
+    console.error(" SSLCommerz credentials uninitialized in database or environment.");
+    return res.redirect(`${frontendUrl}/payment/failed?reason=Payment%20configuration%20error`);
+  }
+
+  try {
+    const sslcz = new SSLCommerzPayment(storeId.trim(), rawStorePass.trim(), isLive);
+    const validationData = await sslcz.validate({ val_id });
+
+    const isStatusValid = validationData.status === "VALID" || validationData.status === "VALIDATED";
+    const paidAmount = Number(validationData.amount || validationData.currency_amount || 0);
+    const expectedAmount = Number(order.totalPrice);
+
+    if (!isStatusValid) {
+      console.error(` SSLCommerz Rejected: Status=${validationData.status} for Order=${order._id}`);
+      return res.redirect(`${frontendUrl}/payment/failed?reason=Gateway%20declined%20transaction`);
+    }
+
+    // Price tampering defense (0.01 BDT delta tolerance)
+    if (Math.abs(paidAmount - expectedAmount) > 0.01) {
+      logger.error(`Price discrepancy detected: Order ${order._id} Expected ${expectedAmount}, Received ${paidAmount}`);
+      order.paymentResult.status = "Failed";
+      order.orderStatus = "Cancelled";
+      await order.save();
+      return res.redirect(`${frontendUrl}/payment/failed?reason=Amount%20mismatch%20detected`);
+    }
+
     order.paymentResult.status = "Completed";
     order.paymentResult.val_id = val_id;
     order.orderStatus = "Processing";
@@ -194,21 +226,16 @@ export const paymentSuccess = asyncHandler(async (req, res) => {
     clearCache('cache:/api/admin/dashboard*');
     
     const io = req.app.get('io');
-    console.log('🚀 PAYMENT SUCCESS (SSL): Emitting socket event', {
-      hasIo: !!io,
-      orderId: order._id,
-      paymentStatus: 'Completed',
-      timestamp: new Date().toISOString()
-    });
-    
     if (io) {
       io.emit('new_order', order);
-      console.log('✅ PAYMENT SUCCESS (SSL): Socket.io "new_order" event emitted');
-    } else {
-      console.error('❌ PAYMENT SUCCESS (SSL): Socket.io instance not available!');
+      logger.info('SSL payment verified, new_order event emitted', { orderId: order._id });
     }
+    
+    return res.redirect(`${frontendUrl}/payment/success?orderId=${order._id}`);
+  } catch (err) {
+    logger.error(`SSLCommerz verification failed for tran_id=${tran_id}:`, { error: err.message });
+    return res.redirect(`${frontendUrl}/payment/failed?reason=Gateway%20verification%20failed`);
   }
-  res.redirect(`${frontendUrl}/payment/success?orderId=${order._id}`);
 });
 
 export const bkashSuccess = asyncHandler(async (req, res) => {
@@ -221,10 +248,9 @@ export const bkashSuccess = asyncHandler(async (req, res) => {
     appSecret: apiKeys?.bkashAppSecret ? decrypt(apiKeys.bkashAppSecret) : process.env.BKASH_APP_SECRET
   };
 
-  // FIX Bug 5: Guard against null order
   const order = await Order.findById(orderId);
   if (!order) {
-    console.error(`❌ bkashSuccess: Order not found for orderId=${orderId}`);
+    logger.error(`bkashSuccess: Order not found for orderId=${orderId}`);
     return res.redirect(`${frontendUrl}/payment/failed?reason=Order not found`);
   }
 
@@ -240,24 +266,15 @@ export const bkashSuccess = asyncHandler(async (req, res) => {
         clearCache('cache:/api/admin/dashboard*');
         
         const io = req.app.get('io');
-        console.log('🚀 PAYMENT SUCCESS (bKash): Emitting socket event', {
-          hasIo: !!io,
-          orderId: order._id,
-          paymentStatus: 'Completed',
-          timestamp: new Date().toISOString()
-        });
-        
         if (io) {
           io.emit('new_order', order);
-          console.log('✅ PAYMENT SUCCESS (bKash): Socket.io "new_order" event emitted');
-        } else {
-          console.error('❌ PAYMENT SUCCESS (bKash): Socket.io instance not available!');
+          logger.info('bKash payment success, new_order event emitted', { orderId: order._id });
         }
         
         return res.redirect(`${frontendUrl}/payment/success?orderId=${order._id}`);
       }
     } catch (err) {
-      console.error(`❌ bkashSuccess: bKash execute failed:`, err.message);
+      console.error(` bkashSuccess: bKash execute failed:`, err.message);
       return res.redirect(`${frontendUrl}/payment/failed?reason=bKash execution error`);
     }
   }
@@ -280,68 +297,77 @@ export const paymentCancel = asyncHandler(async (req, res) => {
 
 export const ipn = asyncHandler(async (req, res) => {
   const { val_id, tran_id } = req.body;
-  const order = await Order.findOne({ "paymentResult.transactionId": tran_id });
-  if (order && order.paymentResult.status === "Pending") {
-    order.paymentResult.status = "Completed";
-    order.paymentResult.val_id = val_id;
-    await order.save();
-    await finalizeOrderProcessing(order);
-    clearCache('cache:/api/admin/dashboard*');
-    
-    const io = req.app.get('io');
-    console.log('🚀 IPN PAYMENT SUCCESS: Emitting socket event', {
-      hasIo: !!io,
-      orderId: order._id,
-      paymentStatus: 'Completed',
-      timestamp: new Date().toISOString()
-    });
-    
-    if (io) {
-      io.emit('new_order', order);
-      console.log('✅ IPN PAYMENT SUCCESS: Socket.io "new_order" event emitted');
-    } else {
-      console.error('❌ IPN PAYMENT SUCCESS: Socket.io instance not available!');
-    }
+
+  if (!val_id || !tran_id) {
+    return res.status(400).send("Bad Request: Missing validation parameters.");
   }
-  res.status(200).send("OK");
+
+  const order = await Order.findOne({ "paymentResult.transactionId": tran_id });
+  if (!order || order.paymentResult.status === "Completed") {
+    return res.status(200).send("IPN Acknowledged: Order already completed or not found.");
+  }
+
+  const apiKeys = await ApiKey.findOne();
+  const storeId = apiKeys?.sslStoreId || process.env.SSL_STORE_ID;
+  const rawStorePass = apiKeys?.sslStorePassword ? decrypt(apiKeys.sslStorePassword) : process.env.SSL_STORE_PASSWORD;
+  const isLive = apiKeys?.sslIsTest === false || process.env.NODE_ENV === "production";
+
+  try {
+    const sslcz = new SSLCommerzPayment(storeId.trim(), rawStorePass.trim(), isLive);
+    const validationData = await sslcz.validate({ val_id });
+
+    const isStatusValid = validationData.status === "VALID" || validationData.status === "VALIDATED";
+    const paidAmount = Number(validationData.amount || validationData.currency_amount || 0);
+
+    if (isStatusValid && Math.abs(paidAmount - Number(order.totalPrice)) <= 0.01) {
+      order.paymentResult.status = "Completed";
+      order.paymentResult.val_id = val_id;
+      order.orderStatus = "Processing";
+      await order.save();
+
+      await finalizeOrderProcessing(order);
+      clearCache('cache:/api/admin/dashboard*');
+
+      const io = req.app.get('io');
+      if (io) io.emit('new_order', order);
+
+      return res.status(200).send("IPN Processed Successfully");
+    }
+
+    console.warn(` IPN Validation Failed for transaction: ${tran_id}`);
+    return res.status(400).send("IPN Verification Failed");
+  } catch (err) {
+    console.error(" IPN Handler Error:", err.message);
+    return res.status(500).send("Internal Server Error processing IPN");
+  }
 });
 
 export const getMyOrders = asyncHandler(async (req, res) => {
-  const userId = getUserIdFromReq(req);
-  
-  console.log("🔍 GET MY ORDERS DEBUG", {
-    userId,
-    authUser: req.user?._id,
-    headers: {
-      authorization: req.headers.authorization ? "✅ Present" : "❌ Missing",
-      guestId: req.headers["x-guest-id"]
-    }
-  });
-
-  if (!userId) {
-    console.warn("⚠️ NO USER ID FOUND");
-    return res.status(401).json({ message: "Identification required." });
-  }
-
   let query;
-  if (mongoose.Types.ObjectId.isValid(userId)) {
-    query = { user: userId };
-  } else if (userId) {
-    query = { guestId: userId };
+
+  // 1. Authenticated User: Strictly use JWT verified identity
+  if (req.user && req.user._id) {
+    query = { user: req.user._id };
   } else {
-    // Ultimate fallback for tracking
-    const phone = req.query.phone || req.user?.phone;
-    if (phone) {
-      query = { "shippingAddress.phone": phone };
-    } else {
-      return res.json([]); 
+    // 2. Guest Context: Strictly isolate to guest orders
+    const rawGuestHeader = req.headers["x-guest-id"];
+    const sanitizedGuestId = sanitizeGuestId(rawGuestHeader);
+
+    if (!sanitizedGuestId) {
+      return res.status(401).json({
+        success: false,
+        message: "Valid guest session or user authentication required."
+      });
     }
+
+    query = {
+      guestId: sanitizedGuestId,
+      isGuest: true
+    };
   }
 
   const page = parseInt(req.query.page, 10);
-  const limit = parseInt(req.query.limit, 10) || 5;
-
-  console.log("📦 ORDER QUERY", { query, page, limit });
+  const limit = parseInt(req.query.limit, 10) || 10;
 
   if (!isNaN(page) && page > 0) {
     const skip = (page - 1) * limit;
@@ -353,7 +379,6 @@ export const getMyOrders = asyncHandler(async (req, res) => {
       .populate("orderItems.product", "name images slug")
       .populate("orderItems.size", "name");
     
-    console.log("✅ ORDERS FOUND (Paginated)", { count: orders.length, total });
     return res.json({
       orders,
       total,
@@ -367,10 +392,8 @@ export const getMyOrders = asyncHandler(async (req, res) => {
     .populate("orderItems.product", "name images slug")
     .populate("orderItems.size", "name");
   
-  console.log("✅ ORDERS FOUND (All)", { count: orders.length });
   res.json(orders);
 });
-
 
 export const getOrderById = asyncHandler(async (req, res) => {
   const { id } = req.params;
@@ -383,9 +406,9 @@ export const getOrderById = asyncHandler(async (req, res) => {
       .populate({ path: "user", select: "name email avatar role", populate: { path: "role" } })
       .populate("orderItems.product", "name images slug")
       .populate("orderItems.size", "name");
-  } else if (id.length >= 6 && phone) {
-    // Support for short IDs (e.g. last 8 chars) when phone is provided
-    const orders = await Order.find({ "shippingAddress.phone": phone })
+  } else if (id && id.length >= 6 && phone && typeof phone === "string") {
+    const cleanPhone = phone.trim();
+    const orders = await Order.find({ "shippingAddress.phone": cleanPhone })
       .populate({ path: "user", select: "name email avatar role", populate: { path: "role" } })
       .populate("orderItems.product", "name images slug")
       .populate("orderItems.size", "name");
@@ -397,17 +420,26 @@ export const getOrderById = asyncHandler(async (req, res) => {
 
   if (!order) return res.status(404).json({ message: "Protocol not found." });
 
-  const currentUserId = getUserIdFromReq(req); 
+  const userRole = req.user?.role?.name;
+  const isAdmin = userRole === 'admin' || userRole === 'superadmin';
+
   const orderUserId = order.user?._id ? order.user._id.toString() : order.user?.toString();
-  const isAdmin = req.user?.role?.name === 'admin' || req.user?.role?.name === 'superadmin';
-  const isRegisteredOwner = order.user && orderUserId === currentUserId;
-  const isGuestOwner = order.isGuest && order.guestId === currentUserId;
+  const isRegisteredOwner = Boolean(
+    req.user?._id && orderUserId && orderUserId === req.user._id.toString()
+  );
+
+  const rawGuestHeader = req.headers["x-guest-id"];
+  const sanitizedGuestId = sanitizeGuestId(rawGuestHeader);
+  const isGuestOwner = Boolean(
+    order.isGuest && sanitizedGuestId && order.guestId === sanitizedGuestId
+  );
   
-  // Also allow if phone number matches (for tracking without guest session)
-  const isPhoneMatch = phone && order.shippingAddress?.phone === phone;
+  const isPhoneMatch = Boolean(
+    phone && typeof phone === "string" && order.shippingAddress?.phone === phone.trim()
+  );
 
   if (!isRegisteredOwner && !isGuestOwner && !isAdmin && !isPhoneMatch) {
-    return res.status(401).json({ message: "Access Denied." });
+    return res.status(403).json({ message: "Access Denied: Insufficient authorization." });
   }
 
   res.json(order);
@@ -424,16 +456,27 @@ export const getOrderReport = asyncHandler(async (req, res) => {
   }
 
   // Security Check
-  const currentUserId = getUserIdFromReq(req); 
+  const userRole = req.user?.role?.name;
+  const isAdmin = userRole === 'admin' || userRole === 'superadmin';
+
   const orderUserId = order.user?._id ? order.user._id.toString() : order.user?.toString();
-  const isAdmin = req.user?.role?.name === 'admin' || req.user?.role?.name === 'superadmin';
-  const isRegisteredOwner = order.user && orderUserId === currentUserId;
-  const isGuestOwner = order.isGuest && order.guestId === currentUserId;
+  const isRegisteredOwner = Boolean(
+    req.user?._id && orderUserId && orderUserId === req.user._id.toString()
+  );
+
+  const rawGuestHeader = req.headers["x-guest-id"];
+  const sanitizedGuestId = sanitizeGuestId(rawGuestHeader);
+  const isGuestOwner = Boolean(
+    order.isGuest && sanitizedGuestId && order.guestId === sanitizedGuestId
+  );
+  
   const { phone } = req.query;
-  const isPhoneMatch = phone && order.shippingAddress?.phone === phone;
+  const isPhoneMatch = Boolean(
+    phone && typeof phone === "string" && order.shippingAddress?.phone === phone.trim()
+  );
 
   if (!isRegisteredOwner && !isGuestOwner && !isAdmin && !isPhoneMatch) {
-    return res.status(401).json({ message: "Access Denied." });
+    return res.status(403).json({ message: "Access Denied: Insufficient authorization." });
   }
 
   const doc = new PDFDocument({ margin: 50 });
@@ -446,7 +489,7 @@ export const getOrderReport = asyncHandler(async (req, res) => {
 
   // Brand Header
   const settings = await PageSetting.findOne();
-  const siteName = settings?.branding?.siteName || "Vanguard";
+  const siteName = settings?.branding?.siteName || "Store";
   
   doc.fontSize(25).font('Helvetica-Bold').text(siteName.toUpperCase(), { align: 'right' });
   doc.fontSize(10).font('Helvetica').text("Official Order Receipt", { align: 'right' });

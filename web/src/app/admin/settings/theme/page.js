@@ -1,172 +1,212 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Save } from "lucide-react";
+import { Save, Check, RotateCcw } from "lucide-react";
 import { useSettings } from "@/app/admin/settings/lib/useSettings";
-import { Card, CardContent } from "@/components/ui/card";
+import { useAppStore } from "@/store/appStore";
+import { 
+  AdminCard, 
+  AdminCardHeader, 
+  AdminCardTitle, 
+  AdminCardDescription, 
+  AdminCardContent, 
+  AdminCardFooter 
+} from "@/app/admin/_components/AdminCard";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+
+const THEME_COLORS = [
+  { name: "Zinc", label: "Neutral Zinc", class: "bg-zinc-900 dark:bg-zinc-100" },
+  { name: "Rose", label: "Modern Rose", class: "bg-rose-600" },
+  { name: "Blue", label: "Cobalt Blue", class: "bg-blue-600" },
+  { name: "Green", label: "Emerald Green", class: "bg-emerald-600" },
+  { name: "Orange", label: "Amber Orange", class: "bg-amber-600" },
+  { name: "Amethyst", label: "Royal Violet", class: "bg-purple-600" },
+  { name: "Teal", label: "Cyber Teal", class: "bg-teal-600" },
+];
+
+const FONTS = [
+  { name: "Inter", label: "Inter (Modern Sans)" },
+  { name: "Roboto", label: "Roboto (Clean Standard)" },
+  { name: "Plus Jakarta Sans", label: "Plus Jakarta Sans (Friendly Sans)" },
+  { name: "Outfit", label: "Outfit (Fashion & Lifestyle)" },
+  { name: "Geist", label: "Geist (Technical Precision)" },
+];
 
 export default function ThemePage() {
   const { settings, isLoading, updateSettings, isUpdating } = useSettings();
+  const storeThemeColor = useAppStore((state) => state.themeColor);
+  const storeThemeFont = useAppStore((state) => state.themeFont);
+  const setThemeColor = useAppStore((state) => state.setThemeColor);
+  const setThemeFont = useAppStore((state) => state.setThemeFont);
+
   const [formData, setFormData] = useState({
     defaultThemeColor: "Zinc",
     defaultThemeFont: "Inter",
     activeTheme: "executive",
   });
 
-  // Sync state with React Query cache instantly on load/update
   useEffect(() => {
     if (settings?.branding) {
+      const savedColor = settings.branding.defaultThemeColor || "Zinc";
+      const savedFont = settings.branding.defaultThemeFont || "Inter";
+      const savedTheme = settings.branding.activeTheme || "executive";
+      
       setFormData({
-        defaultThemeColor: settings.branding.defaultThemeColor || "Zinc",
-        defaultThemeFont: settings.branding.defaultThemeFont || "Inter",
-        activeTheme: settings.branding.activeTheme || "executive",
+        defaultThemeColor: savedColor,
+        defaultThemeFont: savedFont,
+        activeTheme: savedTheme,
       });
+
+      // Ensure store matches saved settings if not already set
+      if (storeThemeColor !== savedColor) {
+        setThemeColor(savedColor);
+      }
+      if (storeThemeFont !== savedFont) {
+        setThemeFont(savedFont);
+      }
     }
   }, [settings]);
 
+  // 🎨 Instant Live Color Preview
+  const handleColorSelect = (colorName) => {
+    setFormData((prev) => ({ ...prev, defaultThemeColor: colorName }));
+    setThemeColor(colorName); // Immediately updates CSS variables on document.documentElement
+  };
+
+  // 🔤 Instant Live Font Preview
+  const handleFontSelect = (fontName) => {
+    setFormData((prev) => ({ ...prev, defaultThemeFont: fontName }));
+    setThemeFont(fontName); // Immediately updates font on document.documentElement
+  };
+
+  // 🔄 Discard Changes back to saved settings
+  const handleDiscard = () => {
+    if (settings?.branding) {
+      const savedColor = settings.branding.defaultThemeColor || "Zinc";
+      const savedFont = settings.branding.defaultThemeFont || "Inter";
+      setFormData({
+        defaultThemeColor: savedColor,
+        defaultThemeFont: savedFont,
+        activeTheme: settings.branding.activeTheme || "executive",
+      });
+      setThemeColor(savedColor);
+      setThemeFont(savedFont);
+    }
+  };
+
   const handleSave = async () => {
-    // Branding update includes theme settings
     const updatedBranding = { ...settings?.branding, ...formData };
-    
     const payload = new FormData();
     payload.append("branding", JSON.stringify(updatedBranding));
-
     await updateSettings(payload);
   };
 
   if (isLoading && !settings) {
-    return <div className="animate-pulse h-96 bg-muted rounded-3xl" />;
+    return <Skeleton className="h-96 w-full rounded-2xl" />;
   }
 
-  return (
-    <Card className="rounded-[2rem] md:rounded-[3rem] border-border/10 bg-card/30 backdrop-blur-2xl shadow-2xl overflow-hidden">
-      <CardContent className="p-6 md:p-16">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-16"
-        >
-          <section className="space-y-6">
-            <div>
-              <h2 className="text-lg font-bold text-foreground">Theme Colors</h2>
-              <p className="text-xs text-muted-foreground mt-1">Pick your brand's main color</p>
-            </div>
+  const hasChanges = 
+    formData.defaultThemeColor !== (settings?.branding?.defaultThemeColor || "Zinc") ||
+    formData.defaultThemeFont !== (settings?.branding?.defaultThemeFont || "Inter");
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-8">
-              {[
-                { name: "Zinc", color: "bg-zinc-900 dark:bg-white" },
-                { name: "Rose", color: "bg-rose-600" },
-                { name: "Blue", color: "bg-blue-600" },
-                { name: "Green", color: "bg-emerald-500" },
-                { name: "Orange", color: "bg-orange-500" },
-                { name: "Amethyst", color: "bg-purple-500" },
-                { name: "Teal", color: "bg-teal-500" },
-              ].map((item) => (
+  return (
+    <div className="space-y-6">
+      <AdminCard>
+        <AdminCardHeader className="border-b border-border/60 pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <AdminCardTitle className="text-base font-semibold">Brand Color Palette</AdminCardTitle>
+              <AdminCardDescription className="text-xs text-muted-foreground mt-0.5">
+                Select your brand&apos;s primary color. Changes apply live across buttons, active rings, and highlight elements.
+              </AdminCardDescription>
+            </div>
+            {hasChanges && (
+              <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 px-2.5 py-1 rounded-full w-fit">
+                Live Preview Active (Unsaved)
+              </span>
+            )}
+          </div>
+        </AdminCardHeader>
+
+        <AdminCardContent className="space-y-6 pt-5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
+            {THEME_COLORS.map((item) => {
+              const isSelected = formData.defaultThemeColor === item.name;
+              return (
                 <button
                   key={item.name}
-                  onClick={() => setFormData({ ...formData, defaultThemeColor: item.name })}
-                  className="group flex flex-col items-center gap-4 transition-all"
+                  onClick={() => handleColorSelect(item.name)}
                   type="button"
-                >
-                  <div className={cn(
-                    "w-16 h-16 rounded-full shadow-2xl transition-all flex items-center justify-center relative",
-                    item.color,
-                    formData.defaultThemeColor === item.name ? "ring-4 ring-offset-4 ring-foreground" : "scale-90 opacity-40 hover:opacity-100 hover:scale-100"
-                  )}>
-                    {formData.defaultThemeColor === item.name && (
-                      <div className="absolute inset-0 bg-white/20 rounded-full animate-ping" />
-                    )}
-                  </div>
-                  <span className={cn(
-                    "text-xs font-semibold transition-colors",
-                    formData.defaultThemeColor === item.name ? "text-foreground" : "text-muted-foreground"
-                  )}>
-                    {item.name}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="space-y-6 pt-16 border-t border-border/5">
-            <div>
-              <h2 className="text-lg font-bold text-foreground">Text Fonts</h2>
-              <p className="text-xs text-muted-foreground mt-1">Choose the main font for your site</p>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
-              {[
-                "Inter", "Roboto", "Outfit", "Playfair Display",
-                "Montserrat", "Space Grotesk", "Poppins", "Syncopate"
-              ].map((font) => (
-                <button
-                  key={font}
-                  onClick={() => setFormData({ ...formData, defaultThemeFont: font })}
                   className={cn(
-                    "group relative p-6 rounded-3xl border-2 transition-all duration-500 text-left",
-                    formData.defaultThemeFont === font
-                      ? "border-accent-secondary bg-accent-secondary/5 shadow-2xl"
-                      : "border-border/5 hover:border-border/20 bg-muted/20"
+                    "p-3 rounded-xl border text-center flex flex-col items-center gap-2.5 transition-all cursor-pointer",
+                    isSelected
+                      ? "border-primary bg-primary/10 ring-2 ring-primary shadow-2xs font-semibold"
+                      : "border-border/60 hover:border-border bg-card hover:bg-muted/30"
                   )}
-                  type="button"
                 >
-                  <div className="flex flex-col gap-4">
-                    <span className="text-2xl font-black italic tracking-tighter" style={{ fontFamily: font }}>Aa</span>
-                    <span className="text-xs font-semibold opacity-60">{font}</span>
+                  <div className={cn("size-8 rounded-full shadow-xs flex items-center justify-center transition-transform hover:scale-105", item.class)}>
+                    {isSelected && <Check className="size-4 text-white drop-shadow-sm" />}
                   </div>
-                  {formData.defaultThemeFont === font && (
-                    <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-accent-secondary animate-pulse" />
-                  )}
+                  <span className="text-xs font-medium text-foreground">{item.name}</span>
                 </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="space-y-6 pt-16 border-t border-border/5">
-            <div>
-              <h2 className="text-lg font-bold text-foreground">Design Preset</h2>
-              <p className="text-xs text-muted-foreground mt-1">Pick a visual style for your store</p>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-6">
-              {["executive", "streetwear", "earth", "luxury", "cyber"].map((theme) => (
-                <button
-                  key={theme}
-                  onClick={() => setFormData({ ...formData, activeTheme: theme })}
-                  className={cn(
-                    "group relative p-6 rounded-3xl border-2 transition-all duration-500",
-                    formData.activeTheme === theme
-                      ? "border-accent-secondary bg-accent-secondary/5 shadow-2xl"
-                      : "border-border/5 hover:border-border/20 bg-muted/20"
-                  )}
-                  type="button"
-                >
-                  <span className="text-xs font-semibold opacity-60 group-hover:opacity-100 transition-opacity">
-                    {theme}
-                  </span>
-                  {formData.activeTheme === theme && (
-                    <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-accent-secondary animate-pulse" />
-                  )}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <div className="pt-16 border-t border-border/5 flex justify-end">
-            <Button
-              onClick={handleSave}
-              disabled={isUpdating}
-              className="bg-foreground text-background hover:bg-accent-secondary hover:text-white px-10 h-14 rounded-2xl font-bold text-xs shadow-xl transition-all active:scale-95 group"
-            >
-              <Save size={16} className={cn("mr-2", isUpdating && "animate-pulse")} />
-              {isUpdating ? "Saving..." : "Save Changes"}
-            </Button>
+              );
+            })}
           </div>
-        </motion.div>
-      </CardContent>
-    </Card>
+
+          <div className="pt-5 border-t border-border/50 space-y-4">
+            <div>
+              <h3 className="text-xs font-semibold text-foreground">Typography Family</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Select the primary font family for storefront headings and UI elements.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {FONTS.map((font) => {
+                const isSelected = formData.defaultThemeFont === font.name;
+                return (
+                  <button
+                    key={font.name}
+                    type="button"
+                    onClick={() => handleFontSelect(font.name)}
+                    className={cn(
+                      "p-3.5 rounded-xl border text-left transition-all cursor-pointer",
+                      isSelected
+                        ? "border-primary bg-primary/10 ring-2 ring-primary shadow-2xs font-semibold"
+                        : "border-border/60 hover:border-border bg-card hover:bg-muted/30"
+                    )}
+                  >
+                    <p className="text-xs font-semibold text-foreground">{font.label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">The quick brown fox jumps</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </AdminCardContent>
+
+        <AdminCardFooter className="border-t border-border/60 pt-4 flex items-center justify-between">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleDiscard}
+            disabled={!hasChanges || isUpdating}
+            className="h-10 text-xs gap-1.5"
+          >
+            <RotateCcw className="size-3.5" /> Reset Preview
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={isUpdating}
+            className="h-10 text-xs gap-2"
+          >
+            <Save className="size-4" />
+            {isUpdating ? "Saving..." : "Save Changes"}
+          </Button>
+        </AdminCardFooter>
+      </AdminCard>
+    </div>
   );
 }

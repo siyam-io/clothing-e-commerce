@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   ShoppingBag,
+  Store,
   Shirt,
   FolderTree,
   Zap,
@@ -21,6 +22,7 @@ export const navGroups = [
     label: "Management",
     items: [
       { name: "Dashboard", href: "/admin", icon: <LayoutDashboard size={18} />, permission: ["dashboard:view", "reports:view"] },
+      { name: "POS System", href: "/admin/orders/new", icon: <Store size={18} className="text-amber-500" />, permission: "orders:view" },
       { name: "Orders", href: "/admin/orders", icon: <ShoppingBag size={18} />, permission: "orders:view" },
       { name: "Products", href: "/admin/products", icon: <Shirt size={18} />, permission: "products:view" },
       { name: "Categories", href: "/admin/categories", icon: <FolderTree size={18} />, permission: "categories:view" },

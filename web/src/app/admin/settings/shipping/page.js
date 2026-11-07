@@ -1,14 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Truck, Save, Info, Plus, Trash2, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Truck, Save, Plus, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import { useSettings } from "@/app/admin/settings/lib/useSettings";
-import { swalToast, swalError } from "@/utils/swal";
+import { notify } from "@/utils/swal";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { 
+  AdminCard, 
+  AdminCardHeader, 
+  AdminCardTitle, 
+  AdminCardDescription, 
+  AdminCardContent, 
+  AdminCardFooter 
+} from "@/app/admin/_components/AdminCard";
+import FormInput from "@/app/admin/_components/FormInput";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import { Price } from "@/components/common/Price";
 
 export default function ShippingSettingsPage() {
   const { settings, isLoading, updateSettings, isUpdating } = useSettings();
@@ -32,7 +41,7 @@ export default function ShippingSettingsPage() {
 
   const handleAddCourier = () => {
     if (!newCourier.name.trim() || !newCourier.charge) {
-      swalToast("Courier Name and Charge are required", "error");
+      notify.error("Missing Information", "Courier name and delivery charge are required");
       return;
     }
     
@@ -50,7 +59,7 @@ export default function ShippingSettingsPage() {
     }));
 
     setNewCourier({ name: "", charge: "", estimatedDays: "" });
-    swalToast("Courier added to batch list", "success");
+    notify.success("Courier added to list");
   };
 
   const handleToggleCourier = (index) => {
@@ -67,188 +76,157 @@ export default function ShippingSettingsPage() {
       list.splice(index, 1);
       return { ...prev, couriers: list };
     });
-    swalToast("Courier removed from batch list", "success");
+    notify.success("Courier removed");
   };
 
   const handleSave = async () => {
-    try {
-      await updateSettings({
-        shipping: formData,
-      });
-    } catch (error) {
-      // Error alerts are automatically managed by the hook
-    }
+    const payload = new FormData();
+    payload.append("shipping", JSON.stringify(formData));
+    await updateSettings(payload);
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (isLoading && !settings) return <Skeleton className="h-96 w-full rounded-2xl" />;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="max-w-6xl mx-auto space-y-8 pb-16"
-    >
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Custom Courier Configuration */}
-        <div className="lg:col-span-2 space-y-8">
-          <Card className="border border-border/80 dark:border-border/10 bg-card rounded-[2.5rem] shadow-2xl overflow-hidden">
-            <CardContent className="p-8 sm:p-12 space-y-10">
-              
-              {/* Input Agency Form */}
-              <div className="p-6 sm:p-8 rounded-[2rem] bg-accent/20 border border-slate-200 dark:border-border/10 space-y-6">
-                <h3 className="text-sm font-bold text-accent-secondary">Add Courier</h3>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold text-muted-foreground ml-1">Courier Name</Label>
-                    <Input
-                      placeholder="e.g. Steadfast Courier"
-                      value={newCourier.name}
-                      onChange={(e) => setNewCourier({ ...newCourier, name: e.target.value })}
-                      className="h-12 px-4 rounded-xl bg-background border border-slate-300 dark:border-border/40 font-bold text-xs text-foreground"
-                    />
-                  </div>
+    <div className="space-y-6">
+      <AdminCard>
+        <AdminCardHeader className="border-b border-border/60 pb-4">
+          <AdminCardTitle className="text-base font-semibold">Shipping Rates & Couriers</AdminCardTitle>
+          <AdminCardDescription className="text-xs text-muted-foreground mt-0.5">
+            Configure delivery methods, local shipping zones, and delivery fee calculation.
+          </AdminCardDescription>
+        </AdminCardHeader>
 
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold text-muted-foreground ml-1">Delivery Charge (BDT)</Label>
-                    <Input
-                      type="number"
-                      placeholder="e.g. 120"
-                      value={newCourier.charge}
-                      onChange={(e) => setNewCourier({ ...newCourier, charge: e.target.value })}
-                      className="h-12 px-4 rounded-xl bg-background border border-slate-300 dark:border-border/40 font-bold text-xs text-foreground"
-                    />
-                  </div>
+        <AdminCardContent className="space-y-6 pt-5">
+          {/* Add New Courier Form */}
+          <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-4">
+            <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Plus className="size-3.5 text-primary" /> Add New Shipping Method
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-foreground">Method / Zone Name *</label>
+                <input
+                  type="text"
+                  value={newCourier.name}
+                  onChange={(e) => setNewCourier({ ...newCourier, name: e.target.value })}
+                  placeholder="e.g. Inside Dhaka"
+                  className="w-full h-10 px-3 rounded-lg border border-border/70 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold text-muted-foreground ml-1">Est. Transit Duration</Label>
-                    <Input
-                      placeholder="e.g. 2-3 Days"
-                      value={newCourier.estimatedDays}
-                      onChange={(e) => setNewCourier({ ...newCourier, estimatedDays: e.target.value })}
-                      className="h-12 px-4 rounded-xl bg-background border border-slate-300 dark:border-border/40 font-bold text-xs text-foreground"
-                    />
-                  </div>
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-foreground">Delivery Charge (৳) *</label>
+                <input
+                  type="number"
+                  value={newCourier.charge}
+                  onChange={(e) => setNewCourier({ ...newCourier, charge: e.target.value })}
+                  placeholder="e.g. 70"
+                  className="w-full h-10 px-3 rounded-lg border border-border/70 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
 
-                <div className="flex justify-end pt-2">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-foreground">Estimated Delivery Time</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newCourier.estimatedDays}
+                    onChange={(e) => setNewCourier({ ...newCourier, estimatedDays: e.target.value })}
+                    placeholder="e.g. 2-3 Days"
+                    className="w-full h-10 px-3 rounded-lg border border-border/70 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
                   <Button
                     type="button"
                     onClick={handleAddCourier}
-                    className="h-12 px-6 rounded-xl bg-accent-secondary text-white font-bold text-xs uppercase tracking-wider shadow-lg hover:bg-foreground hover:text-background transition-all active:scale-95 flex items-center gap-2"
+                    className="h-10 text-xs shrink-0"
                   >
-                    <Plus size={16} /> Add Courier
+                    Add
                   </Button>
                 </div>
               </div>
-
-              {/* Courier Batch List */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-bold text-foreground ml-1">Couriers List</h3>
-                
-                {(!formData.couriers || formData.couriers.length === 0) ? (
-                  <div className="text-center py-12 rounded-[2rem] border-2 border-dashed border-border/10 bg-accent/5">
-                    <p className="text-xs font-bold text-muted-foreground italic">No custom couriers added yet</p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">Add couriers above to offer shipping choices at checkout.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <AnimatePresence>
-                      {formData.couriers.map((courier, index) => (
-                        <motion.div
-                          key={index}
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.95 }}
-                          className="flex items-center justify-between p-5 rounded-[2rem] bg-accent/10 border border-slate-200 dark:border-border/10 hover:border-accent-secondary/30 transition-all shadow-sm"
-                        >
-                          <div className="space-y-1">
-                            <h4 className="text-xs font-semibold text-foreground">{courier.name}</h4>
-                            <p className="text-[10px] font-bold text-muted-foreground/80">BDT {courier.charge} • <span className="italic">{courier.estimatedDays}</span></p>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            {/* Active Toggle Button */}
-                            <button
-                              type="button"
-                              onClick={() => handleToggleCourier(index)}
-                              className={`p-2 rounded-xl transition-all duration-300 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${
-                                courier.isActive 
-                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" 
-                                  : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
-                              }`}
-                            >
-                              {courier.isActive ? (
-                                <>
-                                  <ShieldCheck size={14} /> Active
-                                </>
-                              ) : (
-                                <>
-                                  <ShieldAlert size={14} /> Inactive
-                                </>
-                              )}
-                            </button>
-
-                            {/* Delete Button */}
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteCourier(index)}
-                              className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-500 hover:bg-rose-500 hover:text-white transition-all active:scale-90"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                  </div>
-                )}
-              </div>
-
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Action Panel */}
-        <div className="lg:col-span-1 space-y-8">
-          <Card className="border border-border/80 dark:border-border/10 bg-card rounded-[2.5rem] p-8 sm:p-10 shadow-xl">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-accent-secondary/10 flex items-center justify-center text-accent-secondary shrink-0">
-                <Info size={20} />
-              </div>
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold text-foreground">Custom Courier Config</h4>
-                <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                  Add courier methods, define pricing, and toggle status. These options populate the checkout selector dynamically.
-                </p>
-              </div>
             </div>
-          </Card>
+          </div>
 
+          {/* Couriers List */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-semibold text-foreground">Active Shipping Methods</h4>
+            {formData.couriers?.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">
+                No shipping zones defined yet. Add one above.
+              </p>
+            ) : (
+              <div className="divide-y divide-border/50 border border-border/60 rounded-xl overflow-hidden">
+                {formData.couriers.map((courier, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3.5 flex items-center justify-between bg-card hover:bg-muted/20 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-primary/10 text-primary border border-primary/20">
+                        <Truck className="size-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-foreground">{courier.name}</p>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-xs px-2 py-0.2 rounded-full",
+                              courier.isActive
+                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 border-emerald-200/60"
+                                : "bg-muted text-muted-foreground border-border/60"
+                            )}
+                          >
+                            {courier.isActive ? "Enabled" : "Disabled"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                          <span>Charge:</span>
+                          <strong className="text-foreground"><Price amount={courier.charge} /></strong>
+                          <span>• Time: {courier.estimatedDays}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleToggleCourier(idx)}
+                        className="h-8 text-xs"
+                      >
+                        {courier.isActive ? "Disable" : "Enable"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteCourier(idx)}
+                        className="size-8 text-muted-foreground hover:text-rose-600 hover:bg-rose-50"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </AdminCardContent>
+
+        <AdminCardFooter className="border-t border-border/60 pt-4 flex justify-end">
           <Button
             onClick={handleSave}
             disabled={isUpdating}
-            className="w-full h-20 rounded-[2.5rem] bg-foreground text-background font-bold uppercase tracking-wider text-xs shadow-2xl hover:bg-accent-secondary hover:text-white transition-all duration-300 active:scale-95 group"
+            className="h-10 text-xs gap-2"
           >
-            {isUpdating ? (
-              <div className="w-6 h-6 border-4 border-background border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                <Save size={20} className="mr-3 group-hover:scale-125 transition-transform" />
-                Save Settings
-              </>
-            )}
+            <Save className="size-4" />
+            {isUpdating ? "Saving..." : "Save Changes"}
           </Button>
-        </div>
-
-      </div>
-    </motion.div>
+        </AdminCardFooter>
+      </AdminCard>
+    </div>
   );
 }

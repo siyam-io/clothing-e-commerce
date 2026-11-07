@@ -2,6 +2,7 @@
 
 import { CreditCard, BadgePercent } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Price } from "@/components/common/Price";
 
 export default function OrderSummaryCard({
   mode = "create", // "create" or "edit"
@@ -49,14 +50,17 @@ export default function OrderSummaryCard({
         {/* Subtotal */}
         <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest opacity-60">
           <span>Subtotal</span>
-          <span className="font-black text-xs">৳{subtotal.toLocaleString()}</span>
+          <Price amount={subtotal} className="font-black text-xs text-background" />
         </div>
 
         {/* Shipping Price (Only for Create mode) */}
         {mode === "create" && (
           <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest opacity-60">
             <span>Delivery Charge</span>
-            <span className="font-black text-xs">+ ৳{shippingPrice}</span>
+            <span className="inline-flex items-baseline gap-0.5 text-xs font-black">
+              <span>+</span>
+              <Price amount={shippingPrice} className="text-background" />
+            </span>
           </div>
         )}
 
@@ -78,9 +82,10 @@ export default function OrderSummaryCard({
         {/* Grand Total */}
         <div className="flex justify-between items-end">
           <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-80">Grand Total</span>
-          <span className="text-3xl font-black tracking-tighter leading-none">
-            ৳{total.toLocaleString()}
-          </span>
+          <Price
+            amount={total}
+            className="text-3xl font-black leading-none text-background tracking-normal"
+          />
         </div>
       </div>
 

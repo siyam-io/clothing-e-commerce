@@ -20,6 +20,7 @@ import {
   useSortable 
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Price } from "@/components/common/Price";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -432,7 +433,11 @@ function ProductPicker({ selectedIds = [], onUpdate }) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-bold truncate">{product.name}</p>
-                <p className="text-[8px] text-muted-foreground font-medium uppercase tracking-tighter">{product.category?.name} • ৳{product.price}</p>
+                <div className="flex items-center gap-1 text-[8px] text-muted-foreground font-medium uppercase">
+                  <span>{product.category?.name}</span>
+                  <span>•</span>
+                  <Price amount={product.price} />
+                </div>
               </div>
               <div className={cn(
                 "w-5 h-5 rounded-full flex items-center justify-center border transition-all",
@@ -459,7 +464,10 @@ function ProductPicker({ selectedIds = [], onUpdate }) {
                    </div>
                    <div className="flex-1 min-w-0">
                       <p className="text-[9px] font-bold truncate">{product.name}</p>
-                      <p className="text-[7px] text-muted-foreground font-black uppercase tracking-tighter">৳{product.price}</p>
+                      <Price
+                        amount={product.price}
+                        className="text-[7px] text-muted-foreground font-black uppercase"
+                      />
                    </div>
                    <button 
                       onClick={(e) => {
@@ -688,9 +696,9 @@ export default function LayoutBuilderPage() {
   }
 
   return (
-    <div className="admin-page-container">
+    <div className="space-y-6">
       {/* 🏛️ Architecture Selector */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12 bg-card/30 p-8 rounded-[2.5rem] border border-border/10 backdrop-blur-xl">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-6 bg-card/70 p-6 rounded-2xl border border-border/60 backdrop-blur-md shadow-2xs">
         <div className="space-y-4">
             <div className="flex flex-wrap gap-3">
                 {architectures.map(arch => (

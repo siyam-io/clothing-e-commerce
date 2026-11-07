@@ -1,13 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import { Save } from "lucide-react";
 import { useSettings } from "@/app/admin/settings/lib/useSettings";
-import { Card, CardContent } from "@/components/ui/card";
+import { 
+  AdminCard, 
+  AdminCardHeader, 
+  AdminCardTitle, 
+  AdminCardDescription, 
+  AdminCardContent, 
+  AdminCardFooter 
+} from "@/app/admin/_components/AdminCard";
 import { Button } from "@/components/ui/button";
 import FormInput from "@/app/admin/_components/FormInput";
-import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ContactPage() {
   const { settings, isLoading, updateSettings, isUpdating } = useSettings();
@@ -18,7 +24,6 @@ export default function ContactPage() {
     whatsapp: "",
   });
 
-  // Sync state with React Query cache instantly on load/update
   useEffect(() => {
     if (settings?.contact) {
       setFormData({
@@ -36,17 +41,20 @@ export default function ContactPage() {
     await updateSettings(payload);
   };
 
-  if (isLoading && !settings) return <div className="animate-pulse h-96 bg-muted rounded-3xl" />;
+  if (isLoading && !settings) return <Skeleton className="h-96 w-full rounded-2xl" />;
 
   return (
-    <Card className="rounded-[2rem] md:rounded-[3rem] border-border/10 bg-card/30 backdrop-blur-2xl shadow-2xl overflow-hidden">
-      <CardContent className="p-6 md:p-16">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-12"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+    <div className="space-y-6">
+      <AdminCard>
+        <AdminCardHeader className="border-b border-border/60 pb-4">
+          <AdminCardTitle className="text-base font-semibold">Store Contact Channels</AdminCardTitle>
+          <AdminCardDescription className="text-xs text-muted-foreground mt-0.5">
+            Public customer service contact information displayed in footer and order confirmations.
+          </AdminCardDescription>
+        </AdminCardHeader>
+
+        <AdminCardContent className="space-y-5 pt-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <FormInput
               label="Phone Number"
               name="phone"
@@ -54,49 +62,49 @@ export default function ContactPage() {
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               errors={{}}
-              placeholder="+880 1234 567890"
+              placeholder="+880 1XXX XXXXXX"
             />
             <FormInput
-              label="WhatsApp"
+              label="WhatsApp Support Number"
               name="whatsapp"
               register={() => ({})}
               value={formData.whatsapp}
               onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
               errors={{}}
-              placeholder="+880 1234 567890"
+              placeholder="+880 1XXX XXXXXX"
             />
             <FormInput
-              label="Email Address"
+              label="Support Email Address"
               name="email"
               register={() => ({})}
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               errors={{}}
-              placeholder="contact@yourstore.com"
+              placeholder="support@clothingbrand.com"
             />
             <FormInput
-              label="Store Address"
+              label="Physical Store / Office Address"
               name="address"
               register={() => ({})}
               value={formData.address}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
               errors={{}}
-              placeholder="e.g. Sector 7, Uttara, Dhaka"
+              placeholder="House 12, Road 4, Banani, Dhaka"
             />
           </div>
+        </AdminCardContent>
 
-          <div className="pt-12 border-t border-border/5 flex justify-end">
-            <Button
-              onClick={handleSave}
-              disabled={isUpdating}
-              className="bg-foreground text-background hover:bg-accent-secondary hover:text-white px-10 h-14 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl transition-all active:scale-95 group"
-            >
-              <Save size={16} className={cn("mr-2", isUpdating && "animate-pulse")} />
-              {isUpdating ? "Updating Support..." : "Save Support Info"}
-            </Button>
-          </div>
-        </motion.div>
-      </CardContent>
-    </Card>
+        <AdminCardFooter className="border-t border-border/60 pt-4 flex justify-end">
+          <Button
+            onClick={handleSave}
+            disabled={isUpdating}
+            className="h-10 text-xs gap-2"
+          >
+            <Save className="size-4" />
+            {isUpdating ? "Saving..." : "Save Changes"}
+          </Button>
+        </AdminCardFooter>
+      </AdminCard>
+    </div>
   );
 }

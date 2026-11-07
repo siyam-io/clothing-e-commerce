@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getImageUrl } from "@/utils/imageUtils";
+import { Price } from "@/components/common/Price";
 
 export default function CartItemCard({
   item,
@@ -105,9 +106,10 @@ export default function CartItemCard({
                   <Plus size={12} className="sm:w-[13px] sm:h-[13px]" />
                 </Button>
               </div>
-              <p className="text-lg sm:text-2xl font-black tracking-tighter text-foreground">
-                ৳{(item.discountedPrice * item.quantity).toFixed(0)}
-              </p>
+              <Price
+                amount={(item.discountedPrice * item.quantity).toFixed(0)}
+                className="text-lg sm:text-2xl font-black text-foreground"
+              />
             </div>
           </div>
         </CardContent>

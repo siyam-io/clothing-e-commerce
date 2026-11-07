@@ -1,13 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Save } from "lucide-react";
+import { Save, Mail } from "lucide-react";
 import { useSettings } from "@/app/admin/settings/lib/useSettings";
-import { Card, CardContent } from "@/components/ui/card";
+import { 
+  AdminCard, 
+  AdminCardHeader, 
+  AdminCardTitle, 
+  AdminCardDescription, 
+  AdminCardContent, 
+  AdminCardFooter 
+} from "@/app/admin/_components/AdminCard";
 import { Button } from "@/components/ui/button";
 import FormInput from "@/app/admin/_components/FormInput";
-import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SMTPPage() {
   const { settings, isLoading, updateSettings, isUpdating } = useSettings();
@@ -19,7 +25,6 @@ export default function SMTPPage() {
     mailFrom: "",
   });
 
-  // Sync state with React Query cache instantly on load/update
   useEffect(() => {
     if (settings?.smtp) {
       setFormData({
@@ -38,19 +43,22 @@ export default function SMTPPage() {
     await updateSettings(payload);
   };
 
-  if (isLoading && !settings) return <div className="animate-pulse h-96 bg-muted rounded-3xl" />;
+  if (isLoading && !settings) return <Skeleton className="h-96 w-full rounded-2xl" />;
 
   return (
-    <Card className="rounded-[2rem] md:rounded-[3rem] border-border/10 bg-card/30 backdrop-blur-2xl shadow-2xl overflow-hidden">
-      <CardContent className="p-6 md:p-16">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-12"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+    <div className="space-y-6">
+      <AdminCard>
+        <AdminCardHeader className="border-b border-border/60 pb-4">
+          <AdminCardTitle className="text-base font-semibold">SMTP Email Server Settings</AdminCardTitle>
+          <AdminCardDescription className="text-xs text-muted-foreground mt-0.5">
+            Configure outbound mail delivery credentials for order invoices and password resets.
+          </AdminCardDescription>
+        </AdminCardHeader>
+
+        <AdminCardContent className="space-y-5 pt-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <FormInput
-              label="SMTP Host"
+              label="SMTP Server Host"
               name="mailHost"
               register={() => ({})}
               value={formData.mailHost}
@@ -65,49 +73,50 @@ export default function SMTPPage() {
               value={formData.mailPort}
               onChange={(e) => setFormData({...formData, mailPort: e.target.value})}
               errors={{}}
-              placeholder="e.g. 587"
+              placeholder="e.g. 587 or 465"
             />
             <FormInput
-              label="SMTP User / Email"
+              label="SMTP Username / Sender Email"
               name="mailUser"
               register={() => ({})}
               value={formData.mailUser}
               onChange={(e) => setFormData({...formData, mailUser: e.target.value})}
               errors={{}}
-              placeholder="e.g. info@yourstore.com"
+              placeholder="e.g. notifications@yourstore.com"
             />
             <FormInput
-              label="SMTP Password / App Pass"
+              label="SMTP Password / App Key"
               name="mailPass"
+              type="password"
               register={() => ({})}
               value={formData.mailPass}
               onChange={(e) => setFormData({...formData, mailPass: e.target.value})}
               errors={{}}
-              placeholder="SMTP Password"
+              placeholder="••••••••••••"
             />
             <FormInput
-              label="Mail From Name"
+              label="Sender Display Name"
               name="mailFrom"
               register={() => ({})}
               value={formData.mailFrom}
               onChange={(e) => setFormData({...formData, mailFrom: e.target.value})}
               errors={{}}
-              placeholder="e.g. Vanguard Store"
+              placeholder="e.g. Urban Attire Orders"
             />
           </div>
+        </AdminCardContent>
 
-          <div className="pt-12 border-t border-border/5 flex justify-end">
-            <Button
-              onClick={handleSave}
-              disabled={isUpdating}
-              className="bg-foreground text-background hover:bg-accent-secondary hover:text-white px-10 h-14 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl transition-all active:scale-95 group"
-            >
-              <Save size={16} className={cn("mr-2", isUpdating && "animate-pulse")} />
-              {isUpdating ? "Updating Email..." : "Save Email Config"}
-            </Button>
-          </div>
-        </motion.div>
-      </CardContent>
-    </Card>
+        <AdminCardFooter className="border-t border-border/60 pt-4 flex justify-end">
+          <Button
+            onClick={handleSave}
+            disabled={isUpdating}
+            className="h-10 text-xs gap-2"
+          >
+            <Save className="size-4" />
+            {isUpdating ? "Saving..." : "Save Changes"}
+          </Button>
+        </AdminCardFooter>
+      </AdminCard>
+    </div>
   );
 }

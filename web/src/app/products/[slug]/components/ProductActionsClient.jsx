@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { Price } from "@/components/common/Price";
 
 const DICTIONARY = {
   en: {
@@ -89,13 +90,16 @@ export default function ProductActionsClient({ product }) {
           {ui.price}
         </p>
         <div className="flex items-baseline gap-6">
-          <span className="text-6xl font-black tracking-tighter text-foreground italic">
-            ৳{discountedPrice.toFixed(0)}
-          </span>
+          <Price
+            amount={discountedPrice.toFixed(0)}
+            className="text-5xl md:text-6xl font-black text-foreground not-italic tracking-normal"
+          />
           {product.discount > 0 && (
-            <span className="text-2xl font-bold text-muted-foreground/30 line-through tracking-tighter italic">
-              ৳{product.price}
-            </span>
+            <Price
+              amount={product.price}
+              lineThrough
+              className="text-2xl font-bold text-muted-foreground/40 not-italic tracking-normal"
+            />
           )}
         </div>
       </div>
@@ -209,9 +213,10 @@ export default function ProductActionsClient({ product }) {
       {/* MOBILE ACTION BAR - FLOAT */}
       <div className="lg:hidden fixed bottom-6 left-6 right-6 z-[130] glass backdrop-blur-3xl p-5 rounded-[2.5rem] flex items-center gap-4 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] border-white/5 animate-in slide-in-from-bottom-20 duration-700">
         <div className="flex-1 min-w-0">
-          <p className="text-2xl font-black tracking-tighter leading-none text-foreground italic">
-            ৳{discountedPrice.toFixed(0)}
-          </p>
+          <Price
+            amount={discountedPrice.toFixed(0)}
+            className="text-2xl font-black text-foreground not-italic tracking-normal leading-none"
+          />
           <p className="text-[9px] text-accent-secondary uppercase font-black mt-1 truncate tracking-widest">
             {product.name}
           </p>

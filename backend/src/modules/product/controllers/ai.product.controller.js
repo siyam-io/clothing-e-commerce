@@ -14,7 +14,7 @@ export const generateProductAiContent = asyncHandler(async (req, res) => {
     });
   }
 
-  let siteName = "Vanguard";
+  let siteName = "Store";
   try {
     const settings = await PageSetting.findOne();
     if (settings && settings.branding && settings.branding.siteName) {
@@ -93,7 +93,7 @@ Your response must be a single, valid JSON object containing exactly these keys:
       data: aiData,
     });
   } catch (err) {
-    console.error("❌ GEMINI API ERROR:", err.message);
+    console.error(" GEMINI API ERROR:", err.message);
     res.status(500).json({
       success: false,
       message: `Failed to generate AI content: ${err.message}`,

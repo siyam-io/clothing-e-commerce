@@ -18,7 +18,7 @@ const reviewSchema = new mongoose.Schema({
     required: true,
     index: true,
   },
-  // 🌟 FIXED: ObjectId এবং ref: 'User' মুছে String করা হয়েছে
+  // User ID stored as string to support authenticated or verified buyer references
   user: {
     type: String, 
     required: true,

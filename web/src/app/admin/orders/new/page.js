@@ -1,389 +1,540 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import api from "@/lib/api";
 import { useAdminOrders } from "@/app/admin/orders/lib/useAdminOrders";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import AdminPageHeader, { AdminBackLink } from "@/app/admin/_components/AdminPageHeader";
-import { 
-  Package,
-  ShoppingBag,
-  User as UserIcon,
-  Truck,
-  CreditCard,
-  BadgePercent
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useAdminCategories } from "@/app/admin/categories/lib/useAdminCategories";
+import { useAuthStore } from "@/store/authStore";
+import { useAppStore } from "@/store/appStore";
+import { notify } from "@/utils/swal";
 
-// Reusable Components
-import OrderItemsEditor from "@/app/admin/orders/components/OrderItemsEditor";
-import OrderProductSearch from "@/app/admin/orders/components/OrderProductSearch";
-import OrderShippingForm from "@/app/admin/orders/components/OrderShippingForm";
-import OrderSummaryCard from "@/app/admin/orders/components/OrderSummaryCard";
+// POS Modular Components & Audio
+import PosHeader from "@/app/admin/orders/components/pos/PosHeader";
+import PosProductCatalog from "@/app/admin/orders/components/pos/PosProductCatalog";
+import PosCartRegister from "@/app/admin/orders/components/pos/PosCartRegister";
+import PosReceiptModal from "@/app/admin/orders/components/pos/PosReceiptModal";
+import PosHeldOrdersModal from "@/app/admin/orders/components/pos/PosHeldOrdersModal";
+import { playBeep, playErrorSound, playSuccessChime, playParkSound } from "@/app/admin/orders/lib/posAudio";
 
-export default function CreateAdminOrder() {
-  const router = useRouter();
-  const { createAdminOrder, isCreating: isCreatingAdminOrder, searchAdminProducts, searchAdminUsers } = useAdminOrders();
-  
-  // Set page title dynamically
+export default function PosNewOrderPage() {
+  const { user } = useAuthStore();
+  const { settings } = useAppStore();
+  const storeName = settings?.branding?.siteName || "Store";
+
+  const { searchAdminUsers, createAdminOrder, isCreating } = useAdminOrders();
+  const { categories } = useAdminCategories();
+
+  const searchInputRef = useRef(null);
+
+  // Set document title
   useEffect(() => {
-    document.title = "Create Order | Vanguard Admin";
-  }, []);
+    document.title = `POS Terminal | ${storeName} Admin`;
+  }, [storeName]);
 
-  // 🛒 Items State
-  const [items, setItems] = useState([]);
-  const [productSearch, setProductSearch] = useState("");
-
-  // 👤 Customer State
-  const [userSearch, setUserSearch] = useState("");
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [isGuest, setIsGuest] = useState(true);
-  const [guestDetails, setGuestDetails] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    address: "",
-  });
-
-  // 🚚 Logistics State
-  const [shippingRegion, setShippingRegion] = useState("dhaka"); // "dhaka", "outside", "custom"
-  const [customShippingPrice, setCustomShippingPrice] = useState(60);
-
-  // 🎟️ Financials State
-  const [couponCode, setCouponCode] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("COD");
-  const [orderStatus, setOrderStatus] = useState("Processing");
-
-  // 🔍 Data Fetching
-  const [products, setProducts] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [isSearchingProducts, setIsSearchingProducts] = useState(false);
-  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
-
-  // Debounced search effect for Products
+  // Global F2 shortcut to focus barcode search
   useEffect(() => {
-    const searchProducts = async () => {
-      if (!productSearch) {
-        setProducts([]);
-        return;
-      }
-      setIsSearchingProducts(true);
-      try {
-        const productsList = await searchAdminProducts(productSearch);
-        setProducts(productsList);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsSearchingProducts(false);
+    const handleKeyDown = (e) => {
+      if (e.key === "F2" || (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA")) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
       }
     };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
-    const timer = setTimeout(searchProducts, 300);
+  // 1. Product Catalog Filters & State
+  const [productSearch, setProductSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(productSearch);
+    }, 250);
     return () => clearTimeout(timer);
   }, [productSearch]);
 
-  // Debounced search effect for Users
-  useEffect(() => {
-    const searchUsers = async () => {
-      if (!userSearch || isGuest) {
-        setUsers([]);
-        return;
-      }
-      setIsSearchingUsers(true);
-      try {
-        const usersList = await searchAdminUsers(userSearch);
-        setUsers(usersList);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsSearchingUsers(false);
-      }
-    };
+  const { data: productsData, isLoading: isLoadingProducts } = useQuery({
+    queryKey: ["adminProducts", { search: debouncedSearch, category: selectedCategory, limit: 60, isActive: "true" }],
+    queryFn: async () => {
+      const { data } = await api.get("/admin/products", {
+        params: {
+          search: debouncedSearch || undefined,
+          category: selectedCategory !== "all" ? selectedCategory : undefined,
+          limit: 60,
+          isActive: "true",
+        },
+      });
+      return data;
+    },
+    staleTime: 1000 * 60 * 2,
+  });
 
-    const timer = setTimeout(searchUsers, 300);
-    return () => clearTimeout(timer);
-  }, [userSearch, isGuest]);
+  const products = productsData?.products || [];
 
-  // 🧮 Calculations
-  const subtotal = useMemo(() => {
-    return items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-  }, [items]);
-
-  const shippingPrice = useMemo(() => {
-    if (shippingRegion === "dhaka") return 60;
-    if (shippingRegion === "outside") return 120;
-    return Number(customShippingPrice) || 0;
-  }, [shippingRegion, customShippingPrice]);
-  const total = subtotal + shippingPrice;
+  // 2. Cart & Items State
+  const [items, setItems] = useState([]);
 
   const handleAddItem = (product, size) => {
     const sizeId = typeof size === "object" && size ? size._id : size;
-    const sizeName = typeof size === "object" && size ? size.name : size;
+    const sizeName = typeof size === "object" && size ? size.name : (size || "Standard");
 
-    const price = product.discount > 0 
-      ? product.price * (1 - product.discount / 100) 
+    const unitPrice = product.discount > 0
+      ? Math.round(product.price * (1 - product.discount / 100))
       : product.price;
 
+    // Find stock for selected size
+    let maxStock = 999;
+    if (product.sizes?.length > 0 && sizeId) {
+      const foundSize = product.sizes.find(
+        (s) => (s.size?._id || s.size)?.toString() === sizeId.toString()
+      );
+      if (foundSize) {
+        maxStock = foundSize.stock;
+      }
+    }
+
     const existingIndex = items.findIndex(
-      (i) => i.product === product._id && i.size === sizeId
+      (item) => item.product === product._id && item.size === sizeId
     );
 
     if (existingIndex > -1) {
-      const newItems = [...items];
-      newItems[existingIndex].quantity += 1;
-      setItems(newItems);
+      if (items[existingIndex].quantity >= maxStock) {
+        playErrorSound();
+        notify.error("Stock Limit", `Only ${maxStock} available in stock for size ${sizeName}.`);
+        return;
+      }
+      playBeep();
+      const updated = [...items];
+      updated[existingIndex].quantity += 1;
+      setItems(updated);
     } else {
+      if (maxStock < 1) {
+        playErrorSound();
+        notify.error("Out of Stock", `${product.name} is currently out of stock.`);
+        return;
+      }
+      playBeep();
       setItems([
         ...items,
         {
           product: product._id,
           name: product.name,
-          image: product.images?.[0],
+          image: product.images?.[0] || "",
           size: sizeId,
-          sizeName: sizeName,
+          sizeName,
           quantity: 1,
-          price
+          price: unitPrice,
+          maxStock,
         },
       ]);
     }
-    setProductSearch("");
   };
 
   const handleUpdateQuantity = (index, delta) => {
-    const newItems = [...items];
-    newItems[index].quantity = Math.max(1, newItems[index].quantity + delta);
-    setItems(newItems);
+    const updated = [...items];
+    const current = updated[index];
+    if (!current) return;
+
+    const newQty = current.quantity + delta;
+    if (newQty <= 0) {
+      handleRemoveItem(index);
+      return;
+    }
+
+    if (delta > 0 && newQty > current.maxStock) {
+      playErrorSound();
+      notify.error("Stock Limit", `Only ${current.maxStock} available in stock.`);
+      return;
+    }
+
+    current.quantity = newQty;
+    setItems(updated);
   };
 
   const handleRemoveItem = (index) => {
-    setItems(items.filter((_, i) => i !== index));
+    setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (items.length === 0) return;
+  const handleClearCart = () => {
+    setItems([]);
+  };
 
-    const shippingAddress = isGuest ? {
-      ...guestDetails,
-    } : {
-      name: selectedUser.name,
-      email: selectedUser.email,
-      phone: guestDetails.phone,
-      address: guestDetails.address,
+  // 3. Customer & Logistics State
+  const [customerMode, setCustomerMode] = useState("walkin"); // "walkin", "member", "delivery"
+  const [walkinPhone, setWalkinPhone] = useState("");
+  const [customerData, setCustomerData] = useState({
+    selectedUser: null,
+    name: "",
+    phone: "",
+    address: "",
+  });
+
+  const [deliveryType, setDeliveryType] = useState("counter"); // "counter" (৳0) or "delivery"
+  const [shippingRegion, setShippingRegion] = useState("dhaka");
+  const [customShippingPrice, setCustomShippingPrice] = useState(60);
+
+  // 4. Financials & Payment State
+  const [couponCode, setCouponCode] = useState("");
+  const [manualDiscountType, setManualDiscountType] = useState("flat");
+  const [manualDiscountValue, setManualDiscountValue] = useState(0);
+
+  const [paymentMethod, setPaymentMethod] = useState("Cash");
+  const [cashReceived, setCashReceived] = useState("");
+  const [transactionId, setTransactionId] = useState("");
+  const [senderPhone, setSenderPhone] = useState("");
+
+  // Split payment state
+  const [splitCash, setSplitCash] = useState("");
+  const [splitDigital, setSplitDigital] = useState("");
+  const [splitMethod, setSplitMethod] = useState("bKash");
+
+  // Order Note / Remarks
+  const [orderNote, setOrderNote] = useState("");
+
+  // 5. Held / Parked Orders State
+  const [heldOrders, setHeldOrders] = useState([]);
+  const [showHeldModal, setShowHeldModal] = useState(false);
+
+  // Load held orders from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("pos_held_orders_v1");
+      if (saved) {
+        setHeldOrders(JSON.parse(saved));
+      }
+    } catch {}
+  }, []);
+
+  // Save held orders to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("pos_held_orders_v1", JSON.stringify(heldOrders));
+    } catch {}
+  }, [heldOrders]);
+
+  const handleHoldOrder = () => {
+    if (items.length === 0) {
+      notify.error("Cart Empty", "Cannot park an empty cart.");
+      return;
+    }
+
+    const heldItem = {
+      id: `HOLD-${Date.now()}`,
+      timestamp: Date.now(),
+      label: customerData?.name ? `Held for ${customerData.name}` : `Held Cart (${items.length} items)`,
+      items: [...items],
+      customerMode,
+      walkinPhone,
+      customerData: { ...customerData },
+      deliveryType,
+      shippingRegion,
+      customShippingPrice,
+      couponCode,
+      manualDiscountType,
+      manualDiscountValue,
+      paymentMethod,
+      orderNote,
     };
 
-    const orderData = {
-      user: isGuest ? null : selectedUser._id,
-      orderItems: items.map(i => ({
+    setHeldOrders((prev) => [heldItem, ...prev]);
+
+    // Reset current active cart
+    setItems([]);
+    setWalkinPhone("");
+    setCustomerData({ selectedUser: null, name: "", phone: "", address: "" });
+    setCashReceived("");
+    setManualDiscountValue(0);
+    setCouponCode("");
+    setTransactionId("");
+    setSenderPhone("");
+    setOrderNote("");
+
+    playParkSound();
+    notify.success("Order Parked", "Active cart held. Ready for next customer.");
+  };
+
+  const handleResumeHeldOrder = (held) => {
+    if (!held) return;
+
+    setItems(held.items || []);
+    setCustomerMode(held.customerMode || "walkin");
+    setWalkinPhone(held.walkinPhone || "");
+    setCustomerData(held.customerData || { selectedUser: null, name: "", phone: "", address: "" });
+    setDeliveryType(held.deliveryType || "counter");
+    setShippingRegion(held.shippingRegion || "dhaka");
+    setCustomShippingPrice(held.customShippingPrice || 60);
+    setCouponCode(held.couponCode || "");
+    setManualDiscountType(held.manualDiscountType || "flat");
+    setManualDiscountValue(held.manualDiscountValue || 0);
+    setPaymentMethod(held.paymentMethod || "Cash");
+    setOrderNote(held.orderNote || "");
+
+    // Remove resumed order from held list
+    setHeldOrders((prev) => prev.filter((h) => h.id !== held.id));
+    setShowHeldModal(false);
+
+    playParkSound();
+    notify.success("Order Resumed", "Parked cart restored to register.");
+  };
+
+  const handleDeleteHeldOrder = (id) => {
+    setHeldOrders((prev) => prev.filter((h) => h.id !== id));
+  };
+
+  const handleClearAllHeld = () => {
+    setHeldOrders([]);
+  };
+
+  // 6. Post-Sale Receipt Modal State
+  const [completedOrder, setCompletedOrder] = useState(null);
+  const [lastPaidAmount, setLastPaidAmount] = useState(0);
+  const [lastChangeDue, setLastChangeDue] = useState(0);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+
+  // Subtotal & Calculations
+  const subtotal = useMemo(() => {
+    return items.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  }, [items]);
+
+  const discountAmount = useMemo(() => {
+    const val = Number(manualDiscountValue) || 0;
+    if (manualDiscountType === "percent") {
+      return Math.min(subtotal, Math.round((subtotal * val) / 100));
+    }
+    return Math.min(subtotal, val);
+  }, [subtotal, manualDiscountType, manualDiscountValue]);
+
+  const shippingPrice = useMemo(() => {
+    if (deliveryType === "counter") return 0;
+    if (shippingRegion === "dhaka") return 60;
+    if (shippingRegion === "outside") return 120;
+    return Number(customShippingPrice) || 0;
+  }, [deliveryType, shippingRegion, customShippingPrice]);
+
+  const grandTotal = Math.max(0, subtotal - discountAmount + shippingPrice);
+  const parsedCash = Number(cashReceived) || 0;
+  const changeDue = parsedCash >= grandTotal ? parsedCash - grandTotal : 0;
+
+  // 7. Complete Order Submission
+  const handleSubmitOrder = async () => {
+    if (items.length === 0) {
+      playErrorSound();
+      notify.error("Cart Empty", "Please add at least one product to the register.");
+      return;
+    }
+
+    let shippingAddress = {};
+    let userId = null;
+    let isGuest = true;
+    let deliveryZone = "pos";
+    let shippingCharge = 0;
+    let orderStatus = "Delivered";
+    let paymentStatus = "Completed";
+
+    const isDelivery = deliveryType === "delivery";
+    deliveryZone = isDelivery ? shippingRegion : "pos";
+    shippingCharge = isDelivery ? shippingPrice : 0;
+    orderStatus = isDelivery ? "Processing" : "Delivered";
+    paymentStatus = paymentMethod === "COD" ? "Pending" : "Completed";
+
+    if (customerMode === "member" && customerData.selectedUser) {
+      const u = customerData.selectedUser;
+      userId = u._id;
+      isGuest = false;
+      shippingAddress = {
+        name: customerData.name?.trim() || u.name || "Member Customer",
+        email: u.email || "",
+        phone: customerData.phone?.trim() || u.phone || walkinPhone || "01700000000",
+        address: customerData.address?.trim() || u.address || (isDelivery ? "Customer Delivery Address" : "In-Store / POS Store"),
+      };
+    } else {
+      // Walk-in Customer (with optional delivery details)
+      isGuest = true;
+      userId = null;
+      shippingAddress = {
+        name: customerData.name?.trim() || "Walk-in Customer",
+        phone: customerData.phone?.trim() || walkinPhone.trim() || "01700000000",
+        address: customerData.address?.trim() || (isDelivery ? "Customer Delivery Address" : "In-Store / POS Store"),
+      };
+    }
+
+    // Determine final paymentMethod string and transactionId
+    let finalPaymentMethod = paymentMethod;
+    let finalTransactionId = transactionId?.trim();
+
+    if (paymentMethod === "Split") {
+      finalPaymentMethod = `Split (${splitMethod} + Cash)`;
+      finalTransactionId = `SPLIT: Cash ৳${splitCash || 0} + ${splitMethod} ৳${splitDigital || 0}${transactionId ? ` [Ref: ${transactionId}]` : ""}`;
+    } else if (paymentMethod === "Cash") {
+      finalTransactionId = finalTransactionId || `CASH-REG-${Date.now().toString().slice(-6)}`;
+    } else {
+      finalTransactionId = finalTransactionId || `POS-${paymentMethod.toUpperCase()}-${Date.now().toString().slice(-6)}`;
+    }
+
+    const payload = {
+      user: userId,
+      orderItems: items.map((i) => ({
         product: i.product,
         size: i.size,
-        quantity: i.quantity
+        quantity: i.quantity,
       })),
       shippingAddress,
-      couponCode,
-      paymentMethod,
+      paymentMethod: finalPaymentMethod,
       orderStatus,
-      paymentStatus: paymentMethod === "COD" ? "Pending" : "Completed"
+      paymentStatus,
+      shippingPrice: shippingCharge,
+      deliveryZone,
+      couponCode: couponCode ? couponCode.trim() : undefined,
+      discountAmount: discountAmount > 0 ? discountAmount : 0,
+      note: orderNote?.trim() || undefined,
+      transactionId: finalTransactionId,
     };
 
     try {
-      const order = await createAdminOrder(orderData);
-      router.push(`/admin/orders/${order._id}`);
+      const created = await createAdminOrder(payload);
+      playSuccessChime();
+      setCompletedOrder(created);
+      setLastPaidAmount(paymentMethod === "Cash" ? (cashReceived || grandTotal) : grandTotal);
+      setLastChangeDue(paymentMethod === "Cash" ? changeDue : 0);
+      setShowReceiptModal(true);
     } catch (err) {
+      playErrorSound();
       console.error(err);
     }
   };
 
+  const handleNewSale = () => {
+    setShowReceiptModal(false);
+    setCompletedOrder(null);
+    setItems([]);
+    setWalkinPhone("");
+    setCustomerData({ selectedUser: null, name: "", phone: "", address: "" });
+    setCashReceived("");
+    setTransactionId("");
+    setSenderPhone("");
+    setSplitCash("");
+    setSplitDigital("");
+    setOrderNote("");
+    setManualDiscountValue(0);
+    setCouponCode("");
+    setCustomerMode("walkin");
+    setDeliveryType("counter");
+    searchInputRef.current?.focus();
+  };
+
   return (
-    <div className="admin-page-container">
-      <AdminBackLink href="/admin/orders" label="Back to orders" />
-      <AdminPageHeader
-        title="New order"
-        description="Create a manual order for a customer"
+    <div className="flex flex-col min-h-screen bg-background text-foreground">
+      {/* POS Top Navigation Header */}
+      <PosHeader
+        cartCount={items.length}
+        onResetCart={handleClearCart}
+        heldOrdersCount={heldOrders.length}
+        onOpenHeldOrders={() => setShowHeldModal(true)}
       />
 
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        
-        {/* Workspace */}
-        <div className="lg:col-span-2 space-y-10">
-          {/* Reusable Product Search Component */}
-          <div className="admin-table-form !overflow-visible p-8 space-y-8 relative z-[30]">
-            <div className="flex items-center gap-4 mb-2">
-              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
-                <Package size={16} className="text-primary" />
-              </div>
-              <h3 className="text-sm font-black uppercase tracking-[0.2em]">Select Product</h3>
-            </div>
+      {/* POS Main Workspace Split Screen */}
+      <main className="flex-1 p-3 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-[1920px] mx-auto w-full overflow-hidden">
 
-            <OrderProductSearch
-              searchTerm={productSearch}
-              onSearchChange={setProductSearch}
-              products={products}
-              onAddItem={handleAddItem}
-              isSearching={isSearchingProducts}
-            />
-          </div>
+        {/* Left Side: Product Catalog, Barcode Search & Category Filters (7 cols) */}
+        <section className="lg:col-span-7 flex flex-col h-[calc(100vh-85px)] min-h-[500px]">
+          <PosProductCatalog
+            products={products}
+            categories={categories}
+            isLoading={isLoadingProducts}
+            searchTerm={productSearch}
+            onSearchChange={setProductSearch}
+            selectedCategory={selectedCategory}
+            onSelectCategory={setSelectedCategory}
+            onAddItem={handleAddItem}
+            searchRef={searchInputRef}
+          />
+        </section>
 
-          {/* Reusable Order Items Workspace Component */}
-          <div className="admin-table-form overflow-hidden">
-            <div className="p-8 border-b border-border/10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
-                    <ShoppingBag size={16} className="text-amber-500" />
-                  </div>
-                  <h3 className="text-sm font-black uppercase tracking-[0.2em]">Order Summary</h3>
-                </div>
-                <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">
-                  Items: {items.length}
-                </span>
-              </div>
-            </div>
-            
-            <div className="p-8">
-              <OrderItemsEditor
-                items={items}
-                onUpdateQuantity={handleUpdateQuantity}
-                onRemoveItem={handleRemoveItem}
-              />
-            </div>
-          </div>
-        </div>
+        {/* Right Side: Active Cart Register & Fast Checkout (Detail Transaction - 5 cols) */}
+        <section className="lg:col-span-5 flex flex-col h-[calc(100vh-85px)] min-h-[500px]">
+          <PosCartRegister
+            items={items}
+            onUpdateQuantity={handleUpdateQuantity}
+            onRemoveItem={handleRemoveItem}
+            onClearCart={handleClearCart}
 
-        {/* Customer & Settlement */}
-        <div className="space-y-10">
-          
-          {/* Identity */}
-          <div className="admin-table-form !overflow-visible p-8 space-y-6 relative z-[20]">
-             <div className="flex items-center gap-4 mb-2">
-              <div className="w-8 h-8 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
-                <UserIcon size={16} className="text-indigo-500" />
-              </div>
-              <h3 className="text-sm font-black uppercase tracking-[0.2em]">Customer Info</h3>
-            </div>
+            customerMode={customerMode}
+            setCustomerMode={setCustomerMode}
+            walkinPhone={walkinPhone}
+            setWalkinPhone={setWalkinPhone}
+            customerData={customerData}
+            setCustomerData={setCustomerData}
+            searchUsers={searchAdminUsers}
 
-            <div className="flex gap-2 p-1 bg-muted rounded-xl">
-              <button 
-                type="button"
-                onClick={() => setIsGuest(false)}
-                className={cn("flex-1 h-10 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", !isGuest ? "bg-background shadow-lg text-foreground" : "text-muted-foreground opacity-50")}
-              >Member</button>
-              <button 
-                type="button"
-                onClick={() => setIsGuest(true)}
-                className={cn("flex-1 h-10 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", isGuest ? "bg-background shadow-lg text-foreground" : "text-muted-foreground opacity-50")}
-              >Guest</button>
-            </div>
+            deliveryType={deliveryType}
+            setDeliveryType={setDeliveryType}
+            shippingRegion={shippingRegion}
+            setShippingRegion={setShippingRegion}
+            customShippingPrice={customShippingPrice}
+            setCustomShippingPrice={setCustomShippingPrice}
 
-            {!isGuest && (
-               <div className="relative">
-                 <div className="relative">
-                  <ChevronLeft className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground rotate-180" size={16} />
-                  <Input 
-                    placeholder="Search for a customer..."
-                    value={userSearch}
-                    onChange={(e) => {
-                      setUserSearch(e.target.value);
-                      setSelectedUser(null);
-                    }}
-                    className="pl-12 bg-background/50 border-border/10 rounded-xl h-14 text-[11px] font-bold uppercase tracking-widest"
-                  />
-                  {userSearch && !selectedUser && users?.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border/20 rounded-2xl shadow-2xl z-[100] overflow-hidden backdrop-blur-3xl">
-                      {users.map(u => (
-                        <button
-                          key={u._id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedUser(u);
-                            setUserSearch(u.name);
-                            setGuestDetails({
-                              name: u.name,
-                              email: u.email,
-                              phone: u.phone || "",
-                              address: "",
-                            });
-                          }}
-                          className="w-full flex items-center gap-4 p-4 hover:bg-muted transition-colors text-left border-b border-border/5 last:border-none"
-                        >
-                          <div className="w-8 h-8 rounded-full bg-foreground flex items-center justify-center text-[10px] font-black text-background">
-                            {u.name.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-tight mb-1">{u.name}</p>
-                            <p className="text-[8px] font-bold text-muted-foreground">{u.email}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-               </div>
-            )}
-
-            {/* Reusable Shipping Form Component */}
-            <OrderShippingForm
-              values={guestDetails}
-              onChange={(field, val) => setGuestDetails(prev => ({ ...prev, [field]: val }))}
-            />
-          </div>
-
-          {/* Logistics */}
-          <div className="admin-table-form p-8 space-y-6">
-            <div className="flex items-center gap-4 mb-2">
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
-                <Truck size={16} className="text-emerald-500" />
-              </div>
-              <h3 className="text-sm font-black uppercase tracking-[0.2em]">Shipping Protocol</h3>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-2 block">Shipping Region</label>
-                <select 
-                  value={shippingRegion}
-                  onChange={(e) => setShippingRegion(e.target.value)}
-                  className="w-full bg-background/50 border border-border/10 rounded-xl h-14 px-4 text-[11px] font-bold uppercase tracking-widest outline-none appearance-none"
-                >
-                  <option value="dhaka">Inside Dhaka (৳60)</option>
-                  <option value="outside">Outside Dhaka (৳120)</option>
-                  <option value="custom">Custom shipping charge</option>
-                </select>
-              </div>
-
-              {shippingRegion === "custom" && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-2 block">Custom Shipping Charge (৳)</label>
-                  <Input 
-                    type="number"
-                    min="0"
-                    placeholder="Enter Charge Amount"
-                    value={customShippingPrice}
-                    onChange={e => setCustomShippingPrice(e.target.value)}
-                    className="bg-background/50 border-border/10 rounded-xl h-14 text-[11px] font-bold uppercase tracking-widest border-emerald-500/20"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Settlement Summary */}
-          <OrderSummaryCard
-            mode="create"
-            subtotal={subtotal}
-            shippingPrice={shippingPrice}
             couponCode={couponCode}
             setCouponCode={setCouponCode}
+            manualDiscountType={manualDiscountType}
+            setManualDiscountType={setManualDiscountType}
+            manualDiscountValue={manualDiscountValue}
+            setManualDiscountValue={setManualDiscountValue}
+
             paymentMethod={paymentMethod}
             setPaymentMethod={setPaymentMethod}
-            total={total}
-            isDisabled={items.length === 0}
-            isSubmitting={isCreatingAdminOrder}
-          />
+            cashReceived={cashReceived}
+            setCashReceived={setCashReceived}
+            transactionId={transactionId}
+            setTransactionId={setTransactionId}
+            senderPhone={senderPhone}
+            setSenderPhone={setSenderPhone}
 
-        </div>
-      </form>
+            splitCash={splitCash}
+            setSplitCash={setSplitCash}
+            splitDigital={splitDigital}
+            setSplitDigital={setSplitDigital}
+            splitMethod={splitMethod}
+            setSplitMethod={setSplitMethod}
+
+            orderNote={orderNote}
+            setOrderNote={setOrderNote}
+
+            onHoldOrder={handleHoldOrder}
+            heldOrdersCount={heldOrders.length}
+            onOpenHeldOrders={() => setShowHeldModal(true)}
+
+            onSubmitOrder={handleSubmitOrder}
+            isSubmitting={isCreating}
+          />
+        </section>
+
+      </main>
+
+      {/* Held / Parked Orders Drawer Modal */}
+      <PosHeldOrdersModal
+        isOpen={showHeldModal}
+        onClose={() => setShowHeldModal(false)}
+        heldOrders={heldOrders}
+        onResumeOrder={handleResumeHeldOrder}
+        onDeleteHeldOrder={handleDeleteHeldOrder}
+        onClearAllHeld={handleClearAllHeld}
+      />
+
+      {/* Post-Sale Thermal Receipt Modal */}
+      {showReceiptModal && (
+        <PosReceiptModal
+          order={completedOrder}
+          onNewSale={handleNewSale}
+          onClose={() => setShowReceiptModal(false)}
+          cashierName={user?.name || "Cashier"}
+          storeName={storeName}
+          paidAmount={lastPaidAmount}
+          changeReturned={lastChangeDue}
+        />
+      )}
     </div>
   );
 }

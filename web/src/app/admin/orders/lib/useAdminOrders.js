@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import { swalSuccess, swalError } from "@/utils/swal";
+import { swalSuccess, swalError, notify } from "@/utils/swal";
 import { useAuthStore } from "@/store/authStore";
 import { hasPermission } from "@/utils/rbacUtils";
 
@@ -62,7 +62,8 @@ export const useAdminOrders = (params = {}, orderId = null) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["adminOrders"] });
-      swalSuccess("Order Created", "The administrative order has been finalized.");
+      queryClient.invalidateQueries({ queryKey: ["adminProducts"] });
+      notify.success("Order Created", "Transaction recorded successfully.");
     },
     onError: (err) => {
       swalError("Creation Failed", err.response?.data?.message || "Internal system error.");

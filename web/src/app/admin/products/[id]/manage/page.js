@@ -5,12 +5,10 @@ import { useAdminProduct } from "@/app/admin/products/lib/useAdminProducts";
 import { useSizes } from "@/app/admin/sizes/lib/useSizes";
 import Loader from "@/components/common/Loader";
 import { getImageUrl } from "@/utils/imageUtils";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Box, DollarSign, Image, MessageSquare } from "lucide-react";
-import Link from "next/link";
-import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import AdminPageContainer from "@/app/admin/_components/AdminPageContainer";
+import AdminPageHeader, { AdminBackLink } from "@/app/admin/_components/AdminPageHeader";
+import { AdminCard, AdminCardContent } from "@/app/admin/_components/AdminCard";
 
 // Subcomponents for each Tab
 import ManageStockTab from "@/app/admin/products/components/ManageStockTab";
@@ -19,7 +17,6 @@ import ManageImagesTab from "@/app/admin/products/components/ManageImagesTab";
 import ManageReviewsTab from "@/app/admin/products/components/ManageReviewsTab";
 import ManageSeoTab from "@/app/admin/products/components/ManageSeoTab";
 import ProductManageNavigation from "@/app/admin/products/components/ProductManageNavigation";
-import AdminPageHeader, { AdminBackLink } from "@/app/admin/_components/AdminPageHeader";
 
 export default function ProductManagementPage({ params: paramsPromise }) {
   const params = use(paramsPromise);
@@ -54,84 +51,75 @@ export default function ProductManagementPage({ params: paramsPromise }) {
   }
 
   return (
-    <div className="admin-page-container max-w-[1400px] mx-auto pb-32">
-      <AdminBackLink href="/admin/products" label="Back to products" />
+    <AdminPageContainer maxWidth="max-w-6xl" className="pb-28">
+      <AdminBackLink href="/admin/products" label="Back to Products" />
 
       <AdminPageHeader
-        title="Manage product"
+        title="Manage Product"
         description={
           product?.name
             ? `Stock, pricing, images, reviews, and SEO for ${product.name}.`
-            : "Stock, pricing, images, reviews, and SEO."
+            : "Configure product parameters, variants, and marketing attributes."
         }
         actions={
-          <div className="flex items-center gap-4 rounded-xl border border-border bg-muted/30 p-4">
-            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-border/10">
+          <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 px-3.5 py-2.5 shadow-2xs">
+            <div className="size-10 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted">
               <img
                 src={getImageUrl(product?.images?.[0])}
-                alt=""
-                className="h-full w-full object-cover"
+                alt={product?.name || "Product"}
+                className="size-full object-cover"
               />
             </div>
             <div>
-              <p className="line-clamp-1 max-w-[200px] text-sm font-medium">{product?.name}</p>
-              <p className="text-xs text-muted-foreground">SKU: {product?.sku || "—"}</p>
+              <p className="line-clamp-1 max-w-[200px] text-xs font-semibold text-foreground tracking-tight">{product?.name}</p>
+              <p className="text-[11px] font-mono text-muted-foreground">SKU: {product?.sku || "—"}</p>
             </div>
           </div>
         }
       />
 
-      {/* Control Center Tabs */}
-      <Tabs defaultValue="stock" onValueChange={setActiveTab} className="w-full">
-        {/* Workspace Card */}
-        <div className="bg-card border border-border p-8 md:p-14 rounded-[3rem] shadow-sm flex flex-col justify-start min-h-[650px] lg:min-h-[700px] w-full">
-           {/* Tab 1: Stock levels */}
-           <TabsContent value="stock" className="focus-visible:outline-none mt-0 w-full">
-             <ManageStockTab 
-               product={product} 
-               filteredSizes={filteredSizes} 
-               updateProduct={updateProduct} 
-             />
-           </TabsContent>
+      <Tabs defaultValue="stock" onValueChange={setActiveTab} className="w-full space-y-4">
+        <AdminCard className="p-6 md:p-8 min-h-[600px]">
+          <TabsContent value="stock" className="focus-visible:outline-none mt-0 w-full">
+            <ManageStockTab 
+              product={product} 
+              filteredSizes={filteredSizes} 
+              updateProduct={updateProduct} 
+            />
+          </TabsContent>
 
-           {/* Tab 2: Pricing Metrics */}
-           <TabsContent value="pricing" className="focus-visible:outline-none mt-0 w-full">
-             <ManagePricingTab 
-               product={product} 
-               updateProduct={updateProduct} 
-             />
-           </TabsContent>
+          <TabsContent value="pricing" className="focus-visible:outline-none mt-0 w-full">
+            <ManagePricingTab 
+              product={product} 
+              patchProduct={patchProduct} 
+            />
+          </TabsContent>
 
-           {/* Tab 3: Product Images */}
-           <TabsContent value="images" className="focus-visible:outline-none mt-0 w-full">
-             <ManageImagesTab 
-               product={product} 
-               updateProduct={updateProduct}
-               setProduct={setProduct}
-             />
-           </TabsContent>
+          <TabsContent value="images" className="focus-visible:outline-none mt-0 w-full">
+            <ManageImagesTab 
+              product={product} 
+              updateProduct={updateProduct} 
+            />
+          </TabsContent>
 
-           {/* Tab 4: Reviews list */}
-           <TabsContent value="reviews" className="focus-visible:outline-none mt-0 w-full">
-             <ManageReviewsTab 
-               product={product} 
-               setProduct={setProduct} 
-               patchProduct={patchProduct} 
-             />
-           </TabsContent>
+          <TabsContent value="reviews" className="focus-visible:outline-none mt-0 w-full">
+            <ManageReviewsTab 
+              product={product} 
+              patchProduct={patchProduct} 
+            />
+          </TabsContent>
 
-           {/* Tab 5: SEO Configuration */}
-           <TabsContent value="seo" className="focus-visible:outline-none mt-0 w-full">
-             <ManageSeoTab 
-               product={product} 
-               updateProduct={updateProduct} 
-             />
-           </TabsContent>
-        </div>
+          <TabsContent value="seo" className="focus-visible:outline-none mt-0 w-full">
+            <ManageSeoTab 
+              product={product} 
+              updateProduct={updateProduct} 
+            />
+          </TabsContent>
+        </AdminCard>
 
-        {/* 📱 Unified Floating Tabs Navigation */}
+        {/* Floating Bottom Navigation */}
         <ProductManageNavigation activeTab={activeTab} product={product} />
       </Tabs>
-    </div>
+    </AdminPageContainer>
   );
 }

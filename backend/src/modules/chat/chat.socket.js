@@ -1,20 +1,22 @@
 import { Conversation, Message } from "./chat.model.js";
 import { VlmClientService } from "./services/vlmClient.service.js";
 import { ConversationalOrderService } from "./services/conversationalOrder.service.js";
+import logger from "../../utils/logger.js";
 
-// 📡 Online users tracker: Map<userId, Set<socketId>>
+// Online users tracker: Map<userId, Set<socketId>>
 const onlineUsers = new Map();
 
 /**
- * 🛰️ Vanguard Chat Engine: High-Performance Socket Handlers with Local VLM AI Assistant
- * Scalable Architecture for 100k+ Users
+ * Socket.io chat handlers and multimodal assistant orchestration.
+ *
+ * @param {import("socket.io").Server} io - Socket.io server instance.
  */
 export const initSocketEvents = (io) => {
   io.on("connection", (socket) => {
     const userId = socket.user._id.toString();
     const userRole = socket.user.role;
 
-    console.log(`📡 Satellite Link Established: ${socket.user.name} [${userRole?.name || userRole}]`);
+    logger.info(`Socket authenticated: ${socket.user.name} [${userRole?.name || userRole}]`);
     socket.join(userId);
 
     // Track online user
@@ -118,7 +120,7 @@ export const initSocketEvents = (io) => {
         // Echo back to sender
         socket.emit("new_message", broadcastData);
 
-        // 5. 🤖 Automated Local VLM Assistant Auto-Reply
+        // Automated local assistant auto-reply
         // Triggers if sender is customer and conversation mode is "ai" (not handed over to human agent)
         const isAiActive = !isAdmin && conversation.mode !== "agent" && !conversation.isHandedOver;
         if (isAiActive) {
@@ -155,7 +157,7 @@ export const initSocketEvents = (io) => {
                       socket.user
                     );
                   } catch (actErr) {
-                    console.warn("⚠️ Socket AI Action Error:", actErr.message);
+                    console.warn(" Socket AI Action Error:", actErr.message);
                   }
                 }
 
@@ -201,14 +203,14 @@ export const initSocketEvents = (io) => {
                 io.to("admin_support_room").emit("new_message", aiBroadcastData);
               }
             } catch (aiErr) {
-              console.error("⚠️ Socket AI Auto-Reply Error:", aiErr);
+              console.error(" Socket AI Auto-Reply Error:", aiErr);
               socket.emit("ai_typing", { conversationId: conversation._id, isTyping: false });
             }
           })();
         }
 
       } catch (err) {
-        console.error("🚨 Transmission Failure:", err.message);
+        logger.error("Message delivery error:", { error: err.message });
         socket.emit("error_report", { message: "Message delivery failed." });
       }
     });
@@ -308,7 +310,7 @@ export const initSocketEvents = (io) => {
           message: updatedMessage
         });
       } catch (err) {
-        console.error("🚨 Edit Message Failure:", err.message);
+        logger.error("Message edit error:", { error: err.message });
         socket.emit("error_report", { message: err.message });
       }
     });
@@ -363,13 +365,13 @@ export const initSocketEvents = (io) => {
           conversationId
         });
       } catch (err) {
-        console.error("🚨 Delete Message Failure:", err.message);
+        logger.error("Message deletion error:", { error: err.message });
         socket.emit("error_report", { message: err.message });
       }
     });
 
     socket.on("disconnect", () => {
-      console.log(`🛰️ Link Terminated: ${socket.user.name}`);
+      logger.info(`Socket disconnected: ${socket.user.name}`);
       
       const userSockets = onlineUsers.get(userId);
       if (userSockets) {

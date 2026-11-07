@@ -6,13 +6,16 @@ import { useFilters } from "@/app/admin/_hooks/useFilters";
 import TableSkeleton from "@/components/common/TableSkeleton";
 import OrdersSearchAndFilter from "./components/OrdersSearchAndFilter";
 import OrdersTable from "./components/OrdersTable";
-import { Plus } from "lucide-react";
+import { Store } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { notify } from "@/utils/swal";
+import { swalToast, swalError } from "@/utils/swal";
+import AdminPageContainer from "@/app/admin/_components/AdminPageContainer";
 import AdminPageHeader, {
   AdminHeaderButton,
   AdminHeaderStat,
 } from "@/app/admin/_components/AdminPageHeader";
+import { AdminCard, AdminCardContent } from "@/app/admin/_components/AdminCard";
+import AdminDeleteModal from "@/app/admin/_components/AdminDeleteModal";
 
 function AdminOrdersContent() {
   const { search, setSearch, sort, setSort, page, setPage, queryParams } =
@@ -22,6 +25,8 @@ function AdminOrdersContent() {
     });
 
   const [status, setStatus] = useState("all");
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const finalQueryParams = useMemo(
     () => ({
@@ -37,22 +42,23 @@ function AdminOrdersContent() {
   const handleQuickStatusUpdate = async (id, newStatus) => {
     try {
       await updateOrder({ id, data: { orderStatus: newStatus } });
+      swalToast(`Order updated to ${newStatus}`, "success");
     } catch (err) {
-      console.error(err);
+      swalError("Update Failed", err.response?.data?.message || "Could not update order status.");
     }
   };
 
-  const handleDeleteOrder = async (id) => {
-    const confirmed = await notify.confirm(
-      "Delete Order?",
-      "Are you sure you want to permanently delete this order? This action cannot be undone."
-    );
-    if (confirmed) {
-      try {
-        await deleteOrder(id);
-      } catch (err) {
-        console.error(err);
-      }
+  const handleConfirmDelete = async () => {
+    if (!deleteTargetId) return;
+    setIsDeleting(true);
+    try {
+      await deleteOrder(deleteTargetId);
+      swalToast("Order deleted successfully", "success");
+      setDeleteTargetId(null);
+    } catch (err) {
+      swalError("Delete Failed", err.response?.data?.message || "Could not delete order.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -70,66 +76,72 @@ function AdminOrdersContent() {
   };
 
   return (
-    <div className="admin-page-container">
+    <AdminPageContainer>
       <AdminPageHeader
         title="Orders"
-        description="View and manage customer orders."
+        description="Monitor online and in-store customer orders, shipment status, and payments"
         actions={
-          <>
-            <AdminHeaderStat label="Total orders" value={total || 0} />
-            <AdminHeaderButton href="/admin/orders/new" icon={Plus}>
-              Create order
+          <div className="flex items-center gap-3">
+            <AdminHeaderStat label="Total Orders" value={total || 0} />
+            <AdminHeaderButton href="/admin/pos" icon={Store}>
+              POS Terminal
             </AdminHeaderButton>
-          </>
+          </div>
         }
       />
 
-      <div className="admin-table-form">
-        <OrdersSearchAndFilter
-          status={status}
-          onStatusChange={handleFilterStatusChange}
-          search={search}
-          onSearchChange={handleSearch}
-          sort={sort}
-          onSortChange={setSort}
-        />
+      <AdminCard>
+        <div className="p-4 sm:p-5 border-b border-border/40 bg-muted/20">
+          <OrdersSearchAndFilter
+            status={status}
+            onStatusChange={handleFilterStatusChange}
+            search={search}
+            onSearchChange={handleSearch}
+            sort={sort}
+            onSortChange={setSort}
+          />
+        </div>
 
-        <div className="relative pt-0">
+        <AdminCardContent className="p-0">
           {isLoading ? (
-            <div className="p-8">
-              <TableSkeleton rowCount={10} colCount={6} />
+            <div className="p-6">
+              <TableSkeleton rowCount={8} colCount={5} />
             </div>
           ) : (
             <OrdersTable
-              orders={orders || []}
+              orders={orders}
               page={page}
               pages={pages}
               onPageChange={setPage}
               isAllFetching={isAllFetching}
               onQuickStatusUpdate={handleQuickStatusUpdate}
-              onDeleteOrder={handleDeleteOrder}
+              onDeleteOrder={(id) => setDeleteTargetId(id)}
             />
           )}
-        </div>
-      </div>
-    </div>
+        </AdminCardContent>
+      </AdminCard>
+
+      <AdminDeleteModal
+        isOpen={Boolean(deleteTargetId)}
+        onClose={() => setDeleteTargetId(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Order"
+        description="Are you sure you want to permanently delete this order? All inventory and payment records associated with this order will be permanently affected."
+        isLoading={isDeleting}
+      />
+    </AdminPageContainer>
   );
 }
 
-export default function OrdersPage() {
+export default function AdminOrdersPage() {
   return (
     <Suspense
       fallback={
-        <div className="admin-page-container">
-          <Skeleton className="mb-8 h-24 w-full rounded-xl" />
-          <div className="flex flex-wrap gap-2">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-10 w-24 rounded-full" />
-            ))}
-          </div>
-          <Skeleton className="min-h-[80px] w-full rounded-full" />
-          <Skeleton className="min-h-[500px] w-full rounded-[2.5rem]" />
-        </div>
+        <AdminPageContainer>
+          <Skeleton className="h-10 w-48 rounded-xl" />
+          <Skeleton className="h-20 w-full rounded-2xl" />
+          <Skeleton className="h-96 w-full rounded-2xl" />
+        </AdminPageContainer>
       }
     >
       <AdminOrdersContent />

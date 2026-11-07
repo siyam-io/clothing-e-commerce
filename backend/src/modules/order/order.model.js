@@ -61,11 +61,12 @@ const orderSchema = new mongoose.Schema(
     pathaoConsignmentId: String,
     pathaoStatus: { type: String, default: "Not Synced" },
     isDirectBuy: { type: Boolean, default: false },
+    note: { type: String, default: "" },
   },
   { timestamps: true },
 );
 
-// 🚀 CRITICAL: Index for sorting to prevent memory overflow
+// Index for sorted retrieval and payment status queries
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ "paymentResult.status": 1, createdAt: -1 });
 

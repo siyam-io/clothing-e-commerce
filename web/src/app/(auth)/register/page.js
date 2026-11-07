@@ -12,7 +12,8 @@ import SocialAuthButtons from "@/components/common/SocialAuthButtons";
 
 export default function RegisterPage() {
   const { register } = useAuthStore();
-  const { lang } = useAppStore();
+  const { lang, settings } = useAppStore();
+  const siteName = settings?.branding?.siteName || "Store";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,7 +43,7 @@ export default function RegisterPage() {
       if (data.token) {
         swalToast(
           t.identityEstablished,
-          t.welcomeVanguard,
+          lang === 'bn' ? `${siteName}-এ স্বাগতম` : `Welcome to ${siteName}`,
         );
         setTimeout(() => {
           window.location.href = "/";
@@ -108,7 +109,7 @@ export default function RegisterPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
             className="w-full bg-accent/10 border border-border/5 rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-accent-secondary/30 transition-all font-bold text-sm"
-            placeholder="IDENTITY@VANGUARD.COM"
+            placeholder="name@example.com"
           />
         </div>
 

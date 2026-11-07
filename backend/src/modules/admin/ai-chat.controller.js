@@ -1818,7 +1818,7 @@ export const handleAdminAiChat = asyncHandler(async (req, res) => {
           });
         }
       } catch (err) {
-        console.error("⚠️ Failed to load image for Gemini vision processing:", err.message);
+        console.error("Failed to load image for Gemini vision processing:", err.message);
       }
     }
     
@@ -1853,7 +1853,7 @@ export const handleAdminAiChat = asyncHandler(async (req, res) => {
           }
           if (status === 429) {
             // Rate limit retries exhausted for this model — fall back immediately to next model
-            console.warn(`❌ Model ${model} rate limited (429). Trying next model...`);
+            console.warn(` Model ${model} rate limited (429). Trying next model...`);
             break;
           }
 
@@ -1960,7 +1960,7 @@ export const handleAdminAiChat = asyncHandler(async (req, res) => {
     });
 
   } catch (err) {
-    console.error("❌ Gemini AI Admin Chat error:", err.message);
+    console.error(" Gemini AI Admin Chat error:", err.message);
     const status = err.response?.status;
     const isQuotaError = err.response?.data?.error?.message?.includes("quota") || 
                          err.message?.includes("429") || 
@@ -2001,7 +2001,7 @@ export const handleAdminAiChatUndo = asyncHandler(async (req, res) => {
     const result = await toolFn(args, req.user);
     return res.json({ success: true, result });
   } catch (err) {
-    console.error("❌ Failed to undo action:", err.message);
+    console.error(" Failed to undo action:", err.message);
     return res.status(500).json({ success: false, message: err.message });
   }
 });

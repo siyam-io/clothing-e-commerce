@@ -13,7 +13,7 @@ import { getSettings } from "@/lib/settings";
 
 export async function generateMetadata() {
   const settings = await getSettings();
-  const siteName = settings?.branding?.siteName || "Vanguard";
+  const siteName = settings?.branding?.siteName || "Store";
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
   const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://clothing-e-commerce-web.vercel.app";
 
@@ -37,7 +37,7 @@ export async function generateMetadata() {
   const title = `Tactical Aesthetic & Streetwear Journal | ${siteName}`;
   const description = blogCount > 0
     ? `Read our ${blogCount} exclusive streetwear journals and fabric narratives. Discover latest trends in ${categories.slice(0, 3).join(", ").toLowerCase()} and sustainable tactical fashion at ${siteName}.`
-    : `Explore the tactical aesthetic and fabric narratives at the Vanguard Journal. Latest trends in sustainable streetwear at ${siteName}.`;
+    : `Explore editorial articles and fabric narratives at the ${siteName} Journal. Latest fashion trends at ${siteName}.`;
 
   return {
     title,
@@ -60,7 +60,11 @@ export async function generateMetadata() {
 }
 
 export default async function BlogPage() {
-  const cookieStore = await cookies();
+  const [settings, cookieStore] = await Promise.all([
+    getSettings(),
+    cookies()
+  ]);
+  const siteName = settings?.branding?.siteName || "Store";
   const lang = cookieStore.get("vanguard-lang")?.value || "en";
   const t = getTranslation('blog', lang);
 
@@ -78,10 +82,10 @@ export default async function BlogPage() {
     mainEntity: [
       {
         "@type": "Question",
-        name: "What is Vanguard?",
+        name: `What is ${siteName}?`,
         acceptedAnswer: {
           "@type": "Answer",
-          text: "Vanguard is a premium streetwear brand focused on sustainable fabrics, ethical production, and bold urban silhouettes.",
+          text: `${siteName} is a premium brand focused on high-quality fabrics, ethical production, and curated apparel collections.`,
         },
       },
       {
@@ -102,15 +106,15 @@ export default async function BlogPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
       />
       <Suspense fallback={<BlogSkeleton />}>
-        <BlogDataWrapper postsPromise={postsPromise} t={t} />
+        <BlogDataWrapper postsPromise={postsPromise} t={t} siteName={siteName} />
       </Suspense>
     </main>
   );
 }
 
-async function BlogDataWrapper({ postsPromise, t }) {
+async function BlogDataWrapper({ postsPromise, t, siteName }) {
   const posts = await postsPromise;
-  return <BlogListing posts={posts} t={t} />;
+  return <BlogListing posts={posts} t={t} siteName={siteName} />;
 }
 
 function BlogSkeleton() {

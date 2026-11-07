@@ -1,63 +1,71 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardContent } from "@/app/admin/_components/AdminCard";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tag } from "lucide-react";
+import { Price } from "@/components/common/Price";
 
-export function TopSellingCategories({ categories, isLoading }) {
+export function TopSellingCategories({ categories = [], isLoading }) {
   if (isLoading) {
     return (
-      <Card className="border border-border shadow-sm bg-card rounded-[2rem] overflow-hidden">
-        <CardHeader>
-          <CardTitle className="text-sm font-black uppercase tracking-widest italic">Top Categories</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <AdminCard className="h-full">
+        <AdminCardHeader className="pb-3">
+          <Skeleton className="h-5 w-36" />
+        </AdminCardHeader>
+        <AdminCardContent className="space-y-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="space-y-2">
-              <div className="flex justify-between h-4 w-full bg-muted animate-pulse rounded" />
-              <div className="h-2 w-full bg-muted animate-pulse rounded" />
+              <div className="flex justify-between">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-4 w-12" />
+              </div>
+              <Skeleton className="h-2 w-full" />
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </AdminCardContent>
+      </AdminCard>
     );
   }
 
   const maxSales = categories.length > 0 ? Math.max(...categories.map(c => c.sales)) : 0;
 
   return (
-    <Card className="border border-border shadow-sm bg-card rounded-[2rem] overflow-hidden flex flex-col h-full transition-all hover:shadow-xl">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">
-          Most Sold Categories
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6 flex-1">
+    <AdminCard className="h-full flex flex-col">
+      <AdminCardHeader className="pb-3 flex flex-row items-center gap-2">
+        <Tag className="size-4 text-primary" />
+        <AdminCardTitle className="text-base font-semibold">
+          Top Selling Categories
+        </AdminCardTitle>
+      </AdminCardHeader>
+      <AdminCardContent className="space-y-5 flex-1 pt-1">
         {categories.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-xs italic">
-            No sales data yet
+          <div className="flex items-center justify-center h-48 text-muted-foreground text-xs">
+            No sales data recorded yet
           </div>
         ) : (
-          categories.map((cat, i) => (
+          categories.slice(0, 5).map((cat, i) => (
             <div key={i} className="space-y-2">
-              <div className="flex justify-between items-end">
-                <div className="space-y-0.5">
-                  <h4 className="text-sm font-black italic uppercase tracking-tight">{cat.name}</h4>
-                  <p className="text-[9px] text-muted-foreground font-bold tracking-widest uppercase opacity-70">
-                    ৳{cat.revenue.toLocaleString()} Revenue
+              <div className="flex justify-between items-baseline">
+                <div className="min-w-0 pr-2">
+                  <h4 className="text-sm font-medium text-foreground truncate">{cat.name}</h4>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Price amount={cat.revenue || 0} />
+                    <span>Revenue</span>
                   </p>
                 </div>
-                <div className="text-xl font-black italic tracking-tighter">
-                  {cat.sales} <span className="text-[8px] uppercase not-italic">Sold</span>
+                <div className="text-sm font-semibold text-foreground shrink-0 tabular-nums">
+                  {cat.sales} <span className="text-xs font-normal text-muted-foreground">units</span>
                 </div>
               </div>
               <Progress 
-                value={(cat.sales / maxSales) * 100} 
-                className="h-1.5 bg-primary/10" 
+                value={maxSales > 0 ? (cat.sales / maxSales) * 100 : 0} 
+                className="h-2 bg-muted" 
               />
             </div>
           ))
         )}
-      </CardContent>
-    </Card>
+      </AdminCardContent>
+    </AdminCard>
   );
 }

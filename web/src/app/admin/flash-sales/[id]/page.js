@@ -8,8 +8,11 @@ import { useAdminProducts } from "@/app/admin/products/lib/useAdminProducts";
 import { useDebounce } from "@/hooks/useDebounce";
 import Loader from "@/components/common/Loader";
 import { swalToast, swalError } from "@/utils/swal";
-
+import { Button } from "@/components/ui/button";
+import { Zap, Package, Save, Loader2 } from "lucide-react";
+import AdminPageContainer from "@/app/admin/_components/AdminPageContainer";
 import AdminPageHeader, { AdminBackLink } from "@/app/admin/_components/AdminPageHeader";
+import { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardContent } from "@/app/admin/_components/AdminCard";
 
 import FlashSaleDetailsForm from "../components/FlashSaleDetailsForm";
 import FlashSaleProductSelect from "../components/FlashSaleProductSelect";
@@ -23,10 +26,10 @@ export default function FlashSaleFormPage() {
   const { sale, isLoading: isSaleLoading } = useAdminFlashSale(id);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const debouncedSearch = useDebounce(searchTerm, 300);
+  const debouncedSearch = useDebounce(searchTerm, 250);
   const { products: searchResults, isFetching } = useAdminProducts({
     search: debouncedSearch,
-    limit: 5,
+    limit: 6,
   });
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -82,8 +85,8 @@ export default function FlashSaleFormPage() {
   const onSubmit = async (data) => {
     if (selectedProducts.length === 0) {
       return swalError(
-        "No Products",
-        "Please select at least one product.",
+        "Products Required",
+        "Please select at least one product for this flash sale.",
       );
     }
 
@@ -95,35 +98,28 @@ export default function FlashSaleFormPage() {
     }
 
     if (start >= end) {
-      return swalError("Invalid Dates", "End date must be after start date.");
+      return swalError("Invalid Timeframe", "End date must be scheduled after start date.");
     }
 
+    setIsSaving(true);
     const payload = {
-      name: data.name.trim(),
-      description: data.description?.trim() || "",
-      discount: Number(data.discount),
+      ...data,
       startDate: start.toISOString(),
       endDate: end.toISOString(),
-      isActive: data.isActive === "on" || data.isActive === true,
-      startImmediately: data.startImmediately === true,
       products: selectedProducts.map((p) => p._id),
     };
 
     try {
-      setIsSaving(true);
       if (isEdit) {
         await updateFlashSale({ id, data: payload });
-        swalToast("Sale Updated", "success");
+        swalToast("Flash sale updated successfully", "success");
       } else {
         await createFlashSale(payload);
-        swalToast("Sale Created", "success");
+        swalToast("Flash sale created successfully", "success");
       }
-      setTimeout(() => router.push("/admin/flash-sales"), 1500);
+      setTimeout(() => router.push("/admin/flash-sales"), 1200);
     } catch (err) {
-      swalError(
-        "Error",
-        err.response?.data?.message || "Please check the form for errors.",
-      );
+      swalError("Save Failed", err.response?.data?.message || "Could not save flash sale.");
     } finally {
       setIsSaving(false);
     }
@@ -131,46 +127,100 @@ export default function FlashSaleFormPage() {
 
   if (isEdit && isSaleLoading) {
     return (
-      <div className="admin-page-container">
+      <div className="admin-page-container flex items-center justify-center min-h-[50vh]">
         <Loader />
       </div>
     );
   }
 
   return (
-    <div className="admin-page-container">
-      <AdminBackLink href="/admin/flash-sales" label="Back to flash sales" />
+    <AdminPageContainer maxWidth="max-w-6xl">
+      <AdminBackLink href="/admin/flash-sales" label="Back to Flash Sales" />
       <AdminPageHeader
-        title={isEdit ? "Edit flash sale" : "New flash sale"}
-        description="Configure sale dates and products"
+        title={isEdit ? `Edit Sale: ${sale?.name || ""}` : "New Flash Sale"}
+        description={isEdit ? "Update duration, discount percentage, and assigned products" : "Create a time-limited promotional event with automated discounts"}
       />
 
-      <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        
-        {/* 📑 Campaign Parameters */}
-        <div className="lg:col-span-5 space-y-10">
-          <FlashSaleDetailsForm 
-            register={register} 
-            watchStartImmediately={watchStartImmediately} 
-            errors={errors} 
-          />
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left: Campaign Parameters (5 Cols) */}
+          <div className="lg:col-span-5 space-y-6">
+            <AdminCard>
+              <AdminCardHeader>
+                <div className="flex items-center gap-2.5">
+                  <div className="size-8 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                    <Zap className="size-4" />
+                  </div>
+                  <AdminCardTitle>Event Parameters</AdminCardTitle>
+                </div>
+              </AdminCardHeader>
+
+              <AdminCardContent>
+                <FlashSaleDetailsForm
+                  register={register}
+                  watchStartImmediately={watchStartImmediately}
+                  errors={errors}
+                  watch={watch}
+                  setValue={setValue}
+                />
+              </AdminCardContent>
+            </AdminCard>
+          </div>
+
+          {/* Right: Product Selector (7 Cols) */}
+          <div className="lg:col-span-7 space-y-6">
+            <AdminCard>
+              <AdminCardHeader>
+                <div className="flex items-center gap-2.5">
+                  <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                    <Package className="size-4" />
+                  </div>
+                  <div>
+                    <AdminCardTitle>Included Products ({selectedProducts.length})</AdminCardTitle>
+                  </div>
+                </div>
+              </AdminCardHeader>
+
+              <AdminCardContent>
+                <FlashSaleProductSelect
+                  searchTerm={searchTerm}
+                  setSearchTerm={setSearchTerm}
+                  searchResults={searchResults}
+                  isFetching={isFetching}
+                  selectedProducts={selectedProducts}
+                  toggleProductSelection={toggleProductSelection}
+                />
+              </AdminCardContent>
+            </AdminCard>
+          </div>
         </div>
 
-        {/* 📦 Product Vault Linkage */}
-        <div className="lg:col-span-7 space-y-10">
-          <FlashSaleProductSelect
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            searchResults={searchResults}
-            isFetching={isFetching}
-            selectedProducts={selectedProducts}
-            toggleProductSelection={toggleProductSelection}
-            isEdit={isEdit}
-            isSaving={isSaving}
-          />
+        <div className="flex items-center justify-end gap-3 p-4 rounded-2xl border border-border/60 bg-card/70 backdrop-blur-md">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.push("/admin/flash-sales")}
+            disabled={isSaving}
+            className="h-10 px-5 rounded-xl text-xs font-medium"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={isSaving}
+            className="h-10 px-6 rounded-xl text-xs font-medium gap-2 shadow-xs cursor-pointer"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              isEdit ? "Update Flash Sale" : "Launch Flash Sale"
+            )}
+          </Button>
         </div>
-
       </form>
-    </div>
+    </AdminPageContainer>
   );
 }

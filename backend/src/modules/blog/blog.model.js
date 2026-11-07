@@ -12,14 +12,14 @@ const blogSchema = new mongoose.Schema({
   status: { type: String, enum: ['DRAFT', 'PUBLISHED'], default: 'DRAFT' },
   isFeatured: { type: Boolean, default: false },
   
-  // 🔍 SEO Core
+  // SEO metadata
   seo: {
     metaTitle: { type: String },
     metaDescription: { type: String },
     keywords: [{ type: String }]
   },
 
-  // 💬 Engagement
+  // Engagement metrics and comments
   comments: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     text: { type: String, required: true },

@@ -6,6 +6,7 @@ import { useAdminBannerCampaigns, useAdminBannerCampaign } from "@/app/admin/ban
 import { swalError, swalToast } from "@/utils/swal";
 import Loader from "@/components/common/Loader";
 import BannerCampaignForm from "../components/BannerCampaignForm";
+import AdminPageContainer from "@/app/admin/_components/AdminPageContainer";
 import AdminPageHeader, { AdminBackLink } from "@/app/admin/_components/AdminPageHeader";
 
 export default function BannerCampaignFormPage() {
@@ -52,7 +53,7 @@ export default function BannerCampaignFormPage() {
     if (!mainSlide?.image) {
       return swalError(
         "Missing Image",
-        "Please upload a banner image.",
+        "Please upload a banner image for the first slide.",
       );
     }
 
@@ -84,16 +85,16 @@ export default function BannerCampaignFormPage() {
     try {
       if (isEdit) {
         await updateCampaign({ id, formData: formDataToSend });
-        swalToast("Banner Updated", "success");
+        swalToast("Banner campaign updated successfully", "success");
       } else {
         await createCampaign(formDataToSend);
-        swalToast("Banner Created", "success");
+        swalToast("Banner campaign created successfully", "success");
       }
-      setTimeout(() => router.push("/admin/banner-campaigns"), 1500);
+      setTimeout(() => router.push("/admin/banner-campaigns"), 1200);
     } catch (err) {
       swalError(
-        "Error",
-        err.response?.data?.message || "Could not save changes.",
+        "Save Failed",
+        err.response?.data?.message || "Could not save banner campaign.",
       );
     } finally {
       setIsSaving(false);
@@ -102,22 +103,21 @@ export default function BannerCampaignFormPage() {
 
   if (isEdit && isCampaignLoading) {
     return (
-      <div className="admin-page-container">
+      <div className="admin-page-container flex items-center justify-center min-h-[50vh]">
         <Loader />
       </div>
     );
   }
 
   return (
-    <div className="admin-page-container max-w-6xl">
-      <AdminBackLink href="/admin/banner-campaigns" label="Back to banners" />
-
+    <AdminPageContainer maxWidth="max-w-4xl">
+      <AdminBackLink href="/admin/banner-campaigns" label="Back to Banner Campaigns" />
       <AdminPageHeader
-        title={isEdit ? "Edit banner" : "Create banner"}
-        description="Set up slides, schedule, and visibility."
+        title={isEdit ? `Edit Campaign: ${campaign?.name || ""}` : "New Banner Campaign"}
+        description={isEdit ? "Update banner slides, typography overlays, and target URLs" : "Design a new hero carousel banner for your storefront"}
       />
 
-      <BannerCampaignForm 
+      <BannerCampaignForm
         formData={formData}
         setFormData={setFormData}
         slideFiles={slideFiles}
@@ -126,6 +126,6 @@ export default function BannerCampaignFormPage() {
         isSaving={isSaving}
         onSubmit={handleSubmit}
       />
-    </div>
+    </AdminPageContainer>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
  
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchRoles, createRole, updateRole, deleteRole } from "@/app/admin/settings/lib/settings";
 import { useAuthStore } from "@/store/authStore";
@@ -9,18 +9,21 @@ import {
   Plus, 
   Edit2, 
   Trash2, 
-  X, 
-  Check, 
   Lock, 
-  AlertCircle,
-  ChevronRight,
-  Info,
   ArrowLeft,
   Save,
-  Trash
+  Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { 
+  AdminCard, 
+  AdminCardHeader, 
+  AdminCardTitle, 
+  AdminCardDescription, 
+  AdminCardContent, 
+  AdminCardFooter 
+} from "@/app/admin/_components/AdminCard";
 import { 
   Table, 
   TableBody, 
@@ -30,6 +33,7 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { notify } from "@/utils/swal";
 import { cn } from "@/lib/utils";
 
@@ -69,42 +73,47 @@ export default function RolesPage() {
     permissions: []
   });
 
-  // 🏛️ Fetch Roles
   const { data: roles = [], isLoading } = useQuery({
     queryKey: ["roles"],
     queryFn: fetchRoles,
   });
 
-  // 🚀 Mutations
   const createMutation = useMutation({
     mutationFn: createRole,
     onSuccess: () => {
       queryClient.invalidateQueries(["roles"]);
-      checkSession(); // Refresh current user permissions
+      checkSession();
       notify.success("Role created successfully");
       setView("list");
     },
-    onError: (err) => notify.error(err.response?.data?.message || "Failed to create role")
+    onError: (err) => {
+      notify.error("Creation Failed", err.response?.data?.message || err.message);
+    }
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => updateRole(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries(["roles"]);
-      checkSession(); // Refresh current user permissions
+      checkSession();
       notify.success("Role updated successfully");
       setView("list");
     },
-    onError: (err) => notify.error(err.response?.data?.message || "Failed to update role")
+    onError: (err) => {
+      notify.error("Update Failed", err.response?.data?.message || err.message);
+    }
   });
 
   const deleteMutation = useMutation({
     mutationFn: deleteRole,
     onSuccess: () => {
       queryClient.invalidateQueries(["roles"]);
+      checkSession();
       notify.success("Role deleted successfully");
     },
-    onError: (error) => notify.error(error.response?.data?.message || "Failed to delete role"),
+    onError: (err) => {
+      notify.error("Deletion Failed", err.response?.data?.message || err.message);
+    }
   });
 
   const handleStartAdd = () => {
@@ -128,32 +137,39 @@ export default function RolesPage() {
   };
 
   const handleTogglePermission = (permission) => {
-    if (editingRole && !editingRole.isEditable && editingRole.isSystem) return;
-    setFormData(prev => ({
-      ...prev,
-      permissions: prev.permissions.includes(permission)
-        ? prev.permissions.filter(p => p !== permission)
-        : [...prev.permissions, permission]
-    }));
+    setFormData(prev => {
+      const exists = prev.permissions.includes(permission);
+      return {
+        ...prev,
+        permissions: exists 
+          ? prev.permissions.filter(p => p !== permission)
+          : [...prev.permissions, permission]
+      };
+    });
   };
 
   const handleToggleResourceAll = (resource) => {
-    if (editingRole && !editingRole.isEditable && editingRole.isSystem) return;
     const resourcePermissions = ACTIONS.map(a => `${resource}:${a}`);
     const hasAll = resourcePermissions.every(p => formData.permissions.includes(p));
 
     setFormData(prev => {
-      const otherPermissions = prev.permissions.filter(p => !p.startsWith(`${resource}:`));
+      if (hasAll) {
+        return {
+          ...prev,
+          permissions: prev.permissions.filter(p => !resourcePermissions.includes(p))
+        };
+      }
+      const newPerms = new Set([...prev.permissions, ...resourcePermissions]);
       return {
         ...prev,
-        permissions: hasAll ? otherPermissions : [...otherPermissions, ...resourcePermissions]
+        permissions: Array.from(newPerms)
       };
     });
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!formData.name.trim()) return notify.error("Role name is required");
+    if (!formData.name.trim()) return notify.error("Validation Error", "Role name is required");
 
     if (view === "edit" && editingRole) {
       updateMutation.mutate({ id: editingRole._id, data: formData });
@@ -165,9 +181,8 @@ export default function RolesPage() {
   const handleDelete = async (id) => {
     const confirmed = await notify.confirm(
       "Delete Role?",
-      "This action will permanently delete this role and revoke all associated privileges."
+      "Are you sure you want to permanently delete this role?"
     );
-    
     if (confirmed) {
       deleteMutation.mutate(id);
     }
@@ -175,223 +190,210 @@ export default function RolesPage() {
 
   if (view === "list") {
     return (
-      <div className="admin-page-container space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
-        {/* 🚀 Header Section */}
-        <div className="flex justify-end gap-6 mb-6">
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h3 className="text-base font-semibold text-foreground">Access Roles</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Manage permissions assigned to admin accounts</p>
+          </div>
           <Button 
             onClick={handleStartAdd}
-            className="h-14 px-8 rounded-[1.5rem] bg-foreground text-background font-bold uppercase tracking-wider text-xs shadow-2xl hover:bg-primary hover:text-background transition-all group"
+            className="h-10 text-xs gap-2"
           >
-            <Plus size={16} className="mr-2 group-hover:rotate-90 transition-transform" />
-            Create New Role
+            <Plus className="size-4" /> Create New Role
           </Button>
         </div>
 
-        {/* 📊 Roles Table */}
-        <div className="bg-card/40 backdrop-blur-2xl rounded-[2.5rem] border border-border/10 shadow-2xl overflow-hidden">
-          <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow className="border-border/5 hover:bg-transparent">
-                <TableHead className="py-6 px-8 text-[9px] font-black uppercase tracking-[0.3em] text-muted-foreground">Role</TableHead>
-                <TableHead className="py-6 px-8 text-[9px] font-black uppercase tracking-[0.3em] text-muted-foreground">Description</TableHead>
-                <TableHead className="py-6 px-8 text-[9px] font-black uppercase tracking-[0.3em] text-muted-foreground">Clearance</TableHead>
-                <TableHead className="py-6 px-8 text-[9px] font-black uppercase tracking-[0.3em] text-muted-foreground text-right">Operations</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                [1, 2, 3].map(i => (
-                  <TableRow key={i} className="border-border/5">
-                    <TableCell className="p-8"><div className="h-6 w-32 bg-muted animate-pulse rounded-lg" /></TableCell>
-                    <TableCell className="p-8"><div className="h-6 w-48 bg-muted animate-pulse rounded-lg" /></TableCell>
-                    <TableCell className="p-8"><div className="h-6 w-24 bg-muted animate-pulse rounded-lg" /></TableCell>
-                    <TableCell className="p-8 text-right"><div className="h-10 w-24 bg-muted animate-pulse rounded-xl ml-auto" /></TableCell>
-                  </TableRow>
-                ))
-              ) : roles.map((role) => (
-                <TableRow key={role._id} className="border-border/5 group hover:bg-accent/5 transition-colors">
-                  <TableCell className="py-8 px-8">
-                    <div className="flex items-center gap-4">
-                      <div className={cn(
-                        "w-12 h-12 rounded-2xl flex items-center justify-center font-black uppercase shadow-inner border border-border/10",
-                        role.name === "superadmin" ? "bg-primary text-background" : "bg-accent/10 text-foreground"
-                      )}>
-                        {role.name.slice(0, 2)}
+        <AdminCard>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border/60 hover:bg-transparent">
+                  <TableHead className="text-xs font-semibold">Role Name</TableHead>
+                  <TableHead className="text-xs font-semibold">Description</TableHead>
+                  <TableHead className="text-xs font-semibold">Access Level</TableHead>
+                  <TableHead className="text-xs font-semibold text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  [1, 2, 3].map(i => (
+                    <TableRow key={i} className="border-border/50">
+                      <TableCell className="p-4"><Skeleton className="h-5 w-32" /></TableCell>
+                      <TableCell className="p-4"><Skeleton className="h-5 w-48" /></TableCell>
+                      <TableCell className="p-4"><Skeleton className="h-5 w-24" /></TableCell>
+                      <TableCell className="p-4 text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : roles.map((role) => (
+                  <TableRow key={role._id} className="border-border/50 hover:bg-muted/30">
+                    <TableCell className="py-3.5 px-4">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-sm font-semibold text-foreground capitalize">{role.name}</span>
+                        {role.isSystem && (
+                          <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border/60 px-2 py-0.2">System</Badge>
+                        )}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-black uppercase tracking-tight">{role.name}</span>
-                          {role.isSystem && (
-                            <Badge className="bg-primary/10 text-primary border-none text-[8px] font-black uppercase tracking-widest px-2 h-4 rounded-full">System</Badge>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-muted-foreground font-medium">UID: {role._id.slice(-6).toUpperCase()}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-8 px-8 max-w-xs">
-                    <span className="text-[11px] font-medium text-muted-foreground leading-relaxed italic line-clamp-2">
-                      {role.description || "No tactical description provided."}
-                    </span>
-                  </TableCell>
-                  <TableCell className="py-8 px-8">
-                    <div className="flex flex-wrap gap-1.5">
+                    </TableCell>
+                    <TableCell className="py-3.5 px-4 max-w-sm">
+                      <span className="text-xs text-muted-foreground line-clamp-1">
+                        {role.description || "No description provided."}
+                      </span>
+                    </TableCell>
+                    <TableCell className="py-3.5 px-4">
                       {role.name === "superadmin" ? (
-                        <Badge className="bg-rose-500/10 text-rose-500 border-none text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full animate-pulse">
-                          Full Access
+                        <Badge variant="outline" className="text-xs bg-rose-50 text-rose-700 dark:bg-rose-950/40 border-rose-200/60">
+                          Full Superadmin Access
                         </Badge>
                       ) : (
-                        <Badge variant="secondary" className="bg-accent/30 text-foreground border-none text-[9px] font-bold px-2 py-0.5 rounded-lg">
-                          {role.permissions.length} PERMISSIONS
+                        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 dark:bg-blue-950/40 border-blue-200/60">
+                          {role.permissions?.length || 0} permissions
                         </Badge>
                       )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-8 px-8 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        onClick={() => handleStartEdit(role)}
-                        className="w-10 h-10 rounded-xl hover:bg-primary/10 text-primary transition-all"
-                      >
-                        <Edit2 size={16} />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        onClick={() => handleDelete(role._id)}
-                        disabled={role.isSystem}
-                        className="w-10 h-10 rounded-xl hover:bg-destructive/10 text-destructive transition-all disabled:opacity-20"
-                      >
-                        <Trash2 size={16} />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+                    </TableCell>
+                    <TableCell className="py-3.5 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => handleStartEdit(role)}
+                          className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
+                          title="Edit Role"
+                        >
+                          <Edit2 className="size-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => handleDelete(role._id)}
+                          disabled={role.isSystem}
+                          className="size-8 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-50 disabled:opacity-30"
+                          title="Delete Role"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </AdminCard>
       </div>
     );
   }
 
-  // 📝 Form View (Add/Edit)
+  // Add / Edit Form View
   return (
-    <div className="admin-page-container space-y-10 animate-in fade-in slide-in-from-right-4 duration-500 pb-20">
-      {/* 🛠️ Form Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="flex items-center gap-6">
-          <Button 
-            variant="ghost" 
-            onClick={() => setView("list")}
-            className="w-12 h-12 rounded-full hover:bg-accent/10 border border-border/10 animate-in fade-in"
-          >
-            <ArrowLeft size={20} />
-          </Button>
-          <div className="space-y-1">
-            <h2 className="text-2xl font-bold text-foreground">
-              {view === "edit" ? "Edit Role" : "Create New Role"}
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              {view === "edit" ? "Modify access permissions for this role" : "Setup a new administrative role"}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button 
-            variant="ghost" 
-            onClick={() => setView("list")}
-            className="h-14 px-8 rounded-2xl font-bold text-xs uppercase tracking-wider"
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleSubmit}
-            disabled={createMutation.isLoading || updateMutation.isLoading}
-            className="h-14 px-10 rounded-2xl bg-primary text-background font-bold text-xs uppercase tracking-wider shadow-2xl hover:scale-[1.02] transition-all"
-          >
-            <Save size={16} className="mr-2" />
-            {view === "edit" ? "Save Changes" : "Create Role"}
-          </Button>
-        </div>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <Button 
+          variant="outline" 
+          onClick={() => setView("list")}
+          className="h-10 text-xs gap-2"
+        >
+          <ArrowLeft className="size-4" /> Back to Roles
+        </Button>
+        <Button 
+          onClick={handleSubmit}
+          disabled={createMutation.isLoading || updateMutation.isLoading}
+          className="h-10 text-xs gap-2"
+        >
+          <Save className="size-4" />
+          {view === "edit" ? "Save Role" : "Create Role"}
+        </Button>
       </div>
 
-      <div className="space-y-10">
-        {/* 📝 Role Information (Top) */}
-        <div className="bg-card/40 backdrop-blur-2xl rounded-[2.5rem] border border-border/10 p-8 md:p-12">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            <div className="space-y-4">
-              <label className="text-xs font-semibold text-muted-foreground ml-1">Role Name</label>
+      <AdminCard>
+        <AdminCardHeader className="border-b border-border/60 pb-4">
+          <AdminCardTitle className="text-base font-semibold">
+            {view === "edit" ? `Edit Role: ${editingRole?.name}` : "New Role Details"}
+          </AdminCardTitle>
+          <AdminCardDescription className="text-xs text-muted-foreground mt-0.5">
+            Specify the identifier name and internal purpose for this role.
+          </AdminCardDescription>
+        </AdminCardHeader>
+
+        <AdminCardContent className="space-y-4 pt-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">Role Name *</label>
               <Input 
-                placeholder="e.g. Manager"
+                placeholder="e.g. Content Editor"
                 value={formData.name}
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
                 disabled={editingRole && !editingRole.isEditable}
-                className="h-16 rounded-2xl bg-accent/5 border-border/10 px-6 font-bold tracking-tight text-lg"
+                className="h-10 text-sm"
               />
             </div>
 
-            <div className="space-y-4">
-              <label className="text-xs font-semibold text-muted-foreground ml-1">Description</label>
-              <textarea 
-                placeholder="What is this role for?"
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">Role Description</label>
+              <Input 
+                placeholder="Brief summary of duties..."
                 value={formData.description}
                 onChange={(e) => setFormData({...formData, description: e.target.value})}
-                className="w-full h-16 md:h-16 p-4 rounded-2xl bg-accent/5 border border-border/10 font-bold tracking-tight text-[14px] resize-none focus:ring-2 focus:ring-primary/20 outline-none leading-relaxed"
+                className="h-10 text-sm"
               />
             </div>
           </div>
-        </div>
+        </AdminCardContent>
+      </AdminCard>
 
-        {/* 🛡️ Permission Matrix (Bottom) */}
-        <div className="bg-card/40 backdrop-blur-2xl rounded-[2.5rem] border border-border/10 p-8 md:p-12">
-          <div className="flex items-center justify-between mb-10">
-            <div className="space-y-1">
-              <h2 className="text-lg font-bold text-foreground">Permissions Matrix</h2>
-              <p className="text-xs text-muted-foreground mt-1">
-                Selected Permissions: <span className="text-primary font-bold">{formData.permissions.length}</span>
-              </p>
+      <AdminCard>
+        <AdminCardHeader className="border-b border-border/60 pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <AdminCardTitle className="text-base font-semibold">Permission Matrix</AdminCardTitle>
+              <AdminCardDescription className="text-xs text-muted-foreground mt-0.5">
+                Selected permissions: <strong className="text-primary">{formData.permissions.length}</strong>
+              </AdminCardDescription>
             </div>
           </div>
+        </AdminCardHeader>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+        <AdminCardContent className="pt-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {RESOURCES.map((resource) => {
               const resourcePermissions = ACTIONS.map(a => `${resource}:${a}`);
               const hasAll = resourcePermissions.every(p => formData.permissions.includes(p));
               const isLocked = editingRole && !editingRole.isEditable && editingRole.isSystem;
 
               return (
-                <div key={resource} className={cn(
-                  "p-6 rounded-[2rem] border transition-all duration-300",
-                  hasAll ? "bg-primary/5 border-primary/30 shadow-lg shadow-primary/5" : "bg-accent/5 border-border/10"
-                )}>
-                  <div className="space-y-6">
+                <div 
+                  key={resource} 
+                  className={cn(
+                    "p-3.5 rounded-xl border transition-all",
+                    hasAll 
+                      ? "border-primary/40 bg-primary/5 shadow-2xs" 
+                      : "border-border/60 bg-card hover:border-border"
+                  )}
+                >
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-[11px] font-black uppercase tracking-widest text-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-semibold text-foreground">
                           {RESOURCE_LABELS[resource] || resource}
-                        </h3>
-                        {isLocked && <Lock size={12} className="text-muted-foreground/50" />}
+                        </span>
+                        {isLocked && <Lock className="size-3 text-muted-foreground" />}
                       </div>
                       <button
                         type="button"
                         onClick={() => handleToggleResourceAll(resource)}
                         disabled={isLocked}
                         className={cn(
-                          "text-[8px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded-full transition-all border",
+                          "text-xs px-2 py-0.5 rounded-md font-medium transition-colors border",
                           hasAll 
-                            ? "bg-primary text-background border-primary" 
-                            : "bg-transparent text-muted-foreground border-border/10 hover:bg-accent/20"
+                            ? "bg-primary text-primary-foreground border-primary" 
+                            : "bg-muted text-muted-foreground border-border/60 hover:bg-muted/80"
                         )}
                       >
-                        {hasAll ? "ALL_ON" : "ALL_OFF"}
+                        {hasAll ? "Revoke All" : "Grant All"}
                       </button>
                     </div>
                     
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-1.5">
                       {ACTIONS.map((action) => {
                         const perm = `${resource}:${action}`;
                         const isChecked = formData.permissions.includes(perm);
@@ -402,10 +404,10 @@ export default function RolesPage() {
                             onClick={() => handleTogglePermission(perm)}
                             disabled={isLocked}
                             className={cn(
-                              "px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border",
+                              "px-2.5 py-1 rounded-lg text-xs font-medium transition-all capitalize border",
                               isChecked 
-                                ? "bg-foreground text-background border-foreground shadow-lg" 
-                                : "bg-background text-muted-foreground border-border/10 hover:border-primary/50"
+                                ? "bg-foreground text-background border-foreground font-semibold" 
+                                : "bg-muted/40 text-muted-foreground border-border/60 hover:border-foreground/30"
                             )}
                           >
                             {action}
@@ -418,9 +420,19 @@ export default function RolesPage() {
               );
             })}
           </div>
-        </div>
-      </div>
+        </AdminCardContent>
 
+        <AdminCardFooter className="border-t border-border/60 pt-4 flex justify-end">
+          <Button 
+            onClick={handleSubmit}
+            disabled={createMutation.isLoading || updateMutation.isLoading}
+            className="h-10 text-xs gap-2"
+          >
+            <Save className="size-4" />
+            {view === "edit" ? "Save Role Changes" : "Create Role"}
+          </Button>
+        </AdminCardFooter>
+      </AdminCard>
     </div>
   );
 }

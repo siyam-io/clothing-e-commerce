@@ -1,19 +1,24 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Save } from "lucide-react";
+import { Save, Share2 } from "lucide-react";
 import { useSettings } from "@/app/admin/settings/lib/useSettings";
-import { Card, CardContent } from "@/components/ui/card";
+import { 
+  AdminCard, 
+  AdminCardHeader, 
+  AdminCardTitle, 
+  AdminCardDescription, 
+  AdminCardContent, 
+  AdminCardFooter 
+} from "@/app/admin/_components/AdminCard";
 import { Button } from "@/components/ui/button";
 import FormInput from "@/app/admin/_components/FormInput";
-import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SocialsPage() {
   const { settings, isLoading, updateSettings, isUpdating } = useSettings();
   const [socialLinks, setSocialLinks] = useState([]);
 
-  // Sync state with React Query cache instantly on load/update
   useEffect(() => {
     if (settings?.socialLinks) {
       setSocialLinks(settings.socialLinks || []);
@@ -28,7 +33,6 @@ export default function SocialsPage() {
 
     const payload = new FormData();
     payload.append("socialLinks", JSON.stringify(cleanedSocialLinks));
-
     await updateSettings(payload);
   };
 
@@ -43,24 +47,29 @@ export default function SocialsPage() {
     setSocialLinks(newLinks);
   };
 
-  if (isLoading && !settings) return <div className="animate-pulse h-96 bg-muted rounded-3xl" />;
+  if (isLoading && !settings) return <Skeleton className="h-96 w-full rounded-2xl" />;
+
+  const platforms = [
+    { id: "facebook", label: "Facebook Page URL", placeholder: "https://facebook.com/your-brand" },
+    { id: "instagram", label: "Instagram Profile URL", placeholder: "https://instagram.com/your-brand" },
+    { id: "twitter", label: "Twitter / X Profile URL", placeholder: "https://x.com/your-brand" },
+    { id: "linkedin", label: "LinkedIn Company Page", placeholder: "https://linkedin.com/company/your-brand" },
+    { id: "tiktok", label: "TikTok Profile URL", placeholder: "https://tiktok.com/@your-brand" },
+  ];
 
   return (
-    <Card className="rounded-[2rem] md:rounded-[3rem] border-border/10 bg-card/30 backdrop-blur-2xl shadow-2xl overflow-hidden">
-      <CardContent className="p-6 md:p-16">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-12"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-            {[
-              { id: "facebook", label: "Facebook Link", placeholder: "https://facebook.com/your-page" },
-              { id: "instagram", label: "Instagram Link", placeholder: "https://instagram.com/your-profile" },
-              { id: "twitter", label: "Twitter Link", placeholder: "https://twitter.com/your-profile" },
-              { id: "linkedin", label: "LinkedIn Link", placeholder: "https://linkedin.com/company/your-page" },
-              { id: "tiktok", label: "TikTok Link", placeholder: "https://tiktok.com/@your-profile" },
-            ].map((platform) => (
+    <div className="space-y-6">
+      <AdminCard>
+        <AdminCardHeader className="border-b border-border/60 pb-4">
+          <AdminCardTitle className="text-base font-semibold">Social Media Channels</AdminCardTitle>
+          <AdminCardDescription className="text-xs text-muted-foreground mt-0.5">
+            Public social handles and profile links displayed in the storefront header and footer.
+          </AdminCardDescription>
+        </AdminCardHeader>
+
+        <AdminCardContent className="space-y-5 pt-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {platforms.map((platform) => (
               <FormInput
                 key={platform.id}
                 label={platform.label}
@@ -73,19 +82,19 @@ export default function SocialsPage() {
               />
             ))}
           </div>
+        </AdminCardContent>
 
-          <div className="pt-12 border-t border-border/5 flex justify-end">
-            <Button
-              onClick={handleSave}
-              disabled={isUpdating}
-              className="bg-foreground text-background hover:bg-accent-secondary hover:text-white px-10 h-14 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl transition-all active:scale-95 group"
-            >
-              <Save size={16} className={cn("mr-2", isUpdating && "animate-pulse")} />
-              {isUpdating ? "Updating Socials..." : "Save Social Links"}
-            </Button>
-          </div>
-        </motion.div>
-      </CardContent>
-    </Card>
+        <AdminCardFooter className="border-t border-border/60 pt-4 flex justify-end">
+          <Button
+            onClick={handleSave}
+            disabled={isUpdating}
+            className="h-10 text-xs gap-2"
+          >
+            <Save className="size-4" />
+            {isUpdating ? "Saving..." : "Save Changes"}
+          </Button>
+        </AdminCardFooter>
+      </AdminCard>
+    </div>
   );
 }

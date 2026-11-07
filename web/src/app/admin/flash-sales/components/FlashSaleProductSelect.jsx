@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getImageUrl } from "@/utils/imageUtils";
 import { cn } from "@/lib/utils";
+import { Price } from "@/components/common/Price";
 
 export default function FlashSaleProductSelect({
   searchTerm,
@@ -65,7 +66,10 @@ export default function FlashSaleProductSelect({
                       <img src={getImageUrl(p.images?.[0])} className="h-10 w-10 rounded-lg object-cover grayscale group-hover:grayscale-0 transition-all" />
                       <div>
                         <p className={cn("text-[10px] font-black uppercase tracking-tight leading-none", isSelected ? "text-background" : "text-foreground")}>{p.name}</p>
-                        <p className={cn("text-[8px] font-bold uppercase tracking-widest mt-1", isSelected ? "text-background/50" : "text-muted-foreground")}>৳{p.price}</p>
+                        <Price
+                          amount={p.price}
+                          className={cn("text-[8px] font-bold uppercase tracking-widest mt-1", isSelected ? "text-background/70" : "text-muted-foreground")}
+                        />
                       </div>
                     </div>
                     {isSelected && <Badge className="bg-background text-foreground text-[8px] px-2 py-0.5 rounded-md">Added</Badge>}
@@ -95,7 +99,10 @@ export default function FlashSaleProductSelect({
                   <img src={getImageUrl(p.images?.[0])} className="h-12 w-12 rounded-xl object-cover grayscale group-hover:grayscale-0 transition-all" />
                   <div>
                     <p className="text-[11px] font-black uppercase tracking-tight leading-none">{p.name}</p>
-                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1">৳{p.price}</p>
+                    <Price
+                      amount={p.price}
+                      className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1"
+                    />
                   </div>
                 </div>
                 <button

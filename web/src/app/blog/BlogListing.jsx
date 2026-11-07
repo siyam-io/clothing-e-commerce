@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ArrowUpRight, Clock, User } from "lucide-react";
 
-export default function BlogListing({ posts, t }) {
+export default function BlogListing({ posts, t, siteName = "Editorial" }) {
   const safePosts = Array.isArray(posts) ? posts : [];
   const featured = safePosts?.[0];
   const remaining = safePosts?.slice(1) || [];
@@ -53,7 +53,7 @@ export default function BlogListing({ posts, t }) {
                   </div>
                   <h3 className="mt-4 text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight italic">{featured.title}</h3>
                   <div className="mt-4 flex items-center gap-4 text-sm opacity-90">
-                    <span className="flex items-center gap-2"><User size={14} /> {featured.author?.name || 'Vanguard'}</span>
+                    <span className="flex items-center gap-2"><User size={14} /> {featured.author?.name || siteName}</span>
                     <span className="text-muted-foreground">{new Date(featured.createdAt).toLocaleDateString()}</span>
                   </div>
                 </div>
@@ -71,7 +71,7 @@ export default function BlogListing({ posts, t }) {
                       <h4 className="font-bold line-clamp-2">{post.title}</h4>
                       <div className="text-xs text-muted-foreground"><Clock size={12} /> {post.readingTime?.replace(/read/i, '').trim() || '4M'}</div>
                     </div>
-                    <div className="mt-2 text-xs text-muted-foreground">{post.author?.name || 'Vanguard'}</div>
+                    <div className="mt-2 text-xs text-muted-foreground">{post.author?.name || siteName}</div>
                   </div>
                 </Link>
               ))}
@@ -94,7 +94,7 @@ export default function BlogListing({ posts, t }) {
                   </div>
                   <h5 className="mt-3 font-bold text-lg line-clamp-2">{post.title}</h5>
                   <div className="mt-3 text-xs text-muted-foreground flex items-center justify-between">
-                    <span>{post.author?.name || 'Vanguard'}</span>
+                    <span>{post.author?.name || siteName}</span>
                     <ArrowUpRight size={14} className="opacity-70 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </div>

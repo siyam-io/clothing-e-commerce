@@ -37,6 +37,7 @@ const apiKeySchema = new mongoose.Schema({
 
     // Social Auth
     googleClientId: { type: String, default: "" },
+    googleClientSecret: { type: String, default: "" },
     facebookAppId: { type: String, default: "" },
 
     // Cloudinary

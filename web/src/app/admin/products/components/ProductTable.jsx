@@ -3,9 +3,11 @@
 import { useAdminProducts } from "@/app/admin/products/lib/useAdminProducts";
 import DataTable from "@/app/admin/_components/DataTable";
 import Pagination from "@/components/common/Pagination";
-import StatusBadge from "@/app/admin/_components/StatusBadge";
+import AdminStatusBadge from "@/app/admin/_components/AdminStatusBadge";
 import ProductActionButtons from "@/app/admin/products/components/ProductActionButtons";
 import { getImageUrl } from "@/utils/imageUtils";
+import { ImageIcon } from "lucide-react";
+import { Price } from "@/components/common/Price";
 
 export default function ProductTable() {
   const {
@@ -17,22 +19,30 @@ export default function ProductTable() {
 
   const columns = [
     {
-      label: "Product Info",
+      label: "Product",
       render: (item) => (
-        <div className="flex items-center gap-4">
-          <div className="relative h-12 w-12 rounded-xl overflow-hidden border border-border shrink-0">
-            <img
-              src={getImageUrl(item.images?.[0])}
-              alt={item.name}
-              className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500"
-            />
+        <div className="flex items-center gap-3">
+          <div className="size-11 rounded-xl overflow-hidden border border-border/60 bg-muted shrink-0">
+            {item.images?.[0] ? (
+              <img
+                src={getImageUrl(item.images[0])}
+                alt={item.name}
+                loading="lazy"
+                className="w-full h-full object-cover transition-transform duration-200 hover:scale-105"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                <ImageIcon className="size-4 opacity-40" />
+              </div>
+            )}
           </div>
-          <div>
-            <p className="text-sm font-black text-foreground leading-none mb-1 uppercase tracking-tight line-clamp-1">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground tracking-tight truncate max-w-[240px] sm:max-w-xs">
               {item.name}
             </p>
-            <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+            <p className="text-xs text-muted-foreground">
               {item.category?.name || "Uncategorized"}
+              {item.sku && <span className="ml-2 font-mono text-[11px]">SKU: {item.sku}</span>}
             </p>
           </div>
         </div>
@@ -41,48 +51,69 @@ export default function ProductTable() {
     {
       label: "Price",
       render: (item) => (
-        <span className="font-black text-foreground">
-          ৳{item.price.toFixed(2)}
-        </span>
+        <Price
+          amount={item.price || 0}
+          decimals={2}
+          className="text-sm font-semibold text-foreground"
+        />
       ),
     },
     {
-      label: "Inventory",
+      label: "Stock Status",
       render: (item) => {
         const stock = item.totalStock ?? 0;
-        let status = "In Stock";
-        if (stock === 0) status = "Out of Stock";
-        else if (stock < 10) status = "Low Stock";
+        let status = "in_stock";
+        let label = "In Stock";
+        if (stock === 0) {
+          status = "out_of_stock";
+          label = "Out of Stock";
+        } else if (stock < 10) {
+          status = "low_stock";
+          label = `Low Stock (${stock})`;
+        } else {
+          label = `${stock} in stock`;
+        }
         
         return (
-          <div className="flex flex-col gap-1">
-            <StatusBadge value={status} />
-            <span className="text-[10px] font-bold text-muted-foreground ml-1">
-              {stock} Units
-            </span>
+          <div className="flex items-center gap-2">
+            <AdminStatusBadge value={status} label={label} />
           </div>
         );
       },
     },
     {
+      label: "Visibility",
+      render: (item) => (
+        <AdminStatusBadge 
+          value={item.isActive ? "active" : "inactive"} 
+          label={item.isActive ? "Active" : "Hidden"} 
+        />
+      ),
+    },
+    {
       label: "Actions",
+      align: "right",
       render: (item) => <ProductActionButtons product={item} />,
     },
   ];
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <DataTable columns={columns} data={products || []} className="border-none rounded-none" />
+    <div className="space-y-4">
+      <DataTable 
+        columns={columns} 
+        data={products || []} 
+        className="border-none shadow-none rounded-none" 
+      />
       
-      <div className="p-8 border-t border-border/10 bg-background/5">
-        <Pagination
-          page={pagination?.page}
-          totalPages={pagination?.pages}
-          onPageChange={setPage}
-          className="py-0 sm:py-0 justify-between flex-row-reverse"
-        />
-      </div>
+      {pagination && pagination.pages > 1 && (
+        <div className="p-4 border-t border-border/40 bg-muted/10">
+          <Pagination
+            page={pagination?.page}
+            totalPages={pagination?.pages}
+            onPageChange={setPage}
+          />
+        </div>
+      )}
     </div>
   );
 }
-

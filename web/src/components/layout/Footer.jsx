@@ -102,8 +102,13 @@ export default function Footer() {
                    className={`h-18 md:h-24 lg:h-32 w-auto object-contain transition-transform group-hover:scale-105 duration-500 relative z-10 ${theme === 'dark' ? 'invert' : ''}`}
                  />
                ) : (
-                 <div className="w-10 h-10 bg-foreground rounded-xl flex items-center justify-center text-background shadow-2xl relative z-10">
-                    <Sparkles size={20} />
+                 <div className="flex items-center gap-3">
+                   <div className="w-10 h-10 bg-foreground rounded-xl flex items-center justify-center text-background shadow-2xl relative z-10">
+                     <Sparkles size={20} />
+                   </div>
+                   <span className="font-heading font-black tracking-wider text-xl uppercase text-foreground relative z-10">
+                     {branding.siteName || "Store"}
+                   </span>
                  </div>
                )}
             </Link>

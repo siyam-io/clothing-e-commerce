@@ -319,14 +319,14 @@ export default function ProductFilter({ initialCategories }) {
                       {t.minPrice || "Min"}
                     </span>
                     <div className="flex items-center">
-                      <span className="mr-1 text-sm font-black text-muted-foreground">৳</span>
+                      <span className="font-price taka-symbol mr-1 text-sm font-semibold text-muted-foreground">৳</span>
                       <input
                         type="number"
                         min="0"
                         value={localMinPrice}
                         onChange={(event) => setLocalMinPrice(event.target.value)}
                         placeholder="0"
-                        className="w-full bg-transparent py-1 text-base font-black text-foreground outline-none border-none"
+                        className="w-full bg-transparent py-1 text-base font-black text-foreground outline-none border-none font-price tabular-nums"
                       />
                     </div>
                   </div>
@@ -338,14 +338,14 @@ export default function ProductFilter({ initialCategories }) {
                       {t.maxPrice || "Max"}
                     </span>
                     <div className="flex items-center">
-                      <span className="mr-1 text-sm font-black text-muted-foreground">৳</span>
+                      <span className="font-price taka-symbol mr-1 text-sm font-semibold text-muted-foreground">৳</span>
                       <input
                         type="number"
                         min="0"
                         value={localMaxPrice}
                         onChange={(event) => setLocalMaxPrice(event.target.value)}
                         placeholder="99999"
-                        className="w-full bg-transparent py-1 text-base font-black text-foreground outline-none border-none"
+                        className="w-full bg-transparent py-1 text-base font-black text-foreground outline-none border-none font-price tabular-nums"
                       />
                     </div>
                   </div>

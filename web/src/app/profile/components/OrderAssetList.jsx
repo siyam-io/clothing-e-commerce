@@ -1,4 +1,5 @@
 import { getImageUrl } from "@/utils/imageUtils";
+import { Price } from "@/components/common/Price";
 
 export default function OrderAssetList({ order }) {
   return (
@@ -20,7 +21,10 @@ export default function OrderAssetList({ order }) {
                   </div>
                </div>
                <div className="text-right shrink-0">
-                  <p className="text-sm sm:text-lg font-black text-primary tracking-tighter">৳{(item.price || 0).toFixed(0)}</p>
+                  <Price
+                    amount={(item.price || 0).toFixed(0)}
+                    className="text-sm sm:text-lg font-black text-primary tracking-normal"
+                  />
                </div>
             </div>
          ))}

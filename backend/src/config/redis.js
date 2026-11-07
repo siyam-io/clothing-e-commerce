@@ -11,7 +11,7 @@ const createClient = () => {
 
   if (!process.env.REDIS_URL) {
     if (process.env.NODE_ENV === 'production') {
-      console.warn('⚠️ Redis not configured. Performance will be degraded.');
+      console.warn(' Redis not configured. Performance will be degraded.');
     }
     return null;
   }
@@ -48,7 +48,7 @@ const createClient = () => {
 
   client.on('connect', () => {
     if (!hasLoggedConnection) {
-      console.log('✅ Redis connection established');
+      console.log(' Redis connection established');
       hasLoggedConnection = true;
     }
   });
@@ -56,7 +56,7 @@ const createClient = () => {
   client.on('error', (err) => {
     // Only log actual errors, not just disconnects if we already have a connection
     if (client.status !== 'reconnecting' || process.env.NODE_ENV === 'development') {
-      console.error('❌ Redis error:', err.message);
+      console.error(' Redis error:', err.message);
     }
   });
 

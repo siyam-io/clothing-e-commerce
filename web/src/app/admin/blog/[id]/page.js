@@ -17,11 +17,11 @@ export default function BlogEditPage() {
     setIsSubmitting(true);
     try {
       await updateBlog.mutateAsync({ id: blog._id, formData });
-      swalToast("Narrative updated successfully!", "success");
+      swalToast("Article updated successfully", "success");
       router.push("/admin/blog");
     } catch (err) {
       const message = err.response?.data?.message || "Update failed. Check your inputs.";
-      swalError("Sync Failed", message);
+      swalError("Update Failed", message);
     } finally {
       setIsSubmitting(false);
     }
@@ -37,8 +37,8 @@ export default function BlogEditPage() {
 
   if (!blog) {
     return (
-      <div className="h-[60vh] flex items-center justify-center text-center dark:text-white font-black uppercase tracking-widest text-xs">
-        Narrative sequence not found in archives.
+      <div className="h-[60vh] flex items-center justify-center text-center text-muted-foreground font-medium text-sm">
+        Blog post not found.
       </div>
     );
   }

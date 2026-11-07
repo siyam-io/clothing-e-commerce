@@ -1,74 +1,90 @@
 "use client";
 
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardContent } from "@/app/admin/_components/AdminCard";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AlertTriangle, ArrowRight, PackageX } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function InventoryAlerts({ inventory, isLoading }) {
+  const criticalItems = inventory?.criticalItems || [];
+
   return (
-    <Card className="bg-card rounded-[3rem] border border-border shadow-sm transition-all duration-500">
-      <CardHeader>
-        <CardTitle className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.4em]">
-          Low Stock Alerts
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {isLoading ? (
-          [1, 2, 3].map((i) => (
-            <div key={i} className="flex justify-between items-center border-b border-border pb-4 last:border-0">
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-3 w-16" />
-              </div>
-              <Skeleton className="h-8 w-8" />
-            </div>
-          ))
-        ) : inventory.criticalItems.length > 0 ? (
-          inventory.criticalItems.map((item, i) => (
-            <div
-              key={i}
-              className="flex justify-between items-center border-b border-border pb-4 last:border-0"
-            >
-              <div>
-                <p className="text-sm font-black uppercase tracking-tight text-foreground">
-                  {item.name}
-                </p>
-                <Badge 
-                  variant="outline" 
-                  className={cn(
-                    "text-[8px] font-black px-2 py-0.5 rounded-sm border-none mt-1",
-                    item.status === "OUT" 
-                    ? "bg-destructive/20 text-destructive" 
-                    : "bg-amber-500/20 text-amber-500"
-                  )}
-                >
-                  {item.status === "OUT" ? "Out of Stock" : "Low Stock"}
-                </Badge>
-              </div>
-              <p
-                className={cn(
-                  "text-2xl font-black",
-                  item.status === "OUT" ? "text-destructive" : "text-foreground"
-                )}
-              >
-                {item.stock}
-              </p>
-            </div>
-          ))
-        ) : (
-          <p className="text-center text-muted-foreground text-[10px] font-black uppercase tracking-widest py-12">
-            Stock levels are normal
-          </p>
-        )}
+    <AdminCard>
+      <AdminCardHeader className="flex flex-row items-center justify-between pb-3">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="size-4 text-amber-500" />
+          <AdminCardTitle className="text-base font-semibold">
+            Low Stock Alerts
+          </AdminCardTitle>
+        </div>
         <Link
           href="/admin/products"
-          className="block w-full text-center py-4 bg-foreground text-background hover:bg-foreground/90 rounded-2xl font-black text-[10px] uppercase tracking-[0.25em] transition-all shadow-xl"
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline transition-colors"
         >
-          Manage Inventory
+          Manage Inventory <ArrowRight className="size-3" />
         </Link>
-      </CardContent>
-    </Card>
+      </AdminCardHeader>
+      <AdminCardContent className="space-y-4 pt-1">
+        {isLoading ? (
+          [1, 2, 3].map((i) => (
+            <div key={i} className="flex justify-between items-center py-2.5 border-b border-border/50 last:border-0">
+              <div className="space-y-1.5">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+              <Skeleton className="h-6 w-12 rounded-full" />
+            </div>
+          ))
+        ) : criticalItems.length > 0 ? (
+          <div className="divide-y divide-border/50">
+            {criticalItems.map((item, i) => {
+              const isOut = item.status === "OUT" || item.stock <= 0;
+              return (
+                <div
+                  key={i}
+                  className="flex justify-between items-center py-3 first:pt-0 last:pb-0"
+                >
+                  <div className="min-w-0 pr-4">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {item.name}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span
+                        className={cn(
+                          "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
+                          isOut
+                            ? "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200/50 dark:border-rose-800/40"
+                            : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200/50 dark:border-amber-800/40"
+                        )}
+                      >
+                        {isOut ? "Out of Stock" : "Low Stock"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span
+                      className={cn(
+                        "text-lg font-bold tabular-nums",
+                        isOut ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"
+                      )}
+                    >
+                      {item.stock} left
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="py-8 text-center">
+            <PackageX className="size-8 mx-auto text-muted-foreground/50 mb-2" />
+            <p className="text-xs text-muted-foreground">
+              All inventory levels are currently healthy. No alerts.
+            </p>
+          </div>
+        )}
+      </AdminCardContent>
+    </AdminCard>
   );
 }

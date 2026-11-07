@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { getImageUrl } from "@/utils/imageUtils";
@@ -8,8 +8,22 @@ import { Calendar, User, Clock, ArrowLeft, CheckCircle, Activity, Shield } from 
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import DOMPurify from "isomorphic-dompurify";
 
-export default function BlogDetails({ blog, relatedPosts = [], siteUrl = '' }) {
+const DOMPURIFY_CONFIG = {
+  ALLOWED_TAGS: [
+    "h1", "h2", "h3", "h4", "h5", "h6", "p", "b", "i", "strong", "em", "strike",
+    "code", "pre", "blockquote", "ul", "ol", "li", "a", "img", "span", "div",
+    "table", "thead", "tbody", "tr", "th", "td", "br", "hr"
+  ],
+  ALLOWED_ATTR: ["href", "src", "alt", "title", "class", "target", "rel", "width", "height"],
+  ALLOW_DATA_ATTR: false,
+  ADD_ATTR: ["target", "rel"],
+  FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "textarea", "style"],
+  FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"]
+};
+
+export default function BlogDetails({ blog, relatedPosts = [], siteUrl = '', siteName = '' }) {
   const [copied, setCopied] = useState(false);
   const permalink = `${siteUrl.replace(/\/$/, '')}/blog/${blog?.slug}`;
 
@@ -23,6 +37,18 @@ export default function BlogDetails({ blog, relatedPosts = [], siteUrl = '' }) {
       console.error('Copy failed', e);
     }
   }, [permalink]);
+
+  const blogContent = blog?.content;
+  const sanitizedContent = useMemo(() => {
+    if (!blogContent) return "";
+    const cleaned = DOMPurify.sanitize(blogContent, DOMPURIFY_CONFIG);
+    return cleaned.replace(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"/gi, (match) => {
+      if (!match.includes('rel=')) {
+        return `${match} rel="noopener noreferrer" target="_blank"`;
+      }
+      return match;
+    });
+  }, [blogContent]);
 
   if (!blog) return null;
 
@@ -55,7 +81,7 @@ export default function BlogDetails({ blog, relatedPosts = [], siteUrl = '' }) {
               <div className="flex flex-wrap items-center justify-center gap-6 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground pt-2">
                 <div className="flex items-center gap-2">
                   <span className="w-1 h-1 rounded-full bg-rose-500" />
-                  <span>{blog.author?.name || "Vanguard Team"}</span>
+                  <span>{blog.author?.name || `${siteName || "Editorial"} Team`}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-1 h-1 rounded-full bg-border" />
@@ -136,7 +162,7 @@ export default function BlogDetails({ blog, relatedPosts = [], siteUrl = '' }) {
                 prose-a:text-rose-500 prose-a:no-underline hover:prose-a:underline
                 prose-pre:bg-zinc-900/50 prose-pre:border prose-pre:border-border/10 prose-pre:rounded-[2rem] prose-pre:p-8
                 prose-code:text-rose-400 prose-code:bg-rose-400/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:before:content-none prose-code:after:content-none"
-              dangerouslySetInnerHTML={{ __html: blog.content }}
+              dangerouslySetInnerHTML={{ __html: sanitizedContent }}
             />
 
             {/* 🔚 Footer Info */}
@@ -191,22 +217,7 @@ export default function BlogDetails({ blog, relatedPosts = [], siteUrl = '' }) {
                 </section>
               )}
 
-              {/* 🔒 Integrity Footer */}
-            {/* <div className="mt-32 p-8 rounded-[2rem] border border-border/10 bg-accent/5 flex flex-col md:flex-row items-center justify-between gap-6">
-               <div className="flex items-center gap-4">
-                 <div className="w-12 h-12 rounded-2xl bg-foreground flex items-center justify-center text-background">
-                   <Shield size={20} />
-                 </div>
-                 <div>
-                   <p className="text-[11px] font-black uppercase tracking-widest">Verified Content</p>
-                   <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Vanguard Integrity Protocol v2.4</p>
-                 </div>
-               </div>
-               <div className="flex items-center gap-2 text-rose-500 font-black text-[10px] uppercase tracking-widest">
-                 <Activity size={14} className="animate-pulse" />
-                 Secured Session
-               </div>
-            </div> */}
+              {/* Integrity Footer */}
           </div>
         </article>
       </div>

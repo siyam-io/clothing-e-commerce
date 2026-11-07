@@ -15,10 +15,10 @@ export default function BlogCreatePage() {
     setIsSubmitting(true);
     try {
       await createBlog.mutateAsync(formData);
-      swalToast("Narrative deployed successfully!", "success");
+      swalToast("Article published successfully", "success");
       router.push("/admin/blog");
     } catch (err) {
-      const message = err.response?.data?.message || "Deployment failed. Check your inputs.";
+      const message = err.response?.data?.message || "Failed to publish article. Please check your inputs.";
       swalError("Publication Failed", message);
     } finally {
       setIsSubmitting(false);

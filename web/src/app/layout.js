@@ -7,7 +7,8 @@ import {
   Montserrat, 
   Space_Grotesk, 
   Poppins, 
-  Syncopate 
+  Syncopate,
+  Hind_Siliguri 
 } from "next/font/google";
 import "./globals.css";
 
@@ -19,6 +20,12 @@ const montserrat = Montserrat({ subsets: ["latin"], variable: "--font-montserrat
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space" });
 const poppins = Poppins({ weight: ["400", "700", "900"], subsets: ["latin"], variable: "--font-poppins" });
 const syncopate = Syncopate({ weight: ["400", "700"], subsets: ["latin"], variable: "--font-syncopate" });
+const hindSiliguri = Hind_Siliguri({ 
+  weight: ["400", "500", "600", "700"], 
+  subsets: ["bengali", "latin"], 
+  variable: "--font-hind-siliguri",
+  display: "swap" 
+});
 
 import { cookies, headers } from "next/headers";
 import { getSettings } from "@/lib/settings";
@@ -30,7 +37,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://clothing-e-commerc
 export async function generateMetadata() {
   const settings = await getSettings();
   const branding = settings?.branding || {};
-  const siteName = branding.siteName || "VANGUARD";
+  const siteName = branding.siteName || "Store";
   const siteTitle = branding.siteTitle || siteName;
   const favicon = branding.favicon ? getImageUrl(branding.favicon) : "/favicon.ico";
   const description = branding.description || `Discover the latest premium apparel at ${siteName}. Experience, expertise, and quality you can trust.`;
@@ -70,7 +77,7 @@ export async function generateMetadata() {
       title: siteTitle,
       description,
       images: [ogImage],
-      creator: '@vanguard_store',
+      creator: branding.twitterHandle || `@${siteName.toLowerCase().replace(/\s+/g, '_')}`,
     },
   };
 }
@@ -155,7 +162,7 @@ export default async function RootLayout({ children }) {
   return (
     <html 
       lang={lang} 
-      className={`${inter.variable} ${roboto.variable} ${outfit.variable} ${playfair.variable} ${montserrat.variable} ${spaceGrotesk.variable} ${poppins.variable} ${syncopate.variable} ${colorMode}`} 
+      className={`${inter.variable} ${roboto.variable} ${outfit.variable} ${playfair.variable} ${montserrat.variable} ${spaceGrotesk.variable} ${poppins.variable} ${syncopate.variable} ${hindSiliguri.variable} ${colorMode}`} 
       data-theme={identityTheme}
       suppressHydrationWarning
     >

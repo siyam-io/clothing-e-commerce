@@ -1,26 +1,25 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { useProductHistory } from "@/app/admin/products/lib/useProductHistory";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { 
-  ArrowLeft, 
-  History, 
-  ShoppingCart, 
-  User as UserIcon, 
   Calendar, 
   CreditCard,
   TrendingUp,
-  PackageCheck
+  PackageCheck,
+  ShoppingCart,
+  User as UserIcon
 } from "lucide-react";
 import Link from "next/link";
 import { getImageUrl } from "@/utils/imageUtils";
-import DataTable from "@/app/admin/_components/DataTable";
-import StatusBadge from "@/app/admin/_components/StatusBadge";
-import { cn } from "@/lib/utils";
-import Pagination from "@/components/common/Pagination";
-import { useState } from "react";
+import AdminPageContainer from "@/app/admin/_components/AdminPageContainer";
+import AdminPageHeader, { AdminBackLink } from "@/app/admin/_components/AdminPageHeader";
+import { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardContent } from "@/app/admin/_components/AdminCard";
+import AdminDataTable from "@/app/admin/_components/AdminDataTable";
+import AdminStatusBadge from "@/app/admin/_components/AdminStatusBadge";
+import { Price } from "@/components/common/Price";
 
 export default function ProductHistoryPage({ params: paramsPromise }) {
   const params = use(paramsPromise);
@@ -30,15 +29,15 @@ export default function ProductHistoryPage({ params: paramsPromise }) {
 
   if (isLoading) {
     return (
-      <div className="admin-page-container space-y-10">
-        <Skeleton className="h-20 w-64 rounded-full" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Skeleton className="h-32 rounded-[2rem]" />
-          <Skeleton className="h-32 rounded-[2rem]" />
-          <Skeleton className="h-32 rounded-[2rem]" />
+      <AdminPageContainer>
+        <Skeleton className="h-10 w-48 rounded-xl" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-28 rounded-2xl" />
+          ))}
         </div>
-        <Skeleton className="h-[500px] rounded-[3rem]" />
-      </div>
+        <Skeleton className="h-96 w-full rounded-2xl" />
+      </AdminPageContainer>
     );
   }
 
@@ -48,21 +47,27 @@ export default function ProductHistoryPage({ params: paramsPromise }) {
     {
       label: "Customer",
       render: (item) => (
-        <div className="flex items-center gap-4">
-          <div className="h-10 w-10 rounded-full bg-muted overflow-hidden border border-border">
-            <img 
-              src={getImageUrl(item.customer?.avatar)} 
-              alt="" 
-              className="w-full h-full object-cover"
-              onError={(e) => e.target.src = "/placeholder-avatar.png"}
-            />
+        <div className="flex items-center gap-3">
+          <div className="size-9 rounded-full bg-muted overflow-hidden border border-border/60 shrink-0">
+            {item.customer?.avatar ? (
+              <img 
+                src={getImageUrl(item.customer.avatar)} 
+                alt="" 
+                className="size-full object-cover"
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
+              />
+            ) : (
+              <div className="size-full flex items-center justify-center text-muted-foreground">
+                <UserIcon className="size-4" />
+              </div>
+            )}
           </div>
           <div>
-            <p className="text-[10px] font-black uppercase text-foreground leading-none mb-1">
-              {item.customer?.name}
+            <p className="text-xs font-semibold text-foreground tracking-tight">
+              {item.customer?.name || "Customer"}
             </p>
-            <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
-              {item.isGuest ? "GUEST ORDER" : "REGISTERED USER"}
+            <p className="text-[11px] text-muted-foreground">
+              {item.isGuest ? "Guest Checkout" : "Registered User"}
             </p>
           </div>
         </div>
@@ -71,173 +76,146 @@ export default function ProductHistoryPage({ params: paramsPromise }) {
     {
       label: "Quantity",
       render: (item) => (
-        <div className="flex items-center gap-2">
-           <span className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-black text-xs">
-              {item.quantity}
-           </span>
-           <span className="text-[9px] font-black text-muted-foreground uppercase">Units</span>
-        </div>
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-foreground">
+          <span className="px-2 py-0.5 rounded-md bg-muted border border-border/60 tabular-nums">
+            {item.quantity}
+          </span>
+          <span className="text-muted-foreground font-normal">units</span>
+        </span>
       )
     },
     {
-      label: "Total Price",
+      label: "Total Amount",
       render: (item) => (
-        <div className="flex flex-col">
-          <span className="text-xs font-black text-foreground">৳{item.total.toLocaleString()}</span>
-          <span className="text-[8px] font-bold text-muted-foreground uppercase">@{item.price}</span>
-        </div>
-      )
-    },
-    {
-      label: "Date & Time",
-      render: (item) => (
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Calendar size={12} />
-          <span className="text-[10px] font-bold uppercase tracking-tighter">
-             {new Date(item.date).toLocaleDateString()} - {new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        <div>
+          <Price amount={item.total || 0} className="text-xs font-semibold text-foreground" />
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Price amount={item.price || 0} />
+            <span>each</span>
           </span>
         </div>
       )
     },
     {
-        label: "Status",
-        render: (item) => <StatusBadge value={item.orderStatus} />
+      label: "Order Date",
+      render: (item) => (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Calendar className="size-3.5" />
+          <span>
+            {new Date(item.date).toLocaleDateString()} · {new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+      )
     },
     {
-      label: "Details",
+      label: "Status",
+      render: (item) => <AdminStatusBadge value={item.orderStatus} />
+    },
+    {
+      label: "Action",
+      align: "right",
       render: (item) => (
-        <Link 
-          href={`/admin/orders/${item.orderId}`}
-          className="text-[9px] font-black text-primary uppercase underline hover:text-primary/70 transition-all tracking-[0.2em]"
-        >
-          View Order →
-        </Link>
+        <Button asChild variant="ghost" size="sm" className="h-8 px-2.5 rounded-lg text-xs font-medium">
+          <Link href={`/admin/orders/${item.orderId}`}>
+            View Order
+          </Link>
+        </Button>
       )
     }
   ];
 
   return (
-    <div className="admin-page-container pb-20">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
-        <div className="flex items-center gap-6">
-          <Link href="/admin/products">
-            <Button variant="ghost" className="h-12 w-12 rounded-full border border-border/50 hover:bg-muted">
-              <ArrowLeft size={20} />
-            </Button>
-          </Link>
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-                <History className="text-primary" size={24} strokeWidth={3} />
-                <h1 className="text-3xl md:text-5xl font-black text-foreground tracking-tighter uppercase italic leading-none">
-                  Product <span className="text-muted-foreground/30">History</span>
-                </h1>
+    <AdminPageContainer maxWidth="max-w-6xl">
+      <AdminBackLink href="/admin/products" label="Back to Products" />
+
+      <AdminPageHeader
+        title="Sales History"
+        description={`Transaction log and performance metrics for ${product?.name || "Product"}`}
+        actions={
+          <div className="flex items-center gap-3 bg-muted/40 p-2.5 rounded-xl border border-border/60 shadow-2xs">
+            <div className="size-10 rounded-lg overflow-hidden border border-border/60 bg-muted shrink-0">
+              <img src={getImageUrl(product?.images?.[0])} alt="" className="size-full object-cover" />
             </div>
-            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.4em] ml-1">
-              Sales History for: <span className="text-primary">{product?.name}</span>
-            </p>
+            <div>
+              <p className="text-[11px] text-muted-foreground">Retail Price</p>
+              <Price amount={product?.price || 0} className="text-base font-semibold text-foreground" />
+            </div>
           </div>
-        </div>
+        }
+      />
 
-        <div className="flex items-center gap-4 bg-card p-3 rounded-[2rem] border border-border shadow-xl">
-           <div className="h-14 w-14 rounded-2xl overflow-hidden border border-border">
-             <img src={getImageUrl(product?.images?.[0])} className="w-full h-full object-cover grayscale" />
-           </div>
-           <div className="pr-6">
-              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">Current Price</p>
-              <p className="text-xl font-black text-foreground tracking-tight italic">৳{product?.price?.toLocaleString()}</p>
-           </div>
-        </div>
+      {/* KPI Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatsCard 
+          label="Total Units Sold" 
+          value={stats?.totalSold || 0} 
+          unit="units" 
+          icon={PackageCheck} 
+          description="Cumulative items sold"
+        />
+        <StatsCard 
+          label="Total Revenue" 
+          value={<Price amount={stats?.totalRevenue || 0} />} 
+          icon={TrendingUp} 
+          description="Total sales generated"
+        />
+        <StatsCard 
+          label="Total Orders" 
+          value={stats?.orderCount || 0} 
+          unit="orders" 
+          icon={ShoppingCart} 
+          description="Distinct purchase orders"
+        />
+        <StatsCard 
+          label="Avg. Order Value" 
+          value={<Price amount={stats?.orderCount ? Math.round(stats.totalRevenue / stats.orderCount) : 0} />} 
+          icon={CreditCard} 
+          description="Average revenue per order"
+        />
       </div>
 
-      {/* KPI Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-         <StatsCard 
-            label="Total Sold" 
-            value={stats?.totalSold} 
-            unit="Units" 
-            icon={<PackageCheck className="text-emerald-500" />} 
-            description="Cumulative items sold"
-         />
-         <StatsCard 
-            label="Total Revenue" 
-            value={`৳${stats?.totalRevenue?.toLocaleString()}`} 
-            icon={<TrendingUp className="text-primary" />} 
-            description="Total revenue generated"
-         />
-         <StatsCard 
-            label="Total Orders" 
-            value={stats?.orderCount} 
-            unit="Orders" 
-            icon={<ShoppingCart className="text-indigo-500" />} 
-            description="Number of orders"
-         />
-         <StatsCard 
-            label="Avg. Order Value" 
-            value={(stats?.totalRevenue / (stats?.orderCount || 1)).toFixed(0)} 
-            unit="৳/Order" 
-            icon={<CreditCard className="text-amber-500" />} 
-            description="Revenue per transaction"
-         />
-      </div>
-
-      {/* Audit Log Table */}
-      <div className="admin-table-form overflow-hidden border border-border/50 bg-background/50 backdrop-blur-xl rounded-[3rem] shadow-2xl">
-         <div className="p-8 border-b border-border/10">
-            <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
-               <History size={14} className="text-primary" />
-               All Sales Records
-            </h2>
-         </div>
-         <div className="p-2">
-            <DataTable 
-                columns={columns} 
-                data={history || []} 
-                className="border-none bg-transparent"
-            />
-         </div>
-         {pagination?.pages > 1 && (
-            <div className="p-8 border-t border-border/5 bg-muted/5 flex justify-center">
-              <Pagination 
-                page={page}
-                totalPages={pagination.pages}
-                onPageChange={setPage}
-                className="py-0"
-              />
-            </div>
-         )}
-         {history?.length === 0 && (
-            <div className="py-20 flex flex-col items-center justify-center opacity-30 text-center">
-                <PackageCheck size={64} strokeWidth={1} className="mb-4" />
-                <p className="text-[10px] font-black uppercase tracking-[0.5em]">No Sales Record Found</p>
-            </div>
-         )}
-      </div>
-    </div>
+      {/* Orders Table */}
+      <AdminCard>
+        <AdminCardHeader>
+          <AdminCardTitle>Sales Transactions</AdminCardTitle>
+        </AdminCardHeader>
+        <AdminCardContent className="p-0">
+          <AdminDataTable
+            columns={columns}
+            data={history || []}
+            emptyTitle="No Sales Records Yet"
+            emptyDescription="This product has not been purchased in any completed order."
+            pagination={{
+              page,
+              totalPages: pagination?.pages || 1,
+              total: pagination?.total,
+              onPageChange: setPage,
+            }}
+          />
+        </AdminCardContent>
+      </AdminCard>
+    </AdminPageContainer>
   );
 }
 
-function StatsCard({ label, value, unit, icon, description }) {
+function StatsCard({ label, value, unit, icon: Icon, description }) {
   return (
-    <div className="bg-card border border-border p-8 rounded-[2.5rem] shadow-sm hover:shadow-xl transition-all duration-500 group relative overflow-hidden">
-      <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity scale-[2] group-hover:scale-[2.5] duration-700">
-         {icon}
+    <div className="rounded-2xl border border-border/60 bg-card/70 p-5 shadow-2xs backdrop-blur-md relative overflow-hidden flex flex-col justify-between">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        <div className="size-8 rounded-lg bg-muted flex items-center justify-center text-muted-foreground shrink-0">
+          <Icon className="size-4" />
+        </div>
       </div>
-      <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.3em] mb-4">
-        {label}
-      </p>
-      <div className="flex items-baseline gap-2">
-        <h3 className="text-4xl font-black text-foreground tracking-tighter italic leading-none mb-2">
-          {value}
-        </h3>
-        {unit && <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{unit}</span>}
+      <div>
+        <div className="flex items-baseline gap-1.5">
+          <h3 className="text-2xl font-bold tracking-tight text-foreground tabular-nums">
+            {value}
+          </h3>
+          {unit && <span className="text-xs text-muted-foreground font-normal">{unit}</span>}
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-1">{description}</p>
       </div>
-      <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest opacity-50">
-        {description}
-      </p>
     </div>
   );
 }
-
-
-

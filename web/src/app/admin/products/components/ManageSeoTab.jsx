@@ -289,7 +289,7 @@ export default function ManageSeoTab({ product, updateProduct }) {
             <Label className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground ml-1">Brand</Label>
             <Input 
               {...register("brand")}
-              placeholder="e.g. Vanguard"
+              placeholder="e.g. Brand Name"
               className="h-16 bg-muted/30 border-border/10 rounded-2xl px-6 font-bold focus:ring-2 focus:ring-indigo-600/20"
             />
           </div>
