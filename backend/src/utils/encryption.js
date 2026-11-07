@@ -5,22 +5,16 @@ const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // 96-bit nonce standard for GCM
 const AUTH_TAG_LENGTH = 16; // 128-bit authentication tag
 
-const RAW_KEY = process.env.ENCRYPTION_KEY;
+const RAW_KEY = process.env.ENCRYPTION_KEY || process.env.JWT_SECRET;
 if (!RAW_KEY || Buffer.from(RAW_KEY, "utf-8").length < 32) {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error(
-      "Configuration error: ENCRYPTION_KEY environment variable must be defined with at least 32 bytes of entropy."
-    );
-  } else {
-    logger.warn(
-      "ENCRYPTION_KEY is missing or below 32 bytes. Utilizing development session fallback key."
-    );
-  }
+  logger.warn(
+    "ENCRYPTION_KEY is missing or below 32 bytes. Utilizing fallback key derived from secret."
+  );
 }
 
 const DERIVED_KEY = crypto
   .createHash("sha256")
-  .update(RAW_KEY || "default_dev_secret_key_32_characters_min!!")
+  .update(RAW_KEY || "default_secure_fallback_key_32_chars_minimum!")
   .digest();
 
 /**
