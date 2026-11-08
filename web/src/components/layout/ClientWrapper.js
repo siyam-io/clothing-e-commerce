@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { useAppStore } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
@@ -8,8 +8,10 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import SupportChat from "@/app/live-support/components/SupportChat";
 
+const emptySubscribe = () => () => {};
+
 export default function ClientWrapper({ children }) {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const pathname = usePathname();
   const { initApp, lang, settings } = useAppStore();
   const { checkSession, isLoading } = useAuthStore();
@@ -18,7 +20,6 @@ export default function ClientWrapper({ children }) {
   const isAdminPage = pathname.startsWith("/admin");
 
   useEffect(() => {
-    setMounted(true);
     initApp();
     checkSession();
   }, [initApp, checkSession]);

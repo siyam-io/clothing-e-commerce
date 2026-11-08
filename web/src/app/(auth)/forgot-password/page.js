@@ -42,7 +42,7 @@ export default function ForgotPasswordPage() {
             Check Your Email
           </h2>
           <p className="text-secondary text-sm mb-8">
-            We've sent password reset instructions to {email}
+            We&apos;ve sent password reset instructions to {email}
           </p>
           <Link
             href="/login"

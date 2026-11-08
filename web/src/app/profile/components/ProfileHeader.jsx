@@ -54,7 +54,7 @@ export default function ProfileHeader({ user, ui }) {
 
           {user.bio && (
             <p className="max-w-xl text-[10px] md:text-sm font-medium text-muted-foreground leading-relaxed italic border-l-2 border-accent-secondary/30 pl-3 md:pl-6 py-0.5 md:py-2 mx-auto md:mx-0">
-              "{user.bio}"
+              &ldquo;{user.bio}&rdquo;
             </p>
           )}
         </div>

@@ -18,12 +18,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function SocialsPage() {
   const { settings, isLoading, updateSettings, isUpdating } = useSettings();
   const [socialLinks, setSocialLinks] = useState([]);
+  const [prevSettings, setPrevSettings] = useState(null);
 
-  useEffect(() => {
-    if (settings?.socialLinks) {
-      setSocialLinks(settings.socialLinks || []);
-    }
-  }, [settings]);
+  if (settings?.socialLinks && settings !== prevSettings) {
+    setPrevSettings(settings);
+    setSocialLinks(settings.socialLinks || []);
+  }
 
   const handleSave = async () => {
     const allowedPlatforms = ["facebook", "instagram", "twitter", "linkedin", "tiktok"];

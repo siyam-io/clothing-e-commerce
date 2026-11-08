@@ -12,10 +12,12 @@ import ProfileAvatarUpload from "@/app/profile/components/ProfileAvatarUpload";
 
 export default function ProfileIdentity({ user, ui, onUpdate, loading }) {
   const [avatarPreview, setAvatarPreview] = useState(getImageUrl(user.avatar));
+  const [prevUserAvatar, setPrevUserAvatar] = useState(user.avatar);
   
-  useEffect(() => {
+  if (user.avatar !== prevUserAvatar) {
+    setPrevUserAvatar(user.avatar);
     setAvatarPreview(getImageUrl(user.avatar));
-  }, [user.avatar]);
+  }
 
   const { register, handleSubmit, formState: { errors } } = useForm({
     defaultValues: {

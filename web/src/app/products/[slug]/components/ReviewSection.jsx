@@ -309,7 +309,7 @@ export default function ReviewSection({ productId, onReviewChange }) {
                   )}
                 </div>
                 <p className="text-xl md:text-2xl text-foreground leading-relaxed font-medium italic">
-                  "{userReview.comment}"
+                  &ldquo;{userReview.comment}&rdquo;
                 </p>
                 {userReview.images?.length > 0 && (
                   <div className="flex flex-wrap gap-4">
@@ -543,7 +543,7 @@ export default function ReviewSection({ productId, onReviewChange }) {
                   
                   <div className="flex-1">
                     <p className="text-muted-foreground text-sm leading-relaxed mb-8 font-medium italic group-hover/card:text-foreground transition-colors duration-500">
-                      "{review.comment}"
+                      &ldquo;{review.comment}&rdquo;
                     </p>
                   </div>
 

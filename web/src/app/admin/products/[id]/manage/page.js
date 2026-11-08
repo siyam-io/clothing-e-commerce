@@ -41,14 +41,14 @@ export default function ProductManagementPage({ params: paramsPromise }) {
   const { sizes } = useSizes();
 
   const [product, setProduct] = useState(null);
+  const [prevFetchedProduct, setPrevFetchedProduct] = useState(null);
   const [activeTab, setActiveTab] = useState("stock");
 
   // Find and bind current product
-  useEffect(() => {
-    if (fetchedProduct) {
-      setProduct(fetchedProduct);
-    }
-  }, [fetchedProduct]);
+  if (fetchedProduct && fetchedProduct !== prevFetchedProduct) {
+    setPrevFetchedProduct(fetchedProduct);
+    setProduct(fetchedProduct);
+  }
 
   const filteredSizes = useMemo(() => {
     if (!product || !sizes) return [];
@@ -62,7 +62,7 @@ export default function ProductManagementPage({ params: paramsPromise }) {
   const totalStock = useMemo(() => {
     if (!product?.sizes || !Array.isArray(product.sizes)) return 0;
     return product.sizes.reduce((acc, curr) => acc + (Number(curr.stock) || 0), 0);
-  }, [product?.sizes]);
+  }, [product]);
 
   if (isLoading || !product) {
     return (

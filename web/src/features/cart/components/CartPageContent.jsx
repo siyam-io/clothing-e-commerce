@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
@@ -14,14 +14,13 @@ import EmptyCartState from "@/app/cart/components/EmptyCartState";
 import SizeEditModal from "@/app/cart/components/SizeEditModal";
 import { useCartCheckout } from "../hooks/useCartCheckout";
 
+const emptySubscribe = () => () => {};
+
 /**
  * Client component presenting checkout manifest, logistics, and settlement summary.
  */
 export default function CartPageContent() {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   const checkout = useCartCheckout();
 

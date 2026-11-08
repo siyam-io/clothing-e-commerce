@@ -18,6 +18,7 @@ import { getFirstAllowedRoute } from "@/utils/adminRoutes";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AdminPageContainer } from "@/app/admin/_components/AdminPageContainer";
+import Loader from "@/components/common/Loader";
 
 // Dynamically import heavy components for better first load performance
 const RevenueChart = dynamic(() => import("@/app/admin/_components/dashboard/RevenueChart").then(mod => mod.RevenueChart), {

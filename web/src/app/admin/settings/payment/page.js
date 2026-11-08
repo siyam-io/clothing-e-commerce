@@ -36,15 +36,15 @@ export default function PaymentPage() {
       bkashIsTest: true,
     }
   });
+  const [prevSettings, setPrevSettings] = useState(null);
 
-  useEffect(() => {
-    if (settings) {
-      setFormData({
-        paymentOptions: settings.paymentOptions || formData.paymentOptions,
-        payment: settings.payment || formData.payment,
-      });
-    }
-  }, [settings]);
+  if (settings && settings !== prevSettings) {
+    setPrevSettings(settings);
+    setFormData(prev => ({
+      paymentOptions: settings.paymentOptions || prev.paymentOptions,
+      payment: settings.payment || prev.payment,
+    }));
+  }
 
   const handleSave = async () => {
     const payload = new FormData();

@@ -22,16 +22,16 @@ export default function AuthSettingsPage() {
     googleClientSecret: "",
     facebookAppId: "",
   });
+  const [prevSettings, setPrevSettings] = useState(null);
 
-  useEffect(() => {
-    if (settings?.auth) {
-      setFormData({
-        googleClientId: settings.auth.googleClientId || "",
-        googleClientSecret: settings.auth.googleClientSecret || "",
-        facebookAppId: settings.auth.facebookAppId || "",
-      });
-    }
-  }, [settings]);
+  if (settings?.auth && settings !== prevSettings) {
+    setPrevSettings(settings);
+    setFormData({
+      googleClientId: settings.auth.googleClientId || "",
+      googleClientSecret: settings.auth.googleClientSecret || "",
+      facebookAppId: settings.auth.facebookAppId || "",
+    });
+  }
 
   const handleSave = async () => {
     const payload = new FormData();

@@ -12,11 +12,9 @@ export default function Pagination({
   className,
   dict,
 }) {
-  // Don't render if there's no need for pagination
-  if (!totalPages || totalPages <= 1) return null;
-
   // Calculate page range with a delta of 1 (e.g., 1 ... 4 5 6 ... 10)
   const pages = useMemo(() => {
+    if (!totalPages || totalPages <= 1) return [];
     const range = [];
     const delta = 1; 
 
@@ -33,6 +31,9 @@ export default function Pagination({
     }
     return range;
   }, [page, totalPages]);
+
+  // Don't render if there's no need for pagination
+  if (!totalPages || totalPages <= 1) return null;
 
   return (
     <nav

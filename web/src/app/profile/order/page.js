@@ -52,11 +52,9 @@ export default function ProfileOrdersPage() {
     return ordersData?.totalPages || 0;
   }, [ordersData]);
 
-  useEffect(() => {
-    if (currentPage > totalPages && totalPages > 0) {
-      setCurrentPage(totalPages);
-    }
-  }, [totalPages, currentPage]);
+  if (currentPage > totalPages && totalPages > 0) {
+    setCurrentPage(totalPages);
+  }
 
   useEffect(() => {
     const status = searchParams.get("status");

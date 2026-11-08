@@ -29,23 +29,23 @@ export default function MarketingPage() {
     googleAdsId: "",
     clarityId: ""
   });
+  const [prevSettings, setPrevSettings] = useState(null);
 
-  useEffect(() => {
-    if (settings?.marketing) {
-      setFormData({
-        fbPixelId: settings.marketing.fbPixelId || "",
-        fbAccessToken: settings.marketing.fbAccessToken || "",
-        fbTestEventCode: settings.marketing.fbTestEventCode || "",
-        gtmId: settings.marketing.gtmId || "",
-        tiktokPixelId: settings.marketing.tiktokPixelId || "",
-        tiktokAccessToken: settings.marketing.tiktokAccessToken || "",
-        snapPixelId: settings.marketing.snapPixelId || "",
-        pinterestTagId: settings.marketing.pinterestTagId || "",
-        googleAdsId: settings.marketing.googleAdsId || "",
-        clarityId: settings.marketing.clarityId || ""
-      });
-    }
-  }, [settings]);
+  if (settings?.marketing && settings !== prevSettings) {
+    setPrevSettings(settings);
+    setFormData({
+      fbPixelId: settings.marketing.fbPixelId || "",
+      fbAccessToken: settings.marketing.fbAccessToken || "",
+      fbTestEventCode: settings.marketing.fbTestEventCode || "",
+      gtmId: settings.marketing.gtmId || "",
+      tiktokPixelId: settings.marketing.tiktokPixelId || "",
+      tiktokAccessToken: settings.marketing.tiktokAccessToken || "",
+      snapPixelId: settings.marketing.snapPixelId || "",
+      pinterestTagId: settings.marketing.pinterestTagId || "",
+      googleAdsId: settings.marketing.googleAdsId || "",
+      clarityId: settings.marketing.clarityId || ""
+    });
+  }
 
   const handleSave = async () => {
     const payload = new FormData();

@@ -30,14 +30,14 @@ export default function ShippingSettingsPage() {
     charge: "",
     estimatedDays: ""
   });
+  const [prevSettings, setPrevSettings] = useState(null);
 
-  useEffect(() => {
-    if (settings?.shipping) {
-      setFormData({
-        couriers: settings.shipping.couriers || []
-      });
-    }
-  }, [settings]);
+  if (settings?.shipping && settings !== prevSettings) {
+    setPrevSettings(settings);
+    setFormData({
+      couriers: settings.shipping.couriers || []
+    });
+  }
 
   const handleAddCourier = () => {
     if (!newCourier.name.trim() || !newCourier.charge) {

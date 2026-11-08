@@ -503,13 +503,23 @@ export default function LayoutBuilderPage() {
   const queryClient = useQueryClient();
   const { categories, isLoading: isCatLoading } = useAdminCategories();
   const [selectedLayoutId, setSelectedLayoutId] = useState(null);
+  const [prevArchitectures, setPrevArchitectures] = useState(null);
   const [layout, setLayout] = useState([]);
+  const [prevRemoteLayout, setPrevRemoteLayout] = useState(null);
 
   // 🏛️ Fetch all architectures
   const { data: architectures = [], isLoading: isArchLoading } = useQuery({
     queryKey: ['architectures'],
     queryFn: fetchAllHomeLayouts,
   });
+
+  if (architectures !== prevArchitectures) {
+    setPrevArchitectures(architectures);
+    if (architectures.length > 0 && !selectedLayoutId) {
+      const active = architectures.find(a => a.isActive);
+      if (active) setSelectedLayoutId(active._id);
+    }
+  }
 
   // 🏗️ Fetch specific selected layout
   const { data: remoteLayout, isLoading: isLayoutLoading } = useQuery({
@@ -532,13 +542,10 @@ export default function LayoutBuilderPage() {
     }
   });
 
-  // 🚀 Initial selection - simplified to avoid redundant state updates
-  useEffect(() => {
-    if (architectures.length > 0 && !selectedLayoutId) {
-      const active = architectures.find(a => a.isActive);
-      if (active) setSelectedLayoutId(active._id);
-    }
-  }, [architectures, selectedLayoutId]);
+  if (remoteLayout !== prevRemoteLayout) {
+    setPrevRemoteLayout(remoteLayout);
+    if (remoteLayout) setLayout(remoteLayout);
+  }
 
   const { data: campaigns = [], isLoading: isCampLoading } = useQuery({
     queryKey: ['campaigns'],
@@ -604,9 +611,6 @@ export default function LayoutBuilderPage() {
     }
   });
 
-  useEffect(() => {
-    if (remoteLayout) setLayout(remoteLayout);
-  }, [remoteLayout]);
 
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -654,7 +658,7 @@ export default function LayoutBuilderPage() {
     }));
   }, []);
 
-  const addNewSection = (type, config = {}) => {
+  const addNewSection = useCallback((type, config = {}) => {
     const newId = `${type.toLowerCase()}-${Date.now()}`;
     const newSection = {
       id: newId,
@@ -669,7 +673,7 @@ export default function LayoutBuilderPage() {
     };
     setLayout(prev => [...prev, newSection]);
     notify.success(`${type.replace(/_/g, ' ')} Added`);
-  };
+  }, []);
 
   const resetLayout = () => {
     if (remoteLayout) {

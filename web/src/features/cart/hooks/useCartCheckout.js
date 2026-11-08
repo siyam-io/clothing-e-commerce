@@ -39,9 +39,9 @@ export function useCartCheckout() {
   const t = useMemo(() => getTranslation("cart", lang), [lang]);
 
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState("ssl");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
   const [couponCode, setCouponCode] = useState("");
-  const [deliveryZone, setDeliveryZone] = useState("");
+  const [selectedZone, setSelectedZone] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [shippingInfo, setShippingInfo] = useState({
     name: "",
@@ -49,7 +49,18 @@ export function useCartCheckout() {
     phone: "",
     address: "",
   });
+  const [prevUser, setPrevUser] = useState(null);
   const [editModal, setEditModal] = useState({ isOpen: false, item: null });
+
+  if (user && user !== prevUser) {
+    setPrevUser(user);
+    setShippingInfo({
+      name: user.name || "",
+      email: user.email || "",
+      phone: user.phone || "",
+      address: user.addresses?.[0]?.address || user.addresses?.[0]?.street || "",
+    });
+  }
 
   useEffect(() => {
     refetchSettings();
@@ -59,17 +70,16 @@ export function useCartCheckout() {
     return settings?.shipping?.couriers?.filter((c) => c.isActive) || [];
   }, [settings]);
 
-  useEffect(() => {
-    if (activeCouriers.length > 0 && (!deliveryZone || !activeCouriers.some((c) => c.name === deliveryZone))) {
-      setDeliveryZone(activeCouriers[0].name);
-    }
-  }, [activeCouriers, deliveryZone]);
+  const deliveryZone = (selectedZone && activeCouriers.some((c) => c.name === selectedZone))
+    ? selectedZone
+    : (activeCouriers[0]?.name || "");
+  const setDeliveryZone = setSelectedZone;
 
   const items = useMemo(() => {
     if (isDirectBuy && buyNowItem) return [buyNowItem];
     if (!cart?.itemsMap) return [];
     return Object.values(cart.itemsMap).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-  }, [isDirectBuy, buyNowItem, cart?.itemsMap]);
+  }, [isDirectBuy, buyNowItem, cart]);
 
   const subtotal = useMemo(() => {
     if (!items.length) return 0;
@@ -83,17 +93,6 @@ export function useCartCheckout() {
     if (!items.length) return 0;
     return items.reduce((sum, i) => sum + (i.quantity || 0), 0);
   }, [items]);
-
-  useEffect(() => {
-    if (user) {
-      setShippingInfo({
-        name: user.name || "",
-        email: user.email || "",
-        phone: user.phone || "",
-        address: user.addresses?.[0]?.address || user.addresses?.[0]?.street || "",
-      });
-    }
-  }, [user]);
 
   useEffect(() => {
     if (items.length > 0) {
@@ -110,13 +109,9 @@ export function useCartCheckout() {
     [settings]
   );
 
-  useEffect(() => {
-    if (!settingsLoading) {
-      if (paymentOptions.ssl) setPaymentMethod("ssl");
-      else if (paymentOptions.bkash) setPaymentMethod("bkash");
-      else if (paymentOptions.cod) setPaymentMethod("cod");
-    }
-  }, [paymentOptions, settingsLoading]);
+  const defaultPaymentMethod = paymentOptions.ssl ? "ssl" : paymentOptions.bkash ? "bkash" : paymentOptions.cod ? "cod" : "cod";
+  const paymentMethod = selectedPaymentMethod ?? defaultPaymentMethod;
+  const setPaymentMethod = setSelectedPaymentMethod;
 
   const shippingCharge = useMemo(() => {
     const selected = activeCouriers.find((c) => c.name === deliveryZone);

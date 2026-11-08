@@ -40,31 +40,31 @@ export default function BrandingPage() {
     cloudinaryApiKey: "",
     cloudinaryApiSecret: "",
   });
+  const [prevSettings, setPrevSettings] = useState(null);
 
-  useEffect(() => {
-    if (settings) {
-      if (settings.branding) {
-        setFormData({
-          siteName: settings.branding.siteName || "",
-          siteTitle: settings.branding.siteTitle || "",
-          description: settings.branding.description || "",
-          logo: settings.branding.logo || "",
-          logoDark: settings.branding.logoDark || "",
-          favicon: settings.branding.favicon || "",
-        });
-      }
-      if (settings.config?.storageMethod) {
-        setStorageMethod(settings.config.storageMethod);
-      }
-      if (settings.cloudinary) {
-        setCloudinaryKeys({
-          cloudinaryCloudName: settings.cloudinary.cloudinaryCloudName || "",
-          cloudinaryApiKey: settings.cloudinary.cloudinaryApiKey || "",
-          cloudinaryApiSecret: settings.cloudinary.cloudinaryApiSecret || "",
-        });
-      }
+  if (settings && settings !== prevSettings) {
+    setPrevSettings(settings);
+    if (settings.branding) {
+      setFormData({
+        siteName: settings.branding.siteName || "",
+        siteTitle: settings.branding.siteTitle || "",
+        description: settings.branding.description || "",
+        logo: settings.branding.logo || "",
+        logoDark: settings.branding.logoDark || "",
+        favicon: settings.branding.favicon || "",
+      });
     }
-  }, [settings]);
+    if (settings.config?.storageMethod) {
+      setStorageMethod(settings.config.storageMethod);
+    }
+    if (settings.cloudinary) {
+      setCloudinaryKeys({
+        cloudinaryCloudName: settings.cloudinary.cloudinaryCloudName || "",
+        cloudinaryApiKey: settings.cloudinary.cloudinaryApiKey || "",
+        cloudinaryApiSecret: settings.cloudinary.cloudinaryApiSecret || "",
+      });
+    }
+  }
 
   const handleSave = async () => {
     const mergedBranding = {

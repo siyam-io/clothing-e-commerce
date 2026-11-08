@@ -37,7 +37,6 @@ export default function FlashSaleView({ initialData }) {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
-    setNow(new Date());
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);

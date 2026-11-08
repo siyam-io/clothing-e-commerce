@@ -24,14 +24,14 @@ export default function AiSettingsPage() {
   const [formData, setFormData] = useState({
     geminiApiKey: "",
   });
+  const [prevSettings, setPrevSettings] = useState(null);
 
-  useEffect(() => {
-    if (settings?.ai) {
-      setFormData({
-        geminiApiKey: settings.ai.geminiApiKey || "",
-      });
-    }
-  }, [settings]);
+  if (settings?.ai && settings !== prevSettings) {
+    setPrevSettings(settings);
+    setFormData({
+      geminiApiKey: settings.ai.geminiApiKey || "",
+    });
+  }
 
   const handleSave = async () => {
     if (!isSuperAdmin) return;

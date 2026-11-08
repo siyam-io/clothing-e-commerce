@@ -38,13 +38,23 @@ export default function ProductFilter() {
   const { flashSales } = useAdminFlashSales();
 
   const [localSearch, setLocalSearch] = useState(filters.search || "");
+  const [prevSearch, setPrevSearch] = useState(filters.search || "");
   const [localMin, setLocalMin] = useState(filters.minPrice || "");
   const [localMax, setLocalMax] = useState(filters.maxPrice || "");
+  const [prevMin, setPrevMin] = useState(filters.minPrice || "");
+  const [prevMax, setPrevMax] = useState(filters.maxPrice || "");
 
-  // Debounce search
-  useEffect(() => {
+  if ((filters.search || "") !== prevSearch) {
+    setPrevSearch(filters.search || "");
     setLocalSearch(filters.search || "");
-  }, [filters.search]);
+  }
+
+  if ((filters.minPrice || "") !== prevMin || (filters.maxPrice || "") !== prevMax) {
+    setPrevMin(filters.minPrice || "");
+    setPrevMax(filters.maxPrice || "");
+    setLocalMin(filters.minPrice || "");
+    setLocalMax(filters.maxPrice || "");
+  }
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -54,12 +64,6 @@ export default function ProductFilter() {
     }, 250);
     return () => clearTimeout(timer);
   }, [localSearch, filters.search, setSearch]);
-
-  // Debounce price range
-  useEffect(() => {
-    setLocalMin(filters.minPrice || "");
-    setLocalMax(filters.maxPrice || "");
-  }, [filters.minPrice, filters.maxPrice]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

@@ -21,15 +21,15 @@ export default function SMSPage() {
     smsApiKey: "",
     smsSenderId: "",
   });
+  const [prevSettings, setPrevSettings] = useState(null);
 
-  useEffect(() => {
-    if (settings?.sms) {
-      setFormData({
-        smsApiKey: settings.sms.smsApiKey || "",
-        smsSenderId: settings.sms.smsSenderId || "",
-      });
-    }
-  }, [settings]);
+  if (settings?.sms && settings !== prevSettings) {
+    setPrevSettings(settings);
+    setFormData({
+      smsApiKey: settings.sms.smsApiKey || "",
+      smsSenderId: settings.sms.smsSenderId || "",
+    });
+  }
 
   const handleSave = async () => {
     const payload = new FormData();

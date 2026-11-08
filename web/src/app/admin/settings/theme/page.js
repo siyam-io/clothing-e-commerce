@@ -46,19 +46,26 @@ export default function ThemePage() {
     defaultThemeFont: "Inter",
     activeTheme: "executive",
   });
+  const [prevSettings, setPrevSettings] = useState(null);
+
+  if (settings?.branding && settings !== prevSettings) {
+    setPrevSettings(settings);
+    const savedColor = settings.branding.defaultThemeColor || "Zinc";
+    const savedFont = settings.branding.defaultThemeFont || "Inter";
+    const savedTheme = settings.branding.activeTheme || "executive";
+    
+    setFormData({
+      defaultThemeColor: savedColor,
+      defaultThemeFont: savedFont,
+      activeTheme: savedTheme,
+    });
+  }
 
   useEffect(() => {
     if (settings?.branding) {
       const savedColor = settings.branding.defaultThemeColor || "Zinc";
       const savedFont = settings.branding.defaultThemeFont || "Inter";
-      const savedTheme = settings.branding.activeTheme || "executive";
       
-      setFormData({
-        defaultThemeColor: savedColor,
-        defaultThemeFont: savedFont,
-        activeTheme: savedTheme,
-      });
-
       // Ensure store matches saved settings if not already set
       if (storeThemeColor !== savedColor) {
         setThemeColor(savedColor);
@@ -67,7 +74,7 @@ export default function ThemePage() {
         setThemeFont(savedFont);
       }
     }
-  }, [settings]);
+  }, [settings, storeThemeColor, storeThemeFont, setThemeColor, setThemeFont]);
 
   // 🎨 Instant Live Color Preview
   const handleColorSelect = (colorName) => {

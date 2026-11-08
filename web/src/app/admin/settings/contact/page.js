@@ -23,17 +23,17 @@ export default function ContactPage() {
     address: "",
     whatsapp: "",
   });
+  const [prevSettings, setPrevSettings] = useState(null);
 
-  useEffect(() => {
-    if (settings?.contact) {
-      setFormData({
-        phone: settings.contact.phone || "",
-        email: settings.contact.email || "",
-        address: settings.contact.address || "",
-        whatsapp: settings.contact.whatsapp || "",
-      });
-    }
-  }, [settings]);
+  if (settings?.contact && settings !== prevSettings) {
+    setPrevSettings(settings);
+    setFormData({
+      phone: settings.contact.phone || "",
+      email: settings.contact.email || "",
+      address: settings.contact.address || "",
+      whatsapp: settings.contact.whatsapp || "",
+    });
+  }
 
   const handleSave = async () => {
     const payload = new FormData();

@@ -45,7 +45,6 @@ function PosOrderTerminalContent({ editingOrderId: propEditingOrderId }) {
   const isSubmitting = isEditing ? isUpdating : isCreating;
 
   const searchInputRef = useRef(null);
-  const hasInitializedFromOrder = useRef(false);
 
   // Set document title
   useEffect(() => {
@@ -101,12 +100,56 @@ function PosOrderTerminalContent({ editingOrderId: propEditingOrderId }) {
   // 2. Cart & Items State
   const [items, setItems] = useState([]);
 
-  // Prepopulate form when editing an existing order
-  useEffect(() => {
-    if (editingOrder && isEditing && !hasInitializedFromOrder.current) {
-      hasInitializedFromOrder.current = true;
+  // 3. Customer & Logistics State
+  const [customerMode, setCustomerMode] = useState("walkin"); // "walkin", "member", "delivery"
+  const [walkinPhone, setWalkinPhone] = useState("");
+  const [customerData, setCustomerData] = useState({
+    selectedUser: null,
+    name: "",
+    phone: "",
+    address: "",
+  });
 
-      // 1. Items
+  const [deliveryType, setDeliveryType] = useState("counter"); // "counter" (৳0) or "delivery"
+  const [shippingRegion, setShippingRegion] = useState("dhaka");
+  const [customShippingPrice, setCustomShippingPrice] = useState(60);
+
+  // 4. Financials & Payment State
+  const [couponCode, setCouponCode] = useState("");
+  const [manualDiscountType, setManualDiscountType] = useState("flat");
+  const [manualDiscountValue, setManualDiscountValue] = useState(0);
+
+  const [paymentMethod, setPaymentMethod] = useState("Cash");
+  const [cashReceived, setCashReceived] = useState("");
+  const [transactionId, setTransactionId] = useState("");
+  const [senderPhone, setSenderPhone] = useState("");
+
+  // Split payment state
+  const [splitCash, setSplitCash] = useState("");
+  const [splitDigital, setSplitDigital] = useState("");
+  const [splitMethod, setSplitMethod] = useState("bKash");
+
+  // Order Note / Remarks
+  const [orderNote, setOrderNote] = useState("");
+
+  // 5. Held / Parked Orders State
+  const [heldOrders, setHeldOrders] = useState(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const saved = localStorage.getItem("pos_held_orders_v1");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [showHeldModal, setShowHeldModal] = useState(false);
+  const [prevEditingOrder, setPrevEditingOrder] = useState(null);
+
+  // Prepopulate form when editing an existing order
+  if (editingOrder && isEditing && editingOrder !== prevEditingOrder) {
+    setPrevEditingOrder(editingOrder);
+
+    // 1. Items
       const loadedItems = (editingOrder.orderItems || []).map((item) => {
         const rawSizeId = item.size?._id || item.size;
         let resolvedSizeName = item.size?.name || item.sizeName || "";
@@ -174,8 +217,7 @@ function PosOrderTerminalContent({ editingOrderId: propEditingOrderId }) {
       setPaymentMethod(editingOrder.paymentMethod || "Cash");
       setOrderNote(editingOrder.note || "");
       setTransactionId(editingOrder.paymentResult?.transactionId || "");
-    }
-  }, [editingOrder, isEditing]);
+  }
 
   const handleAddItem = (product, size) => {
     const sizeId = typeof size === "object" && size ? size._id : size;
@@ -266,51 +308,7 @@ function PosOrderTerminalContent({ editingOrderId: propEditingOrderId }) {
     setItems([]);
   };
 
-  // 3. Customer & Logistics State
-  const [customerMode, setCustomerMode] = useState("walkin"); // "walkin", "member", "delivery"
-  const [walkinPhone, setWalkinPhone] = useState("");
-  const [customerData, setCustomerData] = useState({
-    selectedUser: null,
-    name: "",
-    phone: "",
-    address: "",
-  });
 
-  const [deliveryType, setDeliveryType] = useState("counter"); // "counter" (৳0) or "delivery"
-  const [shippingRegion, setShippingRegion] = useState("dhaka");
-  const [customShippingPrice, setCustomShippingPrice] = useState(60);
-
-  // 4. Financials & Payment State
-  const [couponCode, setCouponCode] = useState("");
-  const [manualDiscountType, setManualDiscountType] = useState("flat");
-  const [manualDiscountValue, setManualDiscountValue] = useState(0);
-
-  const [paymentMethod, setPaymentMethod] = useState("Cash");
-  const [cashReceived, setCashReceived] = useState("");
-  const [transactionId, setTransactionId] = useState("");
-  const [senderPhone, setSenderPhone] = useState("");
-
-  // Split payment state
-  const [splitCash, setSplitCash] = useState("");
-  const [splitDigital, setSplitDigital] = useState("");
-  const [splitMethod, setSplitMethod] = useState("bKash");
-
-  // Order Note / Remarks
-  const [orderNote, setOrderNote] = useState("");
-
-  // 5. Held / Parked Orders State
-  const [heldOrders, setHeldOrders] = useState([]);
-  const [showHeldModal, setShowHeldModal] = useState(false);
-
-  // Load held orders from localStorage on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("pos_held_orders_v1");
-      if (saved) {
-        setHeldOrders(JSON.parse(saved));
-      }
-    } catch { }
-  }, []);
 
   // Save held orders to localStorage
   useEffect(() => {

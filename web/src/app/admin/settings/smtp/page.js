@@ -24,18 +24,18 @@ export default function SMTPPage() {
     mailPass: "",
     mailFrom: "",
   });
+  const [prevSettings, setPrevSettings] = useState(null);
 
-  useEffect(() => {
-    if (settings?.smtp) {
-      setFormData({
-        mailHost: settings.smtp.mailHost || "",
-        mailPort: settings.smtp.mailPort || "",
-        mailUser: settings.smtp.mailUser || "",
-        mailPass: settings.smtp.mailPass || "",
-        mailFrom: settings.smtp.mailFrom || "",
-      });
-    }
-  }, [settings]);
+  if (settings?.smtp && settings !== prevSettings) {
+    setPrevSettings(settings);
+    setFormData({
+      mailHost: settings.smtp.mailHost || "",
+      mailPort: settings.smtp.mailPort || "",
+      mailUser: settings.smtp.mailUser || "",
+      mailPass: settings.smtp.mailPass || "",
+      mailFrom: settings.smtp.mailFrom || "",
+    });
+  }
 
   const handleSave = async () => {
     const payload = new FormData();

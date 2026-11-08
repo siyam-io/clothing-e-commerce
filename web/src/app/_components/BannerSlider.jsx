@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -13,12 +13,10 @@ import "swiper/css/pagination";
 import "swiper/css/navigation";
 import "swiper/css/effect-fade";
 
-export default function BannerSlider({ slides = [], buttonText = "Shop Now", lang = "en", showHeader = false }) {
-  const [mounted, setMounted] = useState(false);
+const emptySubscribe = () => () => {};
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+export default function BannerSlider({ slides = [], buttonText = "Shop Now", lang = "en", showHeader = false }) {
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   if (!slides || slides.length === 0) return null;
 
