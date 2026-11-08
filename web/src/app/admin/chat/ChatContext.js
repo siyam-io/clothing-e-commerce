@@ -33,7 +33,7 @@ export function ChatProvider({ children }) {
     setLoading(true);
 
     socketRef.current = io(
-      process.env.NEXT_PUBLIC_API_URL.replace("/api", ""),
+      (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api").replace("/api", ""),
       {
         auth: { token },
         transports: ["websocket"],

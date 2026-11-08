@@ -46,6 +46,8 @@ import { swalConfirm, swalToast, swalError } from "@/utils/swal";
 import ChatToolWidgets from "./components/ChatToolWidgets";
 import ChatSessionSidebar from "./components/ChatSessionSidebar";
 import ChatSettingsDrawer from "./components/ChatSettingsDrawer";
+import ChatEmptyState from "./components/ChatEmptyState";
+import ChatMessageItem from "./components/ChatMessageItem";
 
 const DEFAULT_GREETING = {
   role: "model",
@@ -580,92 +582,22 @@ export default function AdminAiChatPage() {
               <p className="text-xs">Loading conversation...</p>
             </div>
           ) : messages.length === 1 && !loading ? (
-            /* ChatGPT Welcome Hero for empty new chats */
-            <div className="my-auto max-w-xl mx-auto text-center space-y-4 py-8 px-4">
-              <div className="h-14 w-14 mx-auto rounded-3xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
-                <Sparkles size={28} />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-foreground">How can I assist you with your store?</h3>
-                <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
-                  I can inspect orders, adjust stock, manage coupons, review categories, and provide business analytics.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left pt-2">
-                {suggestionChips.map((chip, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleSendMessage(chip.prompt)}
-                    className="p-3 rounded-xl border border-border bg-card/60 hover:bg-muted hover:border-primary/30 transition-all text-xs font-medium text-foreground flex items-center justify-between group shadow-sm"
-                  >
-                    <span>{chip.label}</span>
-                    <ArrowUpRight size={13} className="opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
-                  </button>
-                ))}
-              </div>
-            </div>
+            <ChatEmptyState
+              suggestionChips={suggestionChips}
+              onSelectSuggestion={handleSendMessage}
+            />
           ) : (
             <AnimatePresence initial={false}>
               {messages.map((msg, i) => (
-                <motion.div
+                <ChatMessageItem
                   key={i}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.25 }}
-                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <div className={`flex gap-3 max-w-[85%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                    {/* Avatar */}
-                    {msg.role === "user" ? (
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-zinc-700 to-zinc-900 border border-zinc-600 flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm">
-                        <User size={14} />
-                      </div>
-                    ) : (
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-violet-600 to-indigo-600 border border-violet-500/30 flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-md shadow-violet-500/10">
-                        <Sparkles size={14} className="text-white animate-pulse" />
-                      </div>
-                    )}
-
-                    {/* Message card */}
-                    <div
-                      className={`rounded-2xl px-4 py-3 shadow-md border leading-relaxed text-sm ${msg.role === "user"
-                          ? "bg-primary text-primary-foreground border-primary/30 rounded-tr-none"
-                          : "bg-card/90 backdrop-blur-md text-foreground border-border rounded-tl-none"
-                        }`}
-                    >
-                      {msg.image && (
-                        <div className="mb-2 max-w-sm rounded-lg overflow-hidden border border-border/30 bg-black/5 dark:bg-white/5">
-                          <img
-                            src={msg.image}
-                            alt="Uploaded attachment"
-                            className="max-h-48 w-full object-contain rounded-md"
-                          />
-                        </div>
-                      )}
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
-                      {msg.role === "model" && msg.toolExecutions && (
-                        <ChatToolWidgets
-                          executions={msg.toolExecutions}
-                          msgIdx={i}
-                          setInputValue={setInputValue}
-                          handleUndo={handleUndo}
-                          undoneActions={undoneActions}
-                          undoing={undoing}
-                        />
-                      )}
-                      {msg.createdAt && (
-                        <span
-                          className={cn(
-                            "text-[10px] block mt-1.5 font-mono",
-                            msg.role === "user" ? "text-primary-foreground/70 text-right" : "text-muted-foreground/60 text-right"
-                          )}
-                        >
-                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
+                  msg={msg}
+                  msgIdx={i}
+                  setInputValue={setInputValue}
+                  handleUndo={handleUndo}
+                  undoneActions={undoneActions}
+                  undoing={undoing}
+                />
               ))}
             </AnimatePresence>
           )}

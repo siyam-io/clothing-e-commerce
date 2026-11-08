@@ -27,8 +27,10 @@ export default function Subcategories() {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      await deleteSubcategory.mutateAsync(deleteTarget.id);
-      swalToast("Subcategory deleted", "success");
+      if (deleteTarget.type === "subcategory" || deleteTarget.id) {
+        await deleteSubcategory(deleteTarget.id);
+        swalToast("Subcategory deleted", "success");
+      }
       setDeleteTarget(null);
     } catch (err) {
       swalError("Delete Failed", err.response?.data?.message || "Could not delete subcategory.");

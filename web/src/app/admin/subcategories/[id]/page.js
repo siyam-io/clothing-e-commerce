@@ -1,14 +1,14 @@
 "use client";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useSubcategories } from "@/app/admin/subcategories/lib/useSubcategories";
 import { useAdminCategories } from "@/app/admin/categories/lib/useAdminCategories";
 import { swalToast, swalError } from "@/utils/swal";
 import SubcategoryForm from "@/app/admin/subcategories/components/SubcategoryForm";
 import Loader from "@/components/common/Loader";
 
-export default function SubcategoryFormPage() {
+function SubcategoryFormContent() {
   const { id } = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -63,5 +63,19 @@ export default function SubcategoryFormPage() {
       onSubmit={handleSubmit}
       isSubmitting={isSubmitting}
     />
+  );
+}
+
+export default function SubcategoryFormPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-[40vh]">
+          <Loader />
+        </div>
+      }
+    >
+      <SubcategoryFormContent />
+    </Suspense>
   );
 }

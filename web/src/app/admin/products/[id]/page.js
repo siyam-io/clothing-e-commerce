@@ -3,7 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { useEffect, useState, useMemo } from "react";
-import { useAdminProducts } from "@/app/admin/products/lib/useAdminProducts";
+import { useAdminProducts, useAdminProduct } from "@/app/admin/products/lib/useAdminProducts";
 import { useAdminCategories } from "@/app/admin/categories/lib/useAdminCategories";
 import { useSubcategories } from "@/app/admin/subcategories/lib/useSubcategories";
 import { useSizes } from "@/app/admin/sizes/lib/useSizes";
@@ -15,14 +15,15 @@ import ProductForm from "@/app/admin/products/components/ProductForm";
 export default function ProductAddPage() {
   const { id } = useParams();
   const router = useRouter();
-  const isEdit = id && id !== "new";
+  const isEdit = Boolean(id && id !== "new");
 
-  const { products, createProduct, updateProduct } = useAdminProducts();
+  const { createProduct } = useAdminProducts();
+  const { product: singleProduct, isLoading: isProductLoading, updateProduct } = useAdminProduct(isEdit ? id : null);
   const { categories } = useAdminCategories();
   const { subcategories } = useSubcategories();
   const { sizes } = useSizes();
 
-  const [loading, setLoading] = useState(isEdit);
+  const [hasPopulated, setHasPopulated] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]); 
   const [existingImages, setExistingImages] = useState([]); 
   const [imagePreviews, setImagePreviews] = useState([]); 
@@ -70,51 +71,46 @@ export default function ProductAddPage() {
   }, [watchedCategory, subcategories]);
 
   useEffect(() => {
-    if (isEdit && products && products.length > 0 && loading) {
-      setLoading(false);
-      const product = products.find((p) => p._id === id);
-      if (product) {
-        setValue("name", product.name);
-        setValue("slug", product.slug);
-        setValue("description", product.description || "");
-        setValue("price", product.price);
-        setValue("discount", product.discount || 0);
-        setValue("category", product.category._id);
-        setValue("subcategory", product.subcategory?._id || "");
-        setValue("tags", product.tags?.join(", ") || "");
-        setValue("isActive", product.isActive);
-        setValue("isFeatured", product.isFeatured || false);
-        setValue("showReviews", product.showReviews !== false);
-        setValue("sku", product.sku || "");
-        setValue("gtin", product.gtin || "");
-        setValue("brand", product.brand || "");
-        setValue("material", product.material || "");
-        setValue("color", product.color || "");
-        setValue("gender", product.gender || "Unisex");
-        setValue("specifications.fit", product.specifications?.fit || "");
-        setValue("specifications.sleeve", product.specifications?.sleeve || "");
-        setValue("specifications.pattern", product.specifications?.pattern || "");
-        setValue("specifications.collar", product.specifications?.collar || "");
-        setValue("faqs", product.faqs || []);
-        setValue("seo.metaTitle", product.seo?.metaTitle || "");
-        setValue("seo.metaDescription", product.seo?.metaDescription || "");
-        setValue("seo.keywords", product.seo?.keywords || "");
+    if (isEdit && singleProduct && !hasPopulated) {
+      setHasPopulated(true);
+      setValue("name", singleProduct.name);
+      setValue("slug", singleProduct.slug);
+      setValue("description", singleProduct.description || "");
+      setValue("price", singleProduct.price);
+      setValue("discount", singleProduct.discount || 0);
+      setValue("category", singleProduct.category?._id || singleProduct.category);
+      setValue("subcategory", singleProduct.subcategory?._id || singleProduct.subcategory || "");
+      setValue("tags", singleProduct.tags?.join(", ") || "");
+      setValue("isActive", singleProduct.isActive);
+      setValue("isFeatured", singleProduct.isFeatured || false);
+      setValue("showReviews", singleProduct.showReviews !== false);
+      setValue("sku", singleProduct.sku || "");
+      setValue("gtin", singleProduct.gtin || "");
+      setValue("brand", singleProduct.brand || "");
+      setValue("material", singleProduct.material || "");
+      setValue("color", singleProduct.color || "");
+      setValue("gender", singleProduct.gender || "Unisex");
+      setValue("specifications.fit", singleProduct.specifications?.fit || "");
+      setValue("specifications.sleeve", singleProduct.specifications?.sleeve || "");
+      setValue("specifications.pattern", singleProduct.specifications?.pattern || "");
+      setValue("specifications.collar", singleProduct.specifications?.collar || "");
+      setValue("faqs", singleProduct.faqs || []);
+      setValue("seo.metaTitle", singleProduct.seo?.metaTitle || "");
+      setValue("seo.metaDescription", singleProduct.seo?.metaDescription || "");
+      setValue("seo.keywords", singleProduct.seo?.keywords || "");
 
-        setExistingImages(product.images || []);
-        setImagePreviews(product.images?.map((img) => getImageUrl(img)) || []);
-        setSelectedFiles([]); 
+      setExistingImages(singleProduct.images || []);
+      setImagePreviews(singleProduct.images?.map((img) => getImageUrl(img)) || []);
+      setSelectedFiles([]); 
 
-        const sizesObj = {};
-        product.sizes?.forEach((item) => {
-          const sizeId = item.size._id || item.size;
-          sizesObj[sizeId] = item.stock;
-        });
-        setValue("sizes", sizesObj);
-      } else if (products) setLoading(false);
-    } else if (!isEdit) {
-      setLoading(false);
+      const sizesObj = {};
+      singleProduct.sizes?.forEach((item) => {
+        const sizeId = item.size?._id || item.size;
+        sizesObj[sizeId] = item.stock;
+      });
+      setValue("sizes", sizesObj);
     }
-  }, [isEdit, id, products, setValue, loading]);
+  }, [isEdit, singleProduct, hasPopulated, setValue]);
 
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
@@ -239,7 +235,7 @@ export default function ProductAddPage() {
     }
   };
 
-  if (loading)
+  if (isEdit && isProductLoading && !hasPopulated)
     return (
       <div className="admin-page-container flex items-center justify-center min-h-[60vh]">
         <Loader />
