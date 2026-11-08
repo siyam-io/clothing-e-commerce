@@ -16,33 +16,26 @@ export default function ImageUpload({
   multiple = false,
   className
 }) {
-  const [preview, setPreview] = useState(null);
-  const [previews, setPreviews] = useState([]);
+  const [localPreview, setLocalPreview] = useState(null);
+  const [localPreviews, setLocalPreviews] = useState(null);
 
-  useEffect(() => {
-    if (multiple) {
-      if (currentImage && Array.isArray(currentImage)) {
-        setPreviews(currentImage.map((img) => getImageUrl(img)));
-      }
-    } else {
-      if (currentImage) {
-        setPreview(getImageUrl(currentImage));
-      }
-    }
-  }, [currentImage, multiple]);
+  const preview = localPreview !== null ? localPreview : (currentImage && !multiple ? getImageUrl(currentImage) : null);
+  const previews = localPreviews !== null 
+    ? localPreviews 
+    : (Array.isArray(currentImage) && multiple ? currentImage.map((img) => getImageUrl(img)) : []);
 
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
     if (multiple) {
       const newPreviews = files.map((file) => URL.createObjectURL(file));
-      setPreviews([...previews, ...newPreviews]);
+      setLocalPreviews([...previews, ...newPreviews]);
       if (onImageChange) onImageChange(files);
     } else {
       const file = files[0];
       if (file) {
         const reader = new FileReader();
         reader.onloadend = () => {
-          setPreview(reader.result);
+          setLocalPreview(reader.result);
         };
         reader.readAsDataURL(file);
         if (onImageChange) onImageChange(file);
@@ -53,10 +46,10 @@ export default function ImageUpload({
   const removeImage = (index) => {
     if (multiple) {
       const newPreviews = previews.filter((_, i) => i !== index);
-      setPreviews(newPreviews);
+      setLocalPreviews(newPreviews);
       if (onImageChange) onImageChange(null);
     } else {
-      setPreview(null);
+      setLocalPreview("");
       if (onImageChange) onImageChange(null);
     }
   };

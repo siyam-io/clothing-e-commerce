@@ -14,7 +14,7 @@ export const useAdminCoupons = (params = {}) => {
   } = useQuery({
     queryKey: ["admin-coupons", params],
     queryFn: async () => (await api.get("/coupons", { params })).data,
-    enabled: !!user && hasPermission(user, 'coupons:view'),
+    enabled: !!user && hasPermission(user, ["coupons:view", "all"]),
   });
 
   const createCoupon = useMutation({
@@ -35,24 +35,24 @@ export const useAdminCoupons = (params = {}) => {
       queryClient.invalidateQueries({ queryKey: ["admin-coupons"] }),
   });
 
-  const getCoupon = (id, usageParams = { page: 1, limit: 10 }) => {
-    return useQuery({
-      queryKey: ["admin-coupon", id, usageParams],
-      queryFn: async () => (await api.get(`/coupons/${id}`, { params: usageParams })).data,
-      enabled: !!user && hasPermission(user, 'coupons:view') && !!id && id !== "new",
-    });
-  };
-
   return {
     coupons: coupons?.coupons || [],
     total: coupons?.total || 0,
     pages: coupons?.pages || 1,
     page: coupons?.page || 1,
-    getCoupon,
     isLoading,
     error,
     createCoupon: createCoupon.mutateAsync,
     updateCoupon: updateCoupon.mutateAsync,
     deleteCoupon: deleteCoupon.mutateAsync,
   };
+};
+
+export const useAdminCoupon = (id, usageParams = { page: 1, limit: 10 }) => {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ["admin-coupon", id, usageParams],
+    queryFn: async () => (await api.get(`/coupons/${id}`, { params: usageParams })).data,
+    enabled: !!user && hasPermission(user, ["coupons:view", "all"]) && !!id && id !== "new",
+  });
 };

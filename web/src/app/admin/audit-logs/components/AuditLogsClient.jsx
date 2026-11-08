@@ -42,7 +42,9 @@ const MODULE_OPTIONS = [
   { value: "FlashSale", label: "Flash Sales" },
   { value: "Banner", label: "Banner Campaigns" },
   { value: "Blog", label: "Blog & Articles" },
+  { value: "Review", label: "Reviews & Ratings" },
   { value: "Settings", label: "Store Settings" },
+  { value: "Chat", label: "AI & Live Chat" },
   { value: "System", label: "System Operations" },
 ];
 
@@ -55,9 +57,19 @@ const ACTION_OPTIONS = [
   { value: "DELETE", label: "Delete" },
   { value: "LOGIN", label: "Login" },
   { value: "LOGOUT", label: "Logout" },
+  { value: "REGISTER", label: "Register" },
+  { value: "PASSWORD_RESET", label: "Password Reset" },
+  { value: "REVIEW", label: "Review" },
   { value: "CONFIG_UPDATE", label: "Config Update" },
   { value: "BULK_ACTION", label: "Bulk Action" },
   { value: "CANCEL", label: "Cancellation" },
+];
+
+const ROLE_OPTIONS = [
+  { value: "all", label: "All Roles" },
+  { value: "admin", label: "Admins & Staff" },
+  { value: "customer", label: "Customers" },
+  { value: "guest", label: "Guests / Public" },
 ];
 
 const STATUS_OPTIONS = [
@@ -73,6 +85,7 @@ export default function AuditLogsClient() {
   const [selectedModule, setSelectedModule] = useState("all");
   const [selectedAction, setSelectedAction] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [selectedRole, setSelectedRole] = useState("all");
   const [activeLog, setActiveLog] = useState(null);
 
   // Memoized query parameters for backend
@@ -82,8 +95,9 @@ export default function AuditLogsClient() {
     if (selectedModule !== "all") params.module = selectedModule;
     if (selectedAction !== "all") params.action = selectedAction;
     if (selectedStatus !== "all") params.status = selectedStatus;
+    if (selectedRole !== "all") params.role = selectedRole;
     return params;
-  }, [page, search, selectedModule, selectedAction, selectedStatus]);
+  }, [page, search, selectedModule, selectedAction, selectedStatus, selectedRole]);
 
   const {
     logs,
@@ -105,6 +119,7 @@ export default function AuditLogsClient() {
     setSelectedModule("all");
     setSelectedAction("all");
     setSelectedStatus("all");
+    setSelectedRole("all");
     setPage(1);
   }, []);
 
@@ -112,7 +127,8 @@ export default function AuditLogsClient() {
     Boolean(search.trim()) ||
     selectedModule !== "all" ||
     selectedAction !== "all" ||
-    selectedStatus !== "all";
+    selectedStatus !== "all" ||
+    selectedRole !== "all";
 
   // Helpers for module badge coloring
   const getModuleBadgeClass = (module) => {
@@ -135,6 +151,16 @@ export default function AuditLogsClient() {
         return "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20";
       case "SETTINGS":
         return "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20";
+      case "COUPON":
+        return "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20";
+      case "FLASHSALE":
+        return "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20";
+      case "BANNER":
+        return "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20";
+      case "REVIEW":
+        return "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20";
+      case "CHAT":
+        return "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 border-fuchsia-500/20";
       default:
         return "bg-muted text-muted-foreground border-border";
     }
@@ -404,6 +430,22 @@ export default function AuditLogsClient() {
               className="h-10 px-3 py-1.5 rounded-xl border border-border/60 bg-background/80 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
             >
               {ACTION_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+
+            {/* Role Filter */}
+            <select
+              value={selectedRole}
+              onChange={(e) => {
+                setSelectedRole(e.target.value);
+                setPage(1);
+              }}
+              className="h-10 px-3 py-1.5 rounded-xl border border-border/60 bg-background/80 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+            >
+              {ROLE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>

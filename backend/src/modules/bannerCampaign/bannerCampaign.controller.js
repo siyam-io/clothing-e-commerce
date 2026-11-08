@@ -1,5 +1,6 @@
 import bannerCampaignService from "./bannerCampaign.service.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
+import auditLogService from "../auditLog/auditLog.service.js";
 
 /**
  * Controller delegating promotional banner campaign requests to domain service.
@@ -38,6 +39,18 @@ export class BannerCampaignController {
       isActive,
       files,
     });
+
+    auditLogService.recordLog({
+      req,
+      action: "CREATE",
+      module: "Banner",
+      resourceId: campaign._id,
+      resourceName: campaign.name,
+      description: `Created new banner campaign: ${campaign.name}`,
+      details: { name, isActive },
+      status: "SUCCESS",
+    });
+
     res.status(201).json(campaign);
   });
 
@@ -51,11 +64,33 @@ export class BannerCampaignController {
       isActive,
       files,
     });
+
+    auditLogService.recordLog({
+      req,
+      action: "UPDATE",
+      module: "Banner",
+      resourceId: req.params.id,
+      resourceName: campaign?.name,
+      description: `Updated banner campaign: ${campaign?.name || req.params.id}`,
+      details: { name, isActive },
+      status: "SUCCESS",
+    });
+
     res.status(200).json(campaign);
   });
 
   deleteCampaign = asyncHandler(async (req, res) => {
     const result = await this.service.deleteCampaign(req.params.id);
+
+    auditLogService.recordLog({
+      req,
+      action: "DELETE",
+      module: "Banner",
+      resourceId: req.params.id,
+      description: `Deleted banner campaign #${req.params.id}`,
+      status: "SUCCESS",
+    });
+
     res.status(200).json(result);
   });
 }

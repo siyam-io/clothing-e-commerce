@@ -33,6 +33,7 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import { handleFileError } from "./middleware/cleanup.js";
 import contextMiddleware from "./middleware/context.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
+import auditLogMiddleware from "./middleware/auditLogMiddleware.js";
 import { swaggerUi, specs } from "./swagger.js";
 import logger from "./utils/logger.js";
 
@@ -154,6 +155,7 @@ app.use(contextMiddleware);
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 app.use(cookieParser());
+app.use(auditLogMiddleware);
 
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 

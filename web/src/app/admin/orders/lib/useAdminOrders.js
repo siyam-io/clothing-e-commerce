@@ -12,7 +12,7 @@ export const useAdminOrders = (params = {}, orderId = null) => {
   const { socket } = useChatStore();
 
   const [newOrderIds, setNewOrderIds] = useState(new Set());
-  const [isSocketConnected, setIsSocketConnected] = useState(false);
+  const [isSocketConnected, setIsSocketConnected] = useState(() => Boolean(socket?.connected));
 
   const {
     data: allOrdersData,
@@ -43,8 +43,6 @@ export const useAdminOrders = (params = {}, orderId = null) => {
   // =========================================================================
   useEffect(() => {
     if (!socket) return;
-
-    setIsSocketConnected(Boolean(socket.connected));
 
     const onConnect = () => setIsSocketConnected(true);
     const onDisconnect = () => setIsSocketConnected(false);

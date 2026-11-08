@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Controller } from "react-hook-form";
+import { useState } from "react";
+import { Controller, useFieldArray } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,31 +50,10 @@ export default function ProductForm({
   router,
 }) {
   const watchedCategory = watch("category");
-  const [faqsList, setFaqsList] = useState([]);
-
-  useEffect(() => {
-    const currentFaqs = watch("faqs") || [];
-    setFaqsList(currentFaqs);
-  }, [watch("faqs")]);
-
-  const handleAddFaq = () => {
-    const updated = [...faqsList, { question: "", answer: "" }];
-    setFaqsList(updated);
-    setValue("faqs", updated);
-  };
-
-  const handleFaqChange = (index, field, value) => {
-    const updated = [...faqsList];
-    updated[index][field] = value;
-    setFaqsList(updated);
-    setValue("faqs", updated);
-  };
-
-  const handleRemoveFaq = (index) => {
-    const updated = faqsList.filter((_, i) => i !== index);
-    setFaqsList(updated);
-    setValue("faqs", updated);
-  };
+  const { fields: faqsList, append: appendFaq, remove: removeFaq } = useFieldArray({
+    control,
+    name: "faqs",
+  });
 
   return (
     <AdminPageContainer maxWidth="max-w-5xl">
@@ -425,7 +404,7 @@ export default function ProductForm({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={handleAddFaq}
+                  onClick={() => appendFaq({ question: "", answer: "" })}
                   className="h-8 px-3 rounded-lg text-xs font-medium gap-1.5"
                 >
                   <Plus className="size-3.5" /> Add Question
@@ -440,10 +419,10 @@ export default function ProductForm({
               ) : (
                 <div className="space-y-3">
                   {faqsList.map((faq, idx) => (
-                    <div key={idx} className="p-4 rounded-xl border border-border/60 bg-muted/20 relative space-y-3">
+                    <div key={faq.id || idx} className="p-4 rounded-xl border border-border/60 bg-muted/20 relative space-y-3">
                       <button
                         type="button"
-                        onClick={() => handleRemoveFaq(idx)}
+                        onClick={() => removeFaq(idx)}
                         className="absolute top-3 right-3 text-muted-foreground hover:text-rose-500 transition-colors p-1"
                         title="Remove FAQ"
                       >
@@ -452,8 +431,7 @@ export default function ProductForm({
                       <div className="space-y-1.5 pr-8">
                         <Label className="text-xs font-medium text-foreground">Question {idx + 1}</Label>
                         <Input 
-                          value={faq.question || ""}
-                          onChange={(e) => handleFaqChange(idx, "question", e.target.value)}
+                          {...register(`faqs.${idx}.question`)}
                           placeholder="e.g. Is this fabric pre-shrunk?"
                           className="h-9 bg-background/80 border-border/60 rounded-lg text-xs"
                         />
@@ -462,8 +440,7 @@ export default function ProductForm({
                         <Label className="text-xs font-medium text-foreground">Answer</Label>
                         <Textarea 
                           rows={2}
-                          value={faq.answer || ""}
-                          onChange={(e) => handleFaqChange(idx, "answer", e.target.value)}
+                          {...register(`faqs.${idx}.answer`)}
                           placeholder="e.g. Yes, pre-shrunk for a consistent fit after washing."
                           className="bg-background/80 border-border/60 rounded-lg text-xs resize-none"
                         />

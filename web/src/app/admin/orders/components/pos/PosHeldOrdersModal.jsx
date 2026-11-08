@@ -74,10 +74,12 @@ export default function PosHeldOrdersModal({
             heldOrders.map((held, idx) => {
               const totalItems = (held.items || []).reduce((s, i) => s + i.quantity, 0);
               const subtotal = (held.items || []).reduce((s, i) => s + i.price * i.quantity, 0);
-              const timeString = new Date(held.timestamp || Date.now()).toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-              });
+              const timeString = held.timestamp
+                ? new Date(held.timestamp).toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "Just now";
 
               return (
                 <div

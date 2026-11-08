@@ -20,6 +20,21 @@ export class AuthController {
     const { name, email, password } = req.body;
     const guestId = req.headers["x-guest-id"];
     const result = await this.service.register({ name, email, password, guestId });
+
+    if (result?.user) {
+      auditLogService.recordLog({
+        req,
+        user: result.user,
+        action: "REGISTER",
+        module: "Auth",
+        resourceId: result.user._id,
+        resourceName: result.user.name,
+        description: `New user account registered: ${result.user.name} (${result.user.email})`,
+        details: { email: result.user.email, role: result.user.role?.name || "customer" },
+        status: "SUCCESS",
+      });
+    }
+
     res.status(201).json(result);
   });
 
@@ -32,18 +47,21 @@ export class AuthController {
     const result = await this.service.login({ email, password, guestId });
 
     if (result?.user) {
-      const roleName = String(result.user.role?.name || result.user.role || "").toLowerCase();
-      if (roleName !== "customer" && roleName !== "user") {
-        auditLogService.recordLog({
-          req,
-          user: result.user,
-          action: "LOGIN",
-          module: "Auth",
-          resourceId: result.user._id,
-          description: `Administrator ${result.user.name} logged into the system`,
-          status: "SUCCESS",
-        });
-      }
+      const roleName = String(result.user.role?.name || result.user.role || "user");
+      const isStaff = !["customer", "user"].includes(roleName.toLowerCase());
+      auditLogService.recordLog({
+        req,
+        user: result.user,
+        action: "LOGIN",
+        module: "Auth",
+        resourceId: result.user._id,
+        resourceName: result.user.name,
+        description: isStaff
+          ? `Administrator ${result.user.name} logged into the system`
+          : `Customer ${result.user.name} logged in`,
+        details: { email: result.user.email, role: roleName },
+        status: "SUCCESS",
+      });
     }
 
     res.status(200).json(result);
@@ -64,6 +82,14 @@ export class AuthController {
   forgotPassword = asyncHandler(async (req, res) => {
     const { email } = req.body;
     const result = await this.service.forgotPassword(email);
+    auditLogService.recordLog({
+      req,
+      action: "PASSWORD_RESET",
+      module: "Auth",
+      description: `Password reset request submitted for email: ${email}`,
+      details: { email },
+      status: "SUCCESS",
+    });
     res.status(200).json(result);
   });
 
@@ -74,6 +100,13 @@ export class AuthController {
     const { token } = req.query;
     const { password } = req.body;
     const result = await this.service.resetPassword({ token, password });
+    auditLogService.recordLog({
+      req,
+      action: "PASSWORD_RESET",
+      module: "Auth",
+      description: "Password reset successfully completed for user account",
+      status: "SUCCESS",
+    });
     res.status(200).json(result);
   });
 
@@ -92,6 +125,21 @@ export class AuthController {
     const { idToken, accessToken } = req.body;
     const guestId = req.headers["x-guest-id"];
     const result = await this.service.loginWithGoogle({ idToken, accessToken, guestId });
+
+    if (result?.user) {
+      auditLogService.recordLog({
+        req,
+        user: result.user,
+        action: "LOGIN",
+        module: "Auth",
+        resourceId: result.user._id,
+        resourceName: result.user.name,
+        description: `User ${result.user.name} logged in via Google OAuth`,
+        details: { email: result.user.email, provider: "Google" },
+        status: "SUCCESS",
+      });
+    }
+
     res.status(200).json(result);
   });
 
@@ -102,6 +150,21 @@ export class AuthController {
     const { accessToken } = req.body;
     const guestId = req.headers["x-guest-id"];
     const result = await this.service.loginWithFacebook({ accessToken, guestId });
+
+    if (result?.user) {
+      auditLogService.recordLog({
+        req,
+        user: result.user,
+        action: "LOGIN",
+        module: "Auth",
+        resourceId: result.user._id,
+        resourceName: result.user.name,
+        description: `User ${result.user.name} logged in via Facebook OAuth`,
+        details: { email: result.user.email, provider: "Facebook" },
+        status: "SUCCESS",
+      });
+    }
+
     res.status(200).json(result);
   });
 }

@@ -9,19 +9,19 @@ export default function ProtectedRoute({ children, adminOnly = false }) {
   const { user, isAuthenticated, isLoading } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
-  const [isAuthorized, setIsAuthorized] = useState(false);
+
+  const isRoleAdmin = user?.role === "admin" || user?.role?.name === "admin" || user?.role?.name === "superadmin";
+  const isAuthorized = !isLoading && isAuthenticated && (!adminOnly || isRoleAdmin);
 
   useEffect(() => {
     if (isLoading) return;
 
     if (!isAuthenticated) {
       router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
-    } else if (adminOnly && user?.role !== "admin") {
+    } else if (adminOnly && !isRoleAdmin) {
       router.replace("/");
-    } else {
-      setIsAuthorized(true);
     }
-  }, [isLoading, isAuthenticated, user, router, adminOnly, pathname]);
+  }, [isLoading, isAuthenticated, user, router, adminOnly, pathname, isRoleAdmin]);
 
   if (isLoading || !isAuthorized) {
     return (

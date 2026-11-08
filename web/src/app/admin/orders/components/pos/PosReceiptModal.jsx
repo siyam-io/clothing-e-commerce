@@ -31,17 +31,23 @@ export default function PosReceiptModal({
     window.print();
   };
 
-  const formattedDate = new Date(order.createdAt || Date.now()).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  const orderDate = order.createdAt ? new Date(order.createdAt) : null;
 
-  const formattedTime = new Date(order.createdAt || Date.now()).toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
+  const formattedDate = orderDate
+    ? orderDate.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : "";
+
+  const formattedTime = orderDate
+    ? orderDate.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })
+    : "";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-200">

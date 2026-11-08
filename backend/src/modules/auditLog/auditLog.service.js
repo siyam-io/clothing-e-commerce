@@ -40,23 +40,47 @@ export class AuditLogService {
         "127.0.0.1";
       const userAgent = req?.headers?.["user-agent"] || "Server/Internal";
 
+      const fallbackName =
+        req?.body?.name ||
+        req?.body?.customerName ||
+        req?.body?.shippingAddress?.name;
+      const fallbackEmail =
+        req?.body?.email ||
+        req?.body?.customerEmail ||
+        req?.body?.shippingAddress?.email;
+
+      const userName =
+        actor?.name ||
+        fallbackName ||
+        (actor ? "User" : "Guest / Anonymous");
+      const userEmail =
+        actor?.email ||
+        fallbackEmail ||
+        (actor ? "user@store" : "guest@store");
+      const userRole =
+        actor?.role?.name ||
+        (typeof actor?.role === "string" ? actor.role : (actor ? "user" : "guest"));
+
       const log = new AuditLog({
         user: actor?._id || actor?.id,
-        userName: actor?.name || "System Administrator",
-        userEmail: actor?.email || "system@local",
-        userRole: actor?.role?.name || (typeof actor?.role === "string" ? actor.role : "admin"),
+        userName,
+        userEmail,
+        userRole,
         action: String(action || "SYSTEM").toUpperCase(),
-        module,
+        module: module ? (module.charAt(0).toUpperCase() + module.slice(1)) : "System",
         resourceId: resourceId ? String(resourceId) : undefined,
         resourceName: resourceName ? String(resourceName) : undefined,
         description,
         details,
-        status,
+        status: status || "SUCCESS",
         ipAddress,
         userAgent,
       });
 
       await log.save();
+      if (req) {
+        req._auditLogged = true;
+      }
       logger.info(`AuditLog recorded [${module}:${action}] - ${description}`);
       return log;
     } catch (err) {
@@ -79,6 +103,7 @@ export class AuditLogService {
     module,
     action,
     status,
+    role,
     startDate,
     endDate,
     userId,
@@ -97,6 +122,10 @@ export class AuditLogService {
       // Handle both FAILED and FAILURE
       const normalizedStatus = status.trim().toUpperCase() === "FAILURE" ? "FAILED" : status.trim().toUpperCase();
       query.status = normalizedStatus;
+    }
+
+    if (role && role !== "all") {
+      query.userRole = new RegExp(`^${role.trim()}$`, "i");
     }
 
     if (userId) {
@@ -121,10 +150,12 @@ export class AuditLogService {
         { description: regex },
         { userName: regex },
         { userEmail: regex },
+        { userRole: regex },
         { resourceName: regex },
         { resourceId: regex },
         { action: regex },
         { module: regex },
+        { ipAddress: regex },
       ];
     }
 

@@ -43,6 +43,9 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { hasPermission } from "@/utils/rbacUtils";
 import { swalConfirm, swalToast, swalError } from "@/utils/swal";
+import ChatToolWidgets from "./components/ChatToolWidgets";
+import ChatSessionSidebar from "./components/ChatSessionSidebar";
+import ChatSettingsDrawer from "./components/ChatSettingsDrawer";
 
 const DEFAULT_GREETING = {
   role: "model",
@@ -73,7 +76,6 @@ export default function AdminAiChatPage() {
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState("chat"); // chat or commands
   const messagesEndRef = useRef(null);
   const [cooldown, setCooldown] = useState(0);
   const cooldownRef = useRef(null);
@@ -471,449 +473,32 @@ export default function AdminAiChatPage() {
   );
   const currentSession = sessions.find((s) => s.id === currentSessionId);
 
-  const renderToolWidgets = (executions, msgIdx) => {
-    if (!executions || executions.length === 0) return null;
-
-    return (
-      <div className="mt-4 space-y-3.5 w-full">
-        {executions.map((exec, idx) => {
-          if (exec.status !== "completed" || !exec.result) return null;
-          const { name, result } = exec;
-
-          // Widget 1: searchProducts
-          if (name === "searchProducts" && result.success) {
-            return (
-              <div key={idx} className="border border-primary/20 bg-primary/5 rounded-xl p-4 shadow-inner w-full overflow-hidden backdrop-blur-sm">
-                <div className="flex items-center justify-between mb-2 text-xs font-semibold uppercase tracking-wider text-primary">
-                  <span className="flex items-center gap-1.5"><Search size={14} /> Catalog Query Results</span>
-                  <span className="bg-primary/20 px-2 py-0.5 rounded text-[10px]">{result.count} Match</span>
-                </div>
-                {result.products.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-primary/10 text-muted-foreground">
-                          <th className="py-2 pr-2 font-medium">Product</th>
-                          <th className="py-2 px-2 font-medium">Price</th>
-                          <th className="py-2 px-2 font-medium">Category</th>
-                          <th className="py-2 px-2 font-medium">Status</th>
-                          <th className="py-2 pl-2 font-medium text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {result.products.map((prod) => (
-                          <tr key={prod.id} className="border-b border-primary/5 hover:bg-primary/10 transition-colors">
-                            <td className="py-2.5 pr-2 font-semibold text-foreground">{prod.name}</td>
-                            <td className="py-2.5 px-2 font-mono text-foreground font-semibold">${prod.price}</td>
-                            <td className="py-2.5 px-2 text-muted-foreground">{prod.category}</td>
-                            <td className="py-2.5 px-2">
-                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${prod.isActive ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" : "bg-destructive/10 text-destructive border border-destructive/20"}`}>
-                                {prod.isActive ? "Active" : "Inactive"}
-                              </span>
-                            </td>
-                            <td className="py-2.5 pl-2 text-right">
-                              <button
-                                onClick={() => setInputValue(`Update stock of product ID ${prod.id} for size M to 25`)}
-                                className="text-primary hover:opacity-80 hover:underline text-[10px] font-semibold"
-                              >
-                                Edit Stock
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">No matching products found.</p>
-                )}
-              </div>
-            );
-          }
-
-          // Widget 2: updateProductStock / updateOrderStatus / createCoupon / toggleFlashSale / toggleUserStatus / updateProductSeo / createBlogDraft
-          const successWidgets = {
-            updateProductStock: { label: "Stock Updated", icon: <Package size={16} className="text-emerald-500" />, color: "border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400" },
-            updateOrderStatus: { label: "Order Status Sync", icon: <ShoppingCart size={16} className="text-emerald-500" />, color: "border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400" },
-            createCoupon: { label: "Coupon Issued", icon: <Ticket size={16} className="text-emerald-500" />, color: "border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400" },
-            toggleFlashSale: { label: "Flash Sale Promo", icon: <Zap size={16} className="text-purple-500" />, color: "border-purple-500/20 bg-purple-500/5 text-purple-800 dark:text-purple-400" },
-            toggleUserStatus: { label: "User Access Change", icon: <User size={16} className="text-amber-500" />, color: "border-amber-500/20 bg-amber-500/5 text-amber-800 dark:text-amber-400" },
-            updateProductSeo: { label: "SEO Metadata Live", icon: <Sparkles size={16} className="text-purple-500" />, color: "border-purple-500/20 bg-purple-500/5 text-purple-800 dark:text-purple-400" },
-            createBlogDraft: { label: "Blog Drafted", icon: <BookOpen size={16} className="text-emerald-500" />, color: "border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400" },
-            createProduct: { label: "Product Created", icon: <CheckCircle2 size={16} className="text-emerald-500" />, color: "border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400" },
-            createOrder: { label: "Order Created", icon: <ShoppingCart size={16} className="text-emerald-500" />, color: "border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400" },
-            updateOrder: { label: "Order Updated", icon: <ShoppingCart size={16} className="text-emerald-500" />, color: "border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400" },
-            syncOrderToPathao: { label: "Pathao Synced", icon: <RefreshCw size={16} className="text-emerald-500" />, color: "border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400" },
-            editProduct: { label: "Product Edited", icon: <Package size={16} className="text-emerald-500" />, color: "border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400" },
-            updateProductSettings: { label: "Settings Updated", icon: <Package size={16} className="text-emerald-500" />, color: "border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400" },
-            editCategory: { label: "Category Updated", icon: <CheckCircle2 size={16} className="text-emerald-500" />, color: "border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400" },
-            createSubcategory: { label: "Subcategory Created", icon: <CheckCircle2 size={16} className="text-emerald-500" />, color: "border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400" },
-            editSubcategory: { label: "Subcategory Updated", icon: <CheckCircle2 size={16} className="text-emerald-500" />, color: "border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400" },
-            createBannerCampaign: { label: "Banner Created", icon: <Sparkles size={16} className="text-purple-500" />, color: "border-purple-500/20 bg-purple-500/5 text-purple-800 dark:text-purple-400" },
-            editBannerCampaign: { label: "Banner Updated", icon: <Sparkles size={16} className="text-purple-500" />, color: "border-purple-500/20 bg-purple-500/5 text-purple-800 dark:text-purple-400" },
-            createFlashSaleCampaign: { label: "Flash Sale Created", icon: <Zap size={16} className="text-purple-500" />, color: "border-purple-500/20 bg-purple-500/5 text-purple-800 dark:text-purple-400" },
-            editFlashSaleCampaign: { label: "Flash Sale Updated", icon: <Zap size={16} className="text-purple-500" />, color: "border-purple-500/20 bg-purple-500/5 text-purple-800 dark:text-purple-400" },
-            editCoupon: { label: "Coupon Updated", icon: <Ticket size={16} className="text-emerald-500" />, color: "border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400" },
-            editBlog: { label: "Blog Updated", icon: <BookOpen size={16} className="text-emerald-500" />, color: "border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400" }
-          };
-
-          if (successWidgets[name]) {
-            const config = successWidgets[name];
-            return (
-              <div key={idx} className={`border rounded-xl p-3 flex items-start gap-2.5 shadow-sm text-xs backdrop-blur-sm ${result.success ? config.color : "border-destructive/20 bg-destructive/10 text-destructive"}`}>
-                {result.success ? (
-                  <>
-                    <div className="mt-0.5 shrink-0">{config.icon}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold tracking-wide uppercase text-[10px] text-muted-foreground">{config.label}</p>
-                      <p className="mt-0.5 font-medium">{result.message}</p>
-                      {result.productId && <p className="text-[9px] font-mono text-muted-foreground mt-1">ID: {result.productId}</p>}
-                      {result.blogId && <p className="text-[9px] font-mono text-muted-foreground mt-1">ID: {result.blogId}</p>}
-                      {result.undoAction && (
-                        <div className="mt-2.5 flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleUndo(msgIdx, idx, result.undoAction)}
-                            disabled={undoneActions[`${msgIdx}_${idx}`] || undoing[`${msgIdx}_${idx}`]}
-                            className={cn(
-                              "text-[10px] h-7 px-3 rounded-lg font-bold border transition-all bg-background text-foreground",
-                              undoneActions[`${msgIdx}_${idx}`]
-                                ? "bg-muted text-muted-foreground border-border cursor-not-allowed"
-                                : "border-primary/25 hover:bg-muted hover:border-primary text-primary"
-                            )}
-                          >
-                            {undoing[`${msgIdx}_${idx}`] ? (
-                              <span className="flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Undoing...</span>
-                            ) : undoneActions[`${msgIdx}_${idx}`] ? (
-                              <span className="flex items-center gap-1"><CheckCircle2 size={10} className="text-emerald-500" /> Reverted</span>
-                            ) : (
-                              "Undo Action"
-                            )}
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle size={16} className="text-destructive mt-0.5 shrink-0" />
-                    <div>
-                      <p className="font-bold tracking-wide uppercase text-[10px] text-destructive">Execution Failed</p>
-                      <p className="mt-0.5 font-medium text-muted-foreground">{result.error}</p>
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          }
-
-          // Widget 3: getDashboardSummary
-          if (name === "getDashboardSummary" && result.success) {
-            return (
-              <div key={idx} className="border border-indigo-500/20 bg-indigo-500/5 rounded-xl p-4 shadow-sm w-full backdrop-blur-sm">
-                <div className="flex items-center gap-2 mb-3 text-xs font-semibold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
-                  <Database size={14} />
-                  <span>Real-time Telemetry Metrics</span>
-                </div>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
-                  <div className="bg-background border border-border p-2.5 rounded-lg text-center shadow-sm">
-                    <p className="text-[9px] text-muted-foreground uppercase font-semibold">Total Revenue</p>
-                    <p className="text-base font-bold text-indigo-500 dark:text-indigo-400 font-mono mt-0.5">${result.totalRevenue.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-background border border-border p-2.5 rounded-lg text-center shadow-sm">
-                    <p className="text-[9px] text-muted-foreground uppercase font-semibold">Total Orders</p>
-                    <p className="text-base font-bold text-foreground font-mono mt-0.5">{result.ordersCount}</p>
-                  </div>
-                  <div className="bg-background border border-border p-2.5 rounded-lg text-center shadow-sm">
-                    <p className="text-[9px] text-muted-foreground uppercase font-semibold">Products Catalog</p>
-                    <p className="text-base font-bold text-foreground font-mono mt-0.5">{result.productsCount}</p>
-                  </div>
-                  <div className="bg-background border border-border p-2.5 rounded-lg text-center shadow-sm">
-                    <p className="text-[9px] text-muted-foreground uppercase font-semibold">Stock Alerts</p>
-                    <p className={`text-base font-bold font-mono mt-0.5 ${result.criticalStockCount > 0 ? "text-amber-500 animate-pulse" : "text-emerald-500"}`}>{result.criticalStockCount}</p>
-                  </div>
-                </div>
-
-                {result.criticalItems && result.criticalItems.length > 0 && (
-                  <div className="mt-2.5">
-                    <p className="text-[10px] uppercase tracking-wide font-semibold text-amber-500 mb-1.5 flex items-center gap-1">
-                      <AlertCircle size={12} /> Low Stock Warnings:
-                    </p>
-                    <div className="text-[11px] space-y-1 bg-background/50 p-2.5 rounded border border-border">
-                      {result.criticalItems.map((item, i) => (
-                        <div key={i} className="flex justify-between">
-                          <span className="text-muted-foreground">{item.name}</span>
-                          <span className="font-bold text-amber-500">{item.stock} in stock</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          }
-
-          // Widget 4: getRecentOrders
-          if (name === "getRecentOrders" && result.success) {
-            return (
-              <div key={idx} className="border border-blue-500/20 bg-blue-500/5 rounded-xl p-4 shadow-sm w-full backdrop-blur-sm">
-                <div className="flex items-center gap-2 mb-3 text-xs font-semibold uppercase tracking-wider text-blue-500 dark:text-blue-400">
-                  <ShoppingCart size={14} />
-                  <span>Recent Sales Transactions</span>
-                </div>
-                {result.orders.length > 0 ? (
-                  <div className="space-y-2">
-                    {result.orders.map((ord) => (
-                      <div key={ord.id} className="bg-background border border-border p-3 rounded-lg flex items-center justify-between text-xs hover:border-blue-500/30 transition-all">
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-semibold text-foreground">{ord.customer}</span>
-                            <span className="text-[9px] text-muted-foreground font-mono bg-muted px-1.5 py-0.25 rounded">#{ord.id.slice(-6)}</span>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground font-mono">
-                            {new Date(ord.createdAt).toLocaleDateString()} at {new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                        </div>
-                        <div className="text-right space-y-1">
-                          <p className="font-bold text-blue-500 dark:text-blue-400 font-mono text-xs">${ord.totalPrice}</p>
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wide uppercase border ${ord.orderStatus === "Completed" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" :
-                              ord.orderStatus === "Processing" ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" :
-                                "bg-muted text-muted-foreground border-border"
-                            }`}>
-                            {ord.orderStatus}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">No recent orders recorded.</p>
-                )}
-              </div>
-            );
-          }
-
-          // Widget 5: searchCustomer
-          if (name === "searchCustomer" && result.success) {
-            return (
-              <div key={idx} className="border border-teal-500/20 bg-teal-500/5 rounded-xl p-4 shadow-sm w-full backdrop-blur-sm">
-                <div className="flex items-center gap-2 mb-3 text-xs font-semibold uppercase tracking-wider text-teal-500 dark:text-teal-400">
-                  <Users size={14} />
-                  <span>Found {result.count} Customers</span>
-                </div>
-                {result.users.length > 0 ? (
-                  <div className="space-y-2">
-                    {result.users.map((cust) => (
-                      <div key={cust._id} className="bg-background border border-border p-3 rounded-lg flex items-center justify-between text-xs hover:border-teal-500/30 transition-all">
-                        <div>
-                          <p className="font-semibold text-foreground">{cust.name}</p>
-                          <p className="text-[10px] text-muted-foreground font-mono">{cust.email}</p>
-                        </div>
-                        <div className="flex items-center gap-2.5">
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold border uppercase ${cust.isActive ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" : "bg-destructive/10 text-destructive border-destructive/20"
-                            }`}>
-                            {cust.isActive ? "Active" : "Blocked"}
-                          </span>
-                          <button
-                            onClick={() => setInputValue(`Toggle customer account status for user ID ${cust._id}`)}
-                            className="text-[9px] px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground transition-all font-semibold"
-                          >
-                            Toggle Ban
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">No matching customers found.</p>
-                )}
-              </div>
-            );
-          }
-
-          return null;
-        })}
-      </div>
-    );
-  };
-
   return (
     <div
       id="admin-ai-chat-container"
       className="flex h-screen w-full overflow-hidden bg-background text-foreground fixed lg:relative inset-0 z-50"
     >
       {/* 1. LEFT SIDEBAR: ChatGPT-style Previous Conversations & New Chat */}
-      <aside
-        className={cn(
-          "fixed lg:static inset-y-0 left-0 z-40 flex flex-col bg-card/95 lg:bg-card/70 backdrop-blur-2xl border-r border-border transition-all duration-300 ease-in-out shrink-0",
-          showLeftSidebar ? "w-72 translate-x-0" : "-translate-x-full lg:w-0 lg:border-r-0 lg:overflow-hidden"
-        )}
-      >
-        {/* Top: New Chat Button + Mobile Close */}
-        <div className="p-3 border-b border-border/80 flex items-center gap-2">
-          <Button
-            onClick={handleNewChat}
-            className="flex-1 justify-start gap-2 h-10 px-3.5 rounded-xl bg-primary text-primary-foreground font-semibold text-xs shadow-sm hover:opacity-95"
-          >
-            <Plus size={16} />
-            <span>New Chat</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden rounded-xl h-10 w-10 text-muted-foreground hover:text-foreground shrink-0"
-            onClick={() => setShowLeftSidebar(false)}
-          >
-            <X size={18} />
-          </Button>
-        </div>
-
-        {/* Search Session Query */}
-        {sessions.length > 3 && (
-          <div className="px-3 py-2 border-b border-border/40">
-            <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-2.5 text-muted-foreground" />
-              <Input
-                value={searchSessionQuery}
-                onChange={(e) => setSearchSessionQuery(e.target.value)}
-                placeholder="Search chats..."
-                className="h-8 pl-8 pr-2 text-xs bg-muted/40 border-border/40 rounded-lg"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Sessions List */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin">
-          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-            <span>Conversations</span>
-            {sessions.length > 0 && (
-              <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded font-mono">{filteredSessions.length}</span>
-            )}
-          </div>
-
-          {sessionsLoading ? (
-            <div className="p-6 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
-              <Loader2 size={16} className="animate-spin text-primary" />
-              <span>Loading chats...</span>
-            </div>
-          ) : filteredSessions.length === 0 ? (
-            <div className="p-4 text-center text-xs text-muted-foreground">
-              {searchSessionQuery ? "No matching chats found" : "No previous chats yet"}
-            </div>
-          ) : (
-            filteredSessions.map((s) => {
-              const isActive = s.id === currentSessionId;
-              const isEditing = editingSessionId === s.id;
-
-              return (
-                <div
-                  key={s.id}
-                  onClick={() => {
-                    if (!isEditing) {
-                      handleSelectSession(s.id);
-                      if (typeof window !== "undefined" && window.innerWidth < 1024) setShowLeftSidebar(false);
-                    }
-                  }}
-                  className={cn(
-                    "group relative flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs transition-all cursor-pointer border",
-                    isActive
-                      ? "bg-primary/10 border-primary/30 text-primary font-semibold shadow-sm"
-                      : "border-transparent hover:bg-muted text-foreground/80 hover:text-foreground"
-                  )}
-                >
-                  <MessageSquare size={14} className={cn("shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
-
-                  {isEditing ? (
-                    <div className="flex-1 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="text"
-                        value={editingSessionTitle}
-                        onChange={(e) => setEditingSessionTitle(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleSaveRenameSession(s.id);
-                          if (e.key === "Escape") setEditingSessionId(null);
-                        }}
-                        autoFocus
-                        className="w-full bg-background border border-primary rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none"
-                      />
-                      <button
-                        onClick={() => handleSaveRenameSession(s.id)}
-                        className="p-1 hover:text-primary text-muted-foreground"
-                      >
-                        <Check size={12} />
-                      </button>
-                      <button
-                        onClick={() => setEditingSessionId(null)}
-                        className="p-1 hover:text-destructive text-muted-foreground"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="truncate flex-1 select-none">{s.title || "Untitled Session"}</span>
-                  )}
-
-                  {/* Actions (Rename + Delete) */}
-                  {!isEditing && (
-                    <div
-                      className={cn(
-                        "items-center gap-0.5 shrink-0 transition-opacity",
-                        isActive ? "flex opacity-100" : "hidden group-hover:flex opacity-70 group-hover:opacity-100"
-                      )}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        onClick={() => handleStartRenameSession(s)}
-                        title="Rename"
-                        className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground"
-                      >
-                        <Edit3 size={12} />
-                      </button>
-                      <button
-                        onClick={(e) => handleDeleteSession(e, s.id)}
-                        title="Delete conversation"
-                        className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* Sidebar Footer */}
-        <div className="p-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-          <Link
-            href="/admin"
-            className="flex items-center gap-1.5 hover:text-foreground font-medium transition-colors"
-          >
-            <ArrowLeft size={14} />
-            <span>Dashboard</span>
-          </Link>
-          {sessions.length > 0 && (
-            <button
-              onClick={handleClearAllHistory}
-              className="text-[11px] hover:text-destructive transition-colors text-muted-foreground flex items-center gap-1"
-              title="Clear all chats"
-            >
-              <Trash2 size={12} /> Clear all
-            </button>
-          )}
-        </div>
-      </aside>
-
-      {/* Mobile Backdrop for Left Sidebar */}
-      {showLeftSidebar && (
-        <div
-          className="lg:hidden fixed inset-0 z-30 bg-black/50 backdrop-blur-sm"
-          onClick={() => setShowLeftSidebar(false)}
-        />
-      )}
+      <ChatSessionSidebar
+        showLeftSidebar={showLeftSidebar}
+        setShowLeftSidebar={setShowLeftSidebar}
+        handleNewChat={handleNewChat}
+        searchSessionQuery={searchSessionQuery}
+        setSearchSessionQuery={setSearchSessionQuery}
+        sessions={sessions}
+        filteredSessions={filteredSessions}
+        sessionsLoading={sessionsLoading}
+        currentSessionId={currentSessionId}
+        editingSessionId={editingSessionId}
+        setEditingSessionId={setEditingSessionId}
+        editingSessionTitle={editingSessionTitle}
+        setEditingSessionTitle={setEditingSessionTitle}
+        handleSelectSession={handleSelectSession}
+        handleStartRenameSession={handleStartRenameSession}
+        handleSaveRenameSession={handleSaveRenameSession}
+        handleDeleteSession={handleDeleteSession}
+        handleClearAllHistory={handleClearAllHistory}
+      />
 
       {/* 2. MIDDLE CHAT VIEWPORT */}
       <div className="flex-1 flex flex-col min-w-0 h-full relative">
@@ -1058,7 +643,16 @@ export default function AdminAiChatPage() {
                         </div>
                       )}
                       <p className="whitespace-pre-wrap">{msg.content}</p>
-                      {msg.role === "model" && msg.toolExecutions && renderToolWidgets(msg.toolExecutions, i)}
+                      {msg.role === "model" && msg.toolExecutions && (
+                        <ChatToolWidgets
+                          executions={msg.toolExecutions}
+                          msgIdx={i}
+                          setInputValue={setInputValue}
+                          handleUndo={handleUndo}
+                          undoneActions={undoneActions}
+                          undoing={undoing}
+                        />
+                      )}
                       {msg.createdAt && (
                         <span
                           className={cn(
@@ -1200,158 +794,14 @@ export default function AdminAiChatPage() {
       </div>
 
       {/* 3. RIGHT SIDEBAR: Telemetry & Tools (Collapsible / Toggleable) */}
-      <div
-        className={cn(
-          "w-full lg:w-72 bg-card/60 backdrop-blur-2xl p-4 flex-col border-l border-border shrink-0 transition-all duration-300",
-          showRightSidebar ? "flex fixed lg:static inset-y-0 right-0 z-40" : "hidden"
-        )}
-      >
-        <div className="flex items-center justify-between pb-3 border-b border-border/60">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <Terminal size={14} /> Telemetry & Tools
-          </h3>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowRightSidebar(false)}
-            className="rounded-lg h-7 w-7 text-muted-foreground hover:text-foreground"
-          >
-            <X size={14} />
-          </Button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border border-border rounded-lg p-1 bg-background text-xs gap-1 my-3">
-          <button
-            onClick={() => setActiveTab("chat")}
-            className={`flex-1 py-1.5 rounded-md font-semibold transition-all text-center ${activeTab === "chat" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-          >
-            Telemetry
-          </button>
-          <button
-            onClick={() => setActiveTab("tools")}
-            className={`flex-1 py-1.5 rounded-md font-semibold transition-all text-center ${activeTab === "tools" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-          >
-            AI Tools
-          </button>
-          <button
-            onClick={() => setActiveTab("commands")}
-            className={`flex-1 py-1.5 rounded-md font-semibold transition-all text-center ${activeTab === "commands" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-          >
-            Shortcuts
-          </button>
-        </div>
-
-        {activeTab === "chat" ? (
-          <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-            {/* Status indicators */}
-            <div className="border border-border rounded-xl p-4 bg-background/50 space-y-3.5 shadow-sm">
-              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><Activity size={12} /> Live Engine Status</h3>
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Mongoose Sessions</span>
-                  <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold"><span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse" /> Linked</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Active Session</span>
-                  <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[100px]">{currentSessionId ? `#${currentSessionId.slice(-6)}` : "New Session"}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Gemini Core</span>
-                  <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold"><span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse" /> Active</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Stats Panel */}
-            <div className="border border-border rounded-xl p-4 bg-background/50 flex-1 flex flex-col shadow-sm overflow-hidden">
-              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5 mb-2.5"><Terminal size={12} /> System Details</h3>
-              <div className="text-[11px] font-mono text-muted-foreground space-y-1.5 overflow-y-auto flex-1 scrollbar-thin">
-                <p className="text-primary font-bold"># auth token status verified</p>
-                <p># database: clothing-ecommerce</p>
-                <p># total saved sessions: {sessions.length}</p>
-                <p># model: gemini-2.5-flash</p>
-                <p># function tools registered: 35</p>
-                <p className="text-emerald-600 dark:text-emerald-400"># ready for instructions</p>
-              </div>
-            </div>
-          </div>
-        ) : activeTab === "tools" ? (
-          <div className="flex-1 flex flex-col gap-3 overflow-hidden">
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><Cpu size={12} /> Registered Tools (35)</h3>
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
-              {[
-                { name: "searchProducts", desc: "Search products in catalog" },
-                { name: "updateProductStock", desc: "Update product stock levels" },
-                { name: "getDashboardSummary", desc: "Retrieve dashboard business metrics" },
-                { name: "getRecentOrders", desc: "List recent sales transactions" },
-                { name: "createProduct", desc: "Create new product in catalog" },
-                { name: "updateProductSeo", desc: "Save optimized SEO metadata" },
-                { name: "updateOrderStatus", desc: "Update order delivery status" },
-                { name: "createCoupon", desc: "Create discount coupon code" },
-                { name: "listCoupons", desc: "List active discount coupons" },
-                { name: "toggleFlashSale", desc: "Add/remove item from flash sale" },
-                { name: "searchCustomer", desc: "Search customer profiles" },
-                { name: "toggleUserStatus", desc: "Block or activate customer" },
-                { name: "createBlogDraft", desc: "Draft marketing blog post" },
-                { name: "createCategory", desc: "Create new product category" },
-                { name: "listCategories", desc: "List all existing product categories" },
-                { name: "createOrder", desc: "Create a new customer order manually" },
-                { name: "updateOrder", desc: "Update shipping/payment/status details of an order" },
-                { name: "getOrderDetails", desc: "View detailed information of an order" },
-                { name: "listOrders", desc: "List all orders with status/search filtering" },
-                { name: "syncOrderToPathao", desc: "Dispatch consignment details directly to Pathao Courier" },
-                { name: "editProduct", desc: "Edit core settings/names/prices of catalog products" },
-                { name: "updateProductSettings", desc: "Change visibility flags on products" },
-                { name: "editCategory", desc: "Edit category titles/descriptions" },
-                { name: "listSubcategories", desc: "View all subcategories" },
-                { name: "createSubcategory", desc: "Create subcategory nested inside parent" },
-                { name: "editSubcategory", desc: "Edit subcategory values" },
-                { name: "listBannerCampaigns", desc: "View promotional banner lists" },
-                { name: "createBannerCampaign", desc: "Launch new home slideshow" },
-                { name: "editBannerCampaign", desc: "Configure slide links/images" },
-                { name: "listFlashSales", desc: "View existing active flash sales" },
-                { name: "createFlashSaleCampaign", desc: "Launch timed flash sale promotion" },
-                { name: "editFlashSaleCampaign", desc: "Adjust duration/discount percentages of a sale" },
-                { name: "editCoupon", desc: "Update properties/expiry details of coupon codes" },
-                { name: "listBlogs", desc: "View editorial articles draft/live list" },
-                { name: "editBlog", desc: "Modify title, slug, html or cover image of articles" }
-              ].map((tool, idx) => (
-                <div key={idx} className="p-2 border border-border bg-background/50 rounded-lg hover:border-primary/20 transition-all flex flex-col gap-0.5">
-                  <span className="text-[11px] font-mono font-bold text-primary">{tool.name}()</span>
-                  <span className="text-[10px] text-muted-foreground leading-snug">{tool.desc}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col gap-3 overflow-hidden">
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5 mb-1"><Terminal size={12} /> Command Shortcuts</h3>
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
-              {quickCommands.map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSendMessage(item.prompt)}
-                  className="w-full text-left p-2.5 border border-border bg-background hover:bg-muted rounded-xl transition-all group flex flex-col gap-0.5 shadow-sm"
-                >
-                  <span className="text-xs font-bold text-foreground group-hover:text-primary flex items-center justify-between">
-                    {item.cmd}
-                    <ArrowUpRight size={11} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </span>
-                  <span className="text-[10px] text-muted-foreground leading-snug">{item.desc}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="text-[10px] text-muted-foreground font-mono text-center border-t border-border pt-3 mt-auto">
-          Command Engine v1.1.0
-        </div>
-      </div>
+      <ChatSettingsDrawer
+        showRightSidebar={showRightSidebar}
+        setShowRightSidebar={setShowRightSidebar}
+        currentSessionId={currentSessionId}
+        sessionsCount={sessions.length}
+        quickCommands={quickCommands}
+        onExecuteCommand={(prompt) => handleSendMessage(prompt)}
+      />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { useAdminCoupons } from "@/app/admin/coupons/lib/useAdminCoupons";
+import { useAdminCoupons, useAdminCoupon } from "@/app/admin/coupons/lib/useAdminCoupons";
 import Loader from "@/components/common/Loader";
 import Link from "next/link";
 import { 
@@ -28,8 +28,8 @@ import { Price } from "@/components/common/Price";
 export default function CouponDetailPage() {
   const { id } = useParams();
   const [usagePage, setUsagePage] = useState(1);
-  const { getCoupon, updateCoupon } = useAdminCoupons();
-  const { data: coupon, isLoading: isCouponLoading } = getCoupon(id, { page: usagePage, limit: 10 });
+  const { updateCoupon } = useAdminCoupons();
+  const { data: coupon, isLoading: isCouponLoading } = useAdminCoupon(id, { page: usagePage, limit: 10 });
 
   if (isCouponLoading) {
     return (

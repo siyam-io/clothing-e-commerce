@@ -19,12 +19,14 @@ export function AdminFilterBar({
   isLoading = false,
   className,
 }) {
+  const [prevSearchQuery, setPrevSearchQuery] = useState(searchQuery);
   const [localSearch, setLocalSearch] = useState(searchQuery || "");
 
-  // Sync external search changes
-  useEffect(() => {
+  // Sync external search changes during render
+  if (searchQuery !== prevSearchQuery) {
+    setPrevSearchQuery(searchQuery);
     setLocalSearch(searchQuery || "");
-  }, [searchQuery]);
+  }
 
   // 250ms debounce
   useEffect(() => {

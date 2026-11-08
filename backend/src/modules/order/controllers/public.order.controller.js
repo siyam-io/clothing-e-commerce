@@ -20,6 +20,7 @@ import { decrypt } from "../../../utils/encryption.js";
 import PDFDocument from "pdfkit";
 import SSLCommerzPayment from "sslcommerz-lts";
 import logger from "../../../utils/logger.js";
+import auditLogService from "../../auditLog/auditLog.service.js";
 
 const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
@@ -143,9 +144,34 @@ export const initPayment = asyncHandler(async (req, res) => {
       },
     };
 
+    const logOrderCreated = async (order) => {
+      try {
+        await auditLogService.recordLog({
+          req,
+          action: "CREATE",
+          module: "Order",
+          resourceId: order._id,
+          resourceName: `Order #${order._id.toString().slice(-6).toUpperCase()}`,
+          description: `Customer placed order #${order._id.toString().slice(-6).toUpperCase()} via ${order.paymentMethod} (Total: ৳${order.totalPrice})`,
+          details: {
+            itemsCount: order.orderItems?.length,
+            totalPrice: order.totalPrice,
+            paymentMethod: order.paymentMethod,
+            customerName: order.shippingAddress?.name,
+            phone: order.shippingAddress?.phone,
+            city: order.shippingAddress?.city,
+          },
+          status: "SUCCESS",
+        });
+      } catch (logErr) {
+        logger.error("Failed to record order creation audit log:", { error: logErr.message });
+      }
+    };
+
     if (paymentMethod === "cod") {
       const order = await createOrderWithTransaction(orderPayload, true);
       clearCache('cache:/api/admin/dashboard*');
+      await logOrderCreated(order);
 
       const io = req.app.get('io');
       if (io) {
@@ -157,6 +183,7 @@ export const initPayment = asyncHandler(async (req, res) => {
     } else if (paymentMethod === "bkash") {
       const order = await createOrderWithTransaction(orderPayload, false);
       clearCache('cache:/api/admin/dashboard*');
+      await logOrderCreated(order);
 
       const io = req.app.get('io');
       if (io) {
@@ -172,6 +199,7 @@ export const initPayment = asyncHandler(async (req, res) => {
     } else {
       const order = await createOrderWithTransaction(orderPayload, false);
       clearCache('cache:/api/admin/dashboard*');
+      await logOrderCreated(order);
 
       const io = req.app.get('io');
       if (io) {

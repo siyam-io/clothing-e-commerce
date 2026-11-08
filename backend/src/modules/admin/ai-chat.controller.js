@@ -17,6 +17,7 @@ import FlashSale from "../flashSale/flashSale.model.js";
 import Blog from "../blog/blog.model.js";
 import BannerCampaign from "../bannerCampaign/bannerCampaign.model.js";
 import { AdminAiMessage, AdminAiSession } from "./admin-ai-chat.model.js";
+import auditLogService from "../auditLog/auditLog.service.js";
 import { decrypt } from "../../utils/encryption.js";
 import pathaoService from "../../services/pathao.service.js";
 import { clearCache } from "../../middleware/cacheMiddleware.js";
@@ -2013,6 +2014,21 @@ export const handleAdminAiChat = asyncHandler(async (req, res) => {
           content: finalResponseText,
           toolExecutions: toolExecutionLog || [],
         });
+
+        if (toolExecutionLog && toolExecutionLog.length > 0) {
+          const toolNames = toolExecutionLog.map((t) => t.tool).join(", ");
+          auditLogService.recordLog({
+            req,
+            user: req.user,
+            action: "SYSTEM",
+            module: "Chat",
+            resourceId: targetSession?._id,
+            resourceName: targetSession?.title,
+            description: `Admin executed AI Assistant store tools: [${toolNames}]`,
+            details: { tools: toolExecutionLog },
+            status: "SUCCESS",
+          });
+        }
       } catch (saveErr) {
         console.error("Failed to persist Admin AI chat history:", saveErr.message);
       }

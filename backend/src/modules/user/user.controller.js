@@ -1,5 +1,6 @@
 import userService from "./user.service.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
+import auditLogService from "../auditLog/auditLog.service.js";
 
 /**
  * Controller managing user accounts and profiles.
@@ -17,6 +18,17 @@ export const updateProfile = asyncHandler(async (req, res) => {
     addresses: req.body.addresses,
     file: req.file,
   });
+
+  auditLogService.recordLog({
+    req,
+    action: "UPDATE",
+    module: "User",
+    resourceId: req.user._id,
+    resourceName: result?.name || req.user.name,
+    description: `User ${result?.name || req.user.name} updated personal profile`,
+    status: "SUCCESS",
+  });
+
   res.json(result);
 });
 
@@ -26,6 +38,16 @@ export const changePassword = asyncHandler(async (req, res) => {
     req.body.currentPassword,
     req.body.newPassword
   );
+
+  auditLogService.recordLog({
+    req,
+    action: "PASSWORD_RESET",
+    module: "User",
+    resourceId: req.user._id,
+    description: `User ${req.user.name || "User"} changed account password`,
+    status: "SUCCESS",
+  });
+
   res.json(result);
 });
 
@@ -51,11 +73,38 @@ export const updateUser = asyncHandler(async (req, res) => {
     addresses: req.body.addresses,
     file: req.file,
   });
+
+  auditLogService.recordLog({
+    req,
+    action: "UPDATE",
+    module: "User",
+    resourceId: req.params.id,
+    resourceName: result?.name,
+    description: `Administrator ${req.user?.name || "Admin"} updated user account: ${result?.name || req.params.id} (Role: ${result?.role?.name || result?.role})`,
+    details: {
+      name: req.body.name,
+      email: req.body.email,
+      role: req.body.role,
+      isActive: req.body.isActive,
+    },
+    status: "SUCCESS",
+  });
+
   res.json(result);
 });
 
 export const deleteUser = asyncHandler(async (req, res) => {
   const result = await userService.deleteUser(req.params.id, req.user._id);
+
+  auditLogService.recordLog({
+    req,
+    action: "DELETE",
+    module: "User",
+    resourceId: req.params.id,
+    description: `Administrator ${req.user?.name || "Admin"} deleted user account #${req.params.id}`,
+    status: "SUCCESS",
+  });
+
   res.json(result);
 });
 
