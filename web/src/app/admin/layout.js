@@ -145,48 +145,84 @@ export default function AdminLayout({ children }) {
   useEffect(() => {
     if (!socket) return;
 
+    let debounceTimer = null;
+    let lastAudioTime = 0;
+    let pendingToastCount = 0;
+    let toastTimer = null;
+
+    const playNotificationSound = () => {
+      const now = Date.now();
+      if (now - lastAudioTime > 3000) {
+        lastAudioTime = now;
+        try {
+          const audio = new Audio("/notification.wav");
+          audio.volume = 0.4;
+          audio.play().catch(() => {});
+        } catch {}
+      }
+    };
+
+    const triggerBatchedToast = (order) => {
+      pendingToastCount++;
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        if (pendingToastCount === 1) {
+          swalToast(
+            `New Order Received! #${order?._id ? String(order._id).slice(-8).toUpperCase() : "SUCCESS"}`,
+            "success"
+          );
+        } else if (pendingToastCount > 1) {
+          swalToast(
+            `⚡ ${pendingToastCount} New Orders Received!`,
+            "success"
+          );
+        }
+        pendingToastCount = 0;
+      }, 350);
+    };
+
     const handleNewOrder = (order) => {
-      try {
-        const audio = new Audio("/notification.wav");
-        audio.volume = 0.5;
-        audio.play().catch(() => {});
-      } catch {}
+      playNotificationSound();
+      triggerBatchedToast(order);
 
-      swalToast(
-        `New Order Received! #${order._id ? order._id.slice(-8).toUpperCase() : "SUCCESS"}`,
-        "success"
-      );
+      // Optimistically increment orders count in real time
+      setCounts((prev) => (prev ? { ...prev, orders: (Number(prev.orders) || 0) + 1 } : prev));
 
-      queryClient.invalidateQueries({ queryKey: ["adminOrders"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-dashboard-recent-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-dashboard-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
-
-      api
-        .get("/admin/counts")
-        .then((res) => setCounts(res.data))
-        .catch(() => {});
+      // Debounce heavy dashboard stats invalidations so rapid concurrent orders don't overload backend
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["adminOrders"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-dashboard-stats"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
+        api
+          .get("/admin/counts")
+          .then((res) => setCounts(res.data))
+          .catch(() => {});
+      }, 1500);
     };
 
     const handleOrderUpdated = (data) => {
       queryClient.invalidateQueries({ queryKey: ["adminOrders"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-dashboard-recent-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-dashboard-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
       if (data?.orderId) {
         queryClient.invalidateQueries({ queryKey: ["adminOrder", data.orderId] });
       }
 
-      api
-        .get("/admin/counts")
-        .then((res) => setCounts(res.data))
-        .catch(() => {});
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["admin-dashboard-stats"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
+        api
+          .get("/admin/counts")
+          .then((res) => setCounts(res.data))
+          .catch(() => {});
+      }, 3000);
     };
 
     socket.on("new_order", handleNewOrder);
     socket.on("order_updated", handleOrderUpdated);
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       socket.off("new_order", handleNewOrder);
       socket.off("order_updated", handleOrderUpdated);
     };

@@ -10,8 +10,9 @@ import {
   finalizeOrderProcessing
 } from "../order.utils.js";
 import pathaoService from '../../../services/pathao.service.js';
-import { sendOrderStatusUpdateEmail } from '../../../services/email.service.js';
+import { queueOrderStatusUpdateEmail, queuePathaoDispatch } from '../../../queues/index.js';
 import { cancelOrderWithTransaction } from '../order.service.js';
+import auditLogService from '../../auditLog/auditLog.service.js';
 import logger from '../../../utils/logger.js';
 
 export const getOrders = asyncHandler(async (req, res) => {
@@ -65,7 +66,7 @@ export const getOrders = asyncHandler(async (req, res) => {
 
   const enrichedOrders = ordersRaw.map((order) => {
     const registeredUser = userMap[String(order.user)];
-    
+
     return {
       ...order,
       user: registeredUser ? {
@@ -140,30 +141,45 @@ export const createOrderAdmin = asyncHandler(async (req, res) => {
   });
 
   const createdOrder = await order.save();
-  
+
   // Finalize order processing and inventory deductions
   await finalizeOrderProcessing(createdOrder);
-  
+
   clearCache('cache:/api/admin/dashboard*');
-  
+
   const io = req.app.get('io');
   if (io) {
     io.emit('new_order', createdOrder);
     logger.info('Admin order created, socket emitted', { orderId: createdOrder._id });
   }
-  
+
+  auditLogService.recordLog({
+    req,
+    action: "CREATE",
+    module: "Order",
+    resourceId: createdOrder._id,
+    description: `Created new ${createdOrder.isDirectBuy ? "POS" : "Manual"} Order #${String(createdOrder._id).slice(-8).toUpperCase()} (Total: ৳${createdOrder.totalPrice})`,
+    details: {
+      orderItemsCount: createdOrder.orderItems?.length,
+      totalPrice: createdOrder.totalPrice,
+      paymentMethod: createdOrder.paymentMethod,
+    },
+  });
+
   res.status(201).json(createdOrder);
 });
 
 export const getAdminOrderById = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id)
     .populate({ path: "user", select: "name email avatar role", populate: { path: "role" } })
-        .populate(
-            "orderItems.product",
-            "name images slug"
-        );
-    if (!order) return res.status(404).json({ message: "Protocol not found." });
-    res.json(order);
+    .populate({
+      path: "orderItems.product",
+      select: "name images slug sizes",
+      populate: { path: "sizes.size", select: "name" },
+    })
+    .populate({ path: "orderItems.size", select: "name" });
+  if (!order) return res.status(404).json({ message: "Protocol not found." });
+  res.json(order);
 });
 
 export const updateOrder = asyncHandler(async (req, res) => {
@@ -216,7 +232,12 @@ export const updateOrder = asyncHandler(async (req, res) => {
 
     const updatedOrder = await Order.findById(order._id)
       .populate({ path: "user", select: "name email avatar role", populate: { path: "role" } })
-      .populate("orderItems.product", "name images slug");
+      .populate({
+        path: "orderItems.product",
+        select: "name images slug sizes",
+        populate: { path: "sizes.size", select: "name" },
+      })
+      .populate({ path: "orderItems.size", select: "name" });
 
     const io = req.app.get('io');
     if (io) {
@@ -230,10 +251,10 @@ export const updateOrder = asyncHandler(async (req, res) => {
     }
 
     try {
-      await sendOrderStatusUpdateEmail(updatedOrder);
-      logger.info('Status update email sent', { email: updatedOrder.shippingAddress.email, status: 'Cancelled' });
+      await queueOrderStatusUpdateEmail(updatedOrder);
+      logger.info('Status update email queued', { email: updatedOrder.shippingAddress.email, status: 'Cancelled' });
     } catch (error) {
-      logger.warn('Failed to send status update email, continuing:', { error: error.message });
+      logger.warn('Failed to queue status update email, continuing:', { error: error.message });
     }
 
     return res.json(updatedOrder);
@@ -265,17 +286,40 @@ export const updateOrder = asyncHandler(async (req, res) => {
 
   if (req.body.orderStatus && req.body.orderStatus !== oldStatus) {
     try {
-      await sendOrderStatusUpdateEmail(order);
-      logger.info('Status update email sent', { email: order.shippingAddress.email, status: order.orderStatus });
+      await queueOrderStatusUpdateEmail(order);
+      logger.info('Status update email queued', { email: order.shippingAddress.email, status: order.orderStatus });
     } catch (error) {
-      logger.warn('Failed to send status update email, continuing:', { error: error.message });
+      logger.warn('Failed to queue status update email, continuing:', { error: error.message });
     }
+
+    auditLogService.recordLog({
+      req,
+      action: "STATUS_CHANGE",
+      module: "Order",
+      resourceId: order._id,
+      description: `Updated Order #${String(order._id).slice(-8).toUpperCase()} status from "${oldStatus}" to "${order.orderStatus}"`,
+      details: { oldStatus, newStatus: order.orderStatus },
+    });
+  } else {
+    auditLogService.recordLog({
+      req,
+      action: "UPDATE",
+      module: "Order",
+      resourceId: order._id,
+      description: `Updated Order #${String(order._id).slice(-8).toUpperCase()} attributes / payment`,
+      details: req.body,
+    });
   }
 
   const updatedOrder = await Order.findById(order._id)
     .populate({ path: "user", select: "name email avatar role", populate: { path: "role" } })
-    .populate("orderItems.product", "name images slug");
-    
+    .populate({
+      path: "orderItems.product",
+      select: "name images slug sizes",
+      populate: { path: "sizes.size", select: "name" },
+    })
+    .populate({ path: "orderItems.size", select: "name" });
+
   res.json(updatedOrder);
 });
 
@@ -338,15 +382,28 @@ export const syncOrderToPathao = asyncHandler(async (req, res) => {
   };
 
   try {
-    const pRes = await pathaoService.createOrder(payload, pKeys);
-    order.pathaoConsignmentId = pRes.consignment_id;
-    order.pathaoStatus = "Synced";
-    await order.save();
+    const result = await queuePathaoDispatch({
+      orderId: order._id,
+      payload,
+      pKeys,
+    });
+
+    auditLogService.recordLog({
+      req,
+      action: "DISPATCH",
+      module: "Order",
+      resourceId: order._id,
+      description: `Dispatched Order #${String(order._id).slice(-8).toUpperCase()} to Pathao Courier`,
+      details: { payload, consignmentId: result.consignmentId },
+    });
 
     res.json({
       success: true,
-      message: "Pathao Synchronized successfully.",
-      consignmentId: pRes.consignment_id,
+      message: result.queued
+        ? "Pathao dispatch request queued for processing."
+        : "Pathao Synchronized successfully.",
+      consignmentId: result.consignmentId || null,
+      jobId: result.jobId || null,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -376,6 +433,15 @@ export const deleteOrder = asyncHandler(async (req, res) => {
 
   await Order.findByIdAndDelete(req.params.id);
   clearCache('cache:/api/admin/dashboard*');
+
+  auditLogService.recordLog({
+    req,
+    action: "DELETE",
+    module: "Order",
+    resourceId: req.params.id,
+    description: `Deleted Order #${String(req.params.id).slice(-8).toUpperCase()} (Total: ৳${order.totalPrice})`,
+    details: { orderSummary: { totalPrice: order.totalPrice, status: order.orderStatus, itemsCount: order.orderItems?.length } },
+  });
 
   res.json({ success: true, message: "Order deleted successfully" });
 });

@@ -166,7 +166,7 @@ export default async function RootLayout({ children }) {
       data-theme={identityTheme}
       suppressHydrationWarning
     >
-      <head>
+      <body suppressHydrationWarning>
         {schemas.map((schema, i) => (
           <script 
             key={i}
@@ -183,8 +183,6 @@ export default async function RootLayout({ children }) {
             }}
           />
         )}
-      </head>
-      <body suppressHydrationWarning>
         {!pathname.startsWith("/admin") && <GTMNoScript marketing={settings?.marketing} />}
         <QueryProvider>
           <TooltipProvider>

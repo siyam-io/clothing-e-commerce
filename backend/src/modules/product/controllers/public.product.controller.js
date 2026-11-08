@@ -283,11 +283,12 @@ export const getPublicProductBySlug = asyncHandler(async (req, res) => {
     res.json(product);
 });
 
-export const getPublicProductById = asyncHandler(async (req, res) => {
+export const getPublicProductById = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({ message: 'Invalid product identity protocol' });
+        req.params.slug = id;
+        return getPublicProductBySlug(req, res, next);
     }
 
     const product = await Product.findOne({ _id: id, isActive: true })

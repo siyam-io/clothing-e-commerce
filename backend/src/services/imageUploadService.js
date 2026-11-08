@@ -135,7 +135,57 @@ const uploadToCloudinary = (fileBuffer, folder, config) => {
 };
 
 /**
- * Save image buffer to local filesystem storage.
+ * Validate image binary headers (magic bytes) to defeat MIME-spoofing and invalid files.
+ * Supports JPEG, PNG, GIF, and WebP.
+ *
+ * @param {Buffer} buffer - Raw file buffer.
+ * @returns {boolean} True if binary header matches an image signature.
+ */
+export const isValidImageBuffer = (buffer) => {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12) return false;
+
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return true;
+  }
+
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  ) {
+    return true;
+  }
+
+  // GIF: 47 49 46 38 ("GIF8")
+  if (
+    buffer[0] === 0x47 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x38
+  ) {
+    return true;
+  }
+
+  // WebP: "RIFF" .... "WEBP"
+  if (
+    buffer.toString("ascii", 0, 4) === "RIFF" &&
+    buffer.toString("ascii", 8, 12) === "WEBP"
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+/**
+ * Save image buffer to local filesystem storage with path traversal protections.
  *
  * @param {Buffer} fileBuffer - Image binary buffer.
  * @param {string} folder - Destination subfolder.
@@ -143,13 +193,23 @@ const uploadToCloudinary = (fileBuffer, folder, config) => {
  * @returns {Promise<string>} Relative URL path.
  */
 const saveToLocal = async (fileBuffer, folder, originalname) => {
-  const fileName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(originalname)}`;
-  const relativeDir = `uploads/${folder}`;
-  const fullDirPath = path.join(process.cwd(), relativeDir);
+  const safeFolder = String(folder || "general").replace(/[^a-zA-Z0-9_-]/g, "");
+  const rawExt = path.extname(originalname || "").toLowerCase();
+  const allowedExts = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+  const safeExt = allowedExts.includes(rawExt) ? rawExt : ".jpg";
+
+  const fileName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${safeExt}`;
+  const uploadsBaseDir = path.resolve(process.cwd(), "uploads");
+  const relativeDir = `uploads/${safeFolder}`;
+  const fullDirPath = path.resolve(process.cwd(), relativeDir);
+
+  if (!fullDirPath.startsWith(uploadsBaseDir)) {
+    throw new Error("Invalid destination folder protocol");
+  }
 
   await fs.mkdir(fullDirPath, { recursive: true });
 
-  const fullPath = path.join(fullDirPath, fileName);
+  const fullPath = path.resolve(fullDirPath, fileName);
   await fs.writeFile(fullPath, fileBuffer);
 
   return `/${relativeDir}/${fileName}`;
@@ -217,6 +277,11 @@ export const deleteImage = async (imageUrl) => {
 export const uploadImage = async (file, folder, oldUrl = null) => {
   if (!file?.buffer) return null;
 
+  if (!isValidImageBuffer(file.buffer)) {
+    logger.warn("Upload rejected: Binary does not match supported image magic bytes (JPEG/PNG/GIF/WebP)");
+    throw new Error("Invalid file format: upload must be a valid image");
+  }
+
   if (oldUrl) {
     await deleteImage(oldUrl);
   }
@@ -230,15 +295,17 @@ export const uploadImage = async (file, folder, oldUrl = null) => {
     const enableBgRemoval = process.env.ENABLE_BG_REMOVAL === "true";
 
     if (isLogoOrFavicon && enableBgRemoval) {
+      let tempInput = null;
+      let tempOutput = null;
       try {
         const tempDir = path.join(__dirname, "../../temp");
         await fs.mkdir(tempDir, { recursive: true });
 
-        const tempInput = path.join(
+        tempInput = path.join(
           tempDir,
           `input_${Date.now()}_${Math.random().toString(36).substring(7)}.png`
         );
-        const tempOutput = path.join(
+        tempOutput = path.join(
           tempDir,
           `output_${Date.now()}_${Math.random().toString(36).substring(7)}.png`
         );
@@ -252,13 +319,13 @@ export const uploadImage = async (file, folder, oldUrl = null) => {
 
         await execPromise(`node "${runnerPath}" "${tempInput}" "${tempOutput}"`);
         processedBuffer = await fs.readFile(tempOutput);
-
-        fs.unlink(tempInput).catch(() => {});
-        fs.unlink(tempOutput).catch(() => {});
       } catch (err) {
         logger.error("Background removal process error, retaining original:", {
           error: err.message,
         });
+      } finally {
+        if (tempInput) fs.unlink(tempInput).catch(() => {});
+        if (tempOutput) fs.unlink(tempOutput).catch(() => {});
       }
     }
 
@@ -280,9 +347,10 @@ export const uploadImage = async (file, folder, oldUrl = null) => {
       processedName = `${path.basename(file.originalname, path.extname(file.originalname))}.jpg`;
     }
   } catch (error) {
-    logger.error("Image optimization pipeline error, falling back to original buffer:", {
+    logger.error("Image optimization pipeline error, rejecting corrupted image:", {
       error: error.message,
     });
+    throw new Error("Image processing failed: corrupted or unsupported image content");
   }
 
   const config = await getStorageConfig();

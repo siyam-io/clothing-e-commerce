@@ -26,7 +26,13 @@ import {
   Package,
   Menu,
   X,
-  Paperclip
+  Paperclip,
+  Trash2,
+  Plus,
+  MessageSquare,
+  PanelLeft,
+  Edit3,
+  Check
 } from "lucide-react";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -36,6 +42,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { hasPermission } from "@/utils/rbacUtils";
+import { swalConfirm, swalToast, swalError } from "@/utils/swal";
+
+const DEFAULT_GREETING = {
+  role: "model",
+  content: "Hello! I am your AI store assistant. I have direct access to your catalog, orders, and promotion tools. How can I assist you today?",
+};
 
 export default function AdminAiChatPage() {
   const { user } = useAuthStore();
@@ -47,28 +59,166 @@ export default function AdminAiChatPage() {
     }
   }, [user, router]);
 
-  const [messages, setMessages] = useState([
-    {
-      role: "model",
-      content: "Hello! I am your AI store assistant. I have direct access to your catalog, orders, and promotion tools. How can I assist you today?",
-    },
-  ]);
+  const [sessions, setSessions] = useState([]);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [showLeftSidebar, setShowLeftSidebar] = useState(true);
+  const [showRightSidebar, setShowRightSidebar] = useState(false);
+  const [searchSessionQuery, setSearchSessionQuery] = useState("");
+  const [editingSessionId, setEditingSessionId] = useState(null);
+  const [editingSessionTitle, setEditingSessionTitle] = useState("");
+
+  const [messages, setMessages] = useState([DEFAULT_GREETING]);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("chat"); // chat or commands
-  const [showSidebarMobile, setShowSidebarMobile] = useState(false);
   const messagesEndRef = useRef(null);
   const [cooldown, setCooldown] = useState(0);
   const cooldownRef = useRef(null);
-  
+
   const [imagePreview, setImagePreview] = useState(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef(null);
-  
+
   const [undoneActions, setUndoneActions] = useState({});
   const [undoing, setUndoing] = useState({});
+
+  const userId = user?._id || user?.id;
+
+  // Load all conversation sessions
+  const fetchSessions = async (autoSelect = true) => {
+    try {
+      setSessionsLoading(true);
+      const res = await api.get("/admin/ai-chat/sessions");
+      if (res.data?.success && Array.isArray(res.data.sessions)) {
+        setSessions(res.data.sessions);
+        if (autoSelect && res.data.sessions.length > 0) {
+          handleSelectSession(res.data.sessions[0].id);
+        } else if (res.data.sessions.length === 0) {
+          handleNewChat();
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load sessions:", err);
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (userId) {
+      fetchSessions(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  const handleSelectSession = async (sessionId) => {
+    if (sessionId === currentSessionId && messages.length > 1) return;
+    setCurrentSessionId(sessionId);
+    setError(null);
+    setMessagesLoading(true);
+
+    try {
+      const res = await api.get(`/admin/ai-chat/sessions/${sessionId}`);
+      if (res.data?.success && Array.isArray(res.data.messages)) {
+        if (res.data.messages.length > 0) {
+          setMessages(res.data.messages);
+        } else {
+          setMessages([DEFAULT_GREETING]);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load session messages:", err);
+      swalError("Load Failed", "Could not load conversation messages.");
+    } finally {
+      setMessagesLoading(false);
+    }
+  };
+
+  const handleNewChat = () => {
+    setCurrentSessionId(null);
+    setMessages([DEFAULT_GREETING]);
+    setInputValue("");
+    setError(null);
+    setImagePreview(null);
+    setUploadedImageUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleDeleteSession = async (e, sessionId) => {
+    e.stopPropagation();
+    const confirmed = await swalConfirm(
+      "Delete Conversation?",
+      "This chat session and its history will be permanently deleted.",
+      "warning"
+    );
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/admin/ai-chat/sessions/${sessionId}`);
+      const updated = sessions.filter((s) => s.id !== sessionId);
+      setSessions(updated);
+      swalToast("Conversation deleted");
+
+      if (currentSessionId === sessionId) {
+        if (updated.length > 0) {
+          handleSelectSession(updated[0].id);
+        } else {
+          handleNewChat();
+        }
+      }
+    } catch (err) {
+      console.error("Failed to delete session:", err);
+      swalError("Delete Failed", err.response?.data?.message || "Failed to delete conversation.");
+    }
+  };
+
+  const handleStartRenameSession = (session) => {
+    setEditingSessionId(session.id);
+    setEditingSessionTitle(session.title || "");
+  };
+
+  const handleSaveRenameSession = async (sessionId) => {
+    if (!editingSessionTitle.trim()) {
+      setEditingSessionId(null);
+      return;
+    }
+
+    try {
+      await api.patch(`/admin/ai-chat/sessions/${sessionId}`, {
+        title: editingSessionTitle.trim(),
+      });
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, title: editingSessionTitle.trim() } : s))
+      );
+      setEditingSessionId(null);
+    } catch (err) {
+      console.error("Failed to rename session:", err);
+      swalError("Rename Failed", err.response?.data?.message || "Failed to rename session.");
+    }
+  };
+
+  const handleClearAllHistory = async () => {
+    const confirmed = await swalConfirm(
+      "Clear All Conversations?",
+      "All your previous chats and sessions will be permanently deleted.",
+      "warning"
+    );
+    if (!confirmed) return;
+
+    try {
+      await api.delete("/admin/ai-chat/history");
+      setSessions([]);
+      handleNewChat();
+      swalToast("All conversations cleared");
+    } catch (err) {
+      console.error("Failed to clear chat history:", err);
+      swalError("Clear Failed", err.response?.data?.message || "Failed to clear history.");
+    }
+  };
 
   const handleUndo = async (msgIdx, execIdx, undoAction) => {
     const actionKey = `${msgIdx}_${execIdx}`;
@@ -166,7 +316,7 @@ export default function AdminAiChatPage() {
       document.documentElement.style.overflow = originalHtmlOverflow;
       document.body.style.height = originalBodyHeight;
       document.documentElement.style.height = originalHtmlHeight;
-      
+
       window.removeEventListener("scroll", preventScroll);
       if (window.visualViewport && isMobile) {
         window.visualViewport.removeEventListener("resize", handleVisualResize);
@@ -213,7 +363,12 @@ export default function AdminAiChatPage() {
     setError(null);
     setLoading(true);
 
-    const userMessage = { role: "user", content: query, image: uploadedImageUrl || null };
+    const userMessage = {
+      role: "user",
+      content: query,
+      image: uploadedImageUrl || null,
+      createdAt: new Date().toISOString(),
+    };
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
 
@@ -224,6 +379,7 @@ export default function AdminAiChatPage() {
 
     try {
       const response = await api.post("/admin/ai-chat", {
+        sessionId: currentSessionId,
         messages: updatedMessages.map(msg => ({
           role: msg.role,
           content: msg.content,
@@ -232,14 +388,43 @@ export default function AdminAiChatPage() {
       });
 
       if (response.data && response.data.success) {
-        setMessages(prev => [
-          ...prev,
-          {
-            role: "model",
-            content: response.data.reply,
-            toolExecutions: response.data.toolExecutions || []
-          }
-        ]);
+        const modelMessage = {
+          role: "model",
+          content: response.data.reply,
+          toolExecutions: response.data.toolExecutions || [],
+          createdAt: new Date().toISOString(),
+        };
+        setMessages(prev => [...prev, modelMessage]);
+
+        const respSessionId = response.data.sessionId;
+        const respSessionTitle = response.data.sessionTitle || query.slice(0, 36);
+
+        if (!currentSessionId && respSessionId) {
+          setCurrentSessionId(respSessionId);
+          setSessions(prev => [
+            {
+              id: respSessionId,
+              title: respSessionTitle,
+              lastMessage: response.data.reply?.slice(0, 80) || "",
+              updatedAt: new Date().toISOString(),
+            },
+            ...prev
+          ]);
+        } else if (currentSessionId) {
+          setSessions(prev =>
+            prev.map(s =>
+              s.id === currentSessionId
+                ? {
+                  ...s,
+                  title: respSessionTitle || s.title,
+                  lastMessage: response.data.reply?.slice(0, 80) || s.lastMessage,
+                  updatedAt: new Date().toISOString(),
+                }
+                : s
+            )
+          );
+        }
+
         // Short cooldown between successful requests to stay under free tier limits
         startCooldown(4);
       } else {
@@ -280,6 +465,11 @@ export default function AdminAiChatPage() {
       handleSendMessage();
     }
   };
+
+  const filteredSessions = sessions.filter((s) =>
+    (s.title || "").toLowerCase().includes((searchSessionQuery || "").toLowerCase())
+  );
+  const currentSession = sessions.find((s) => s.id === currentSessionId);
 
   const renderToolWidgets = (executions, msgIdx) => {
     if (!executions || executions.length === 0) return null;
@@ -388,8 +578,8 @@ export default function AdminAiChatPage() {
                             disabled={undoneActions[`${msgIdx}_${idx}`] || undoing[`${msgIdx}_${idx}`]}
                             className={cn(
                               "text-[10px] h-7 px-3 rounded-lg font-bold border transition-all bg-background text-foreground",
-                              undoneActions[`${msgIdx}_${idx}`] 
-                                ? "bg-muted text-muted-foreground border-border cursor-not-allowed" 
+                              undoneActions[`${msgIdx}_${idx}`]
+                                ? "bg-muted text-muted-foreground border-border cursor-not-allowed"
                                 : "border-primary/25 hover:bg-muted hover:border-primary text-primary"
                             )}
                           >
@@ -487,11 +677,10 @@ export default function AdminAiChatPage() {
                         </div>
                         <div className="text-right space-y-1">
                           <p className="font-bold text-blue-500 dark:text-blue-400 font-mono text-xs">${ord.totalPrice}</p>
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wide uppercase border ${
-                            ord.orderStatus === "Completed" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" :
-                            ord.orderStatus === "Processing" ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" :
-                            "bg-muted text-muted-foreground border-border"
-                          }`}>
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wide uppercase border ${ord.orderStatus === "Completed" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" :
+                              ord.orderStatus === "Processing" ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" :
+                                "bg-muted text-muted-foreground border-border"
+                            }`}>
                             {ord.orderStatus}
                           </span>
                         </div>
@@ -522,9 +711,8 @@ export default function AdminAiChatPage() {
                           <p className="text-[10px] text-muted-foreground font-mono">{cust.email}</p>
                         </div>
                         <div className="flex items-center gap-2.5">
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold border uppercase ${
-                            cust.isActive ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" : "bg-destructive/10 text-destructive border-destructive/20"
-                          }`}>
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold border uppercase ${cust.isActive ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" : "bg-destructive/10 text-destructive border-destructive/20"
+                            }`}>
                             {cust.isActive ? "Active" : "Blocked"}
                           </span>
                           <button
@@ -551,111 +739,342 @@ export default function AdminAiChatPage() {
   };
 
   return (
-    <div 
+    <div
       id="admin-ai-chat-container"
-      className="flex flex-col lg:flex-row border border-border bg-background shadow-2xl overflow-hidden text-foreground transition-colors duration-500 fixed lg:relative inset-x-0 top-0 lg:top-auto z-50" 
-      style={{ height: "100dvh" }}
+      className="flex h-screen w-full overflow-hidden bg-background text-foreground fixed lg:relative inset-0 z-50"
     >
-      
-      {/* Dynamic glow backdrops */}
-      <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-gradient-to-tr from-primary/5 to-secondary/5 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
+      {/* 1. LEFT SIDEBAR: ChatGPT-style Previous Conversations & New Chat */}
+      <aside
+        className={cn(
+          "fixed lg:static inset-y-0 left-0 z-40 flex flex-col bg-card/95 lg:bg-card/70 backdrop-blur-2xl border-r border-border transition-all duration-300 ease-in-out shrink-0",
+          showLeftSidebar ? "w-72 translate-x-0" : "-translate-x-full lg:w-0 lg:border-r-0 lg:overflow-hidden"
+        )}
+      >
+        {/* Top: New Chat Button + Mobile Close */}
+        <div className="p-3 border-b border-border/80 flex items-center gap-2">
+          <Button
+            onClick={handleNewChat}
+            className="flex-1 justify-start gap-2 h-10 px-3.5 rounded-xl bg-primary text-primary-foreground font-semibold text-xs shadow-sm hover:opacity-95"
+          >
+            <Plus size={16} />
+            <span>New Chat</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden rounded-xl h-10 w-10 text-muted-foreground hover:text-foreground shrink-0"
+            onClick={() => setShowLeftSidebar(false)}
+          >
+            <X size={18} />
+          </Button>
+        </div>
 
-      {/* Main chat viewport */}
-      <div className={`flex-1 flex-col border-r border-border/80 min-h-0 ${showSidebarMobile ? "hidden lg:flex" : "flex"}`} style={{ height: "100%" }}>
-        
-        {/* Console Header */}
-        <header className="h-[64px] bg-white dark:bg-[#202c33] px-4 md:px-8 flex items-center justify-between border-b border-border/10 shrink-0 z-20 shadow-sm">
-          <div className="flex items-center gap-3">
+        {/* Search Session Query */}
+        {sessions.length > 3 && (
+          <div className="px-3 py-2 border-b border-border/40">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-2.5 text-muted-foreground" />
+              <Input
+                value={searchSessionQuery}
+                onChange={(e) => setSearchSessionQuery(e.target.value)}
+                placeholder="Search chats..."
+                className="h-8 pl-8 pr-2 text-xs bg-muted/40 border-border/40 rounded-lg"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Sessions List */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin">
+          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+            <span>Conversations</span>
+            {sessions.length > 0 && (
+              <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded font-mono">{filteredSessions.length}</span>
+            )}
+          </div>
+
+          {sessionsLoading ? (
+            <div className="p-6 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+              <Loader2 size={16} className="animate-spin text-primary" />
+              <span>Loading chats...</span>
+            </div>
+          ) : filteredSessions.length === 0 ? (
+            <div className="p-4 text-center text-xs text-muted-foreground">
+              {searchSessionQuery ? "No matching chats found" : "No previous chats yet"}
+            </div>
+          ) : (
+            filteredSessions.map((s) => {
+              const isActive = s.id === currentSessionId;
+              const isEditing = editingSessionId === s.id;
+
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => {
+                    if (!isEditing) {
+                      handleSelectSession(s.id);
+                      if (typeof window !== "undefined" && window.innerWidth < 1024) setShowLeftSidebar(false);
+                    }
+                  }}
+                  className={cn(
+                    "group relative flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs transition-all cursor-pointer border",
+                    isActive
+                      ? "bg-primary/10 border-primary/30 text-primary font-semibold shadow-sm"
+                      : "border-transparent hover:bg-muted text-foreground/80 hover:text-foreground"
+                  )}
+                >
+                  <MessageSquare size={14} className={cn("shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
+
+                  {isEditing ? (
+                    <div className="flex-1 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="text"
+                        value={editingSessionTitle}
+                        onChange={(e) => setEditingSessionTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveRenameSession(s.id);
+                          if (e.key === "Escape") setEditingSessionId(null);
+                        }}
+                        autoFocus
+                        className="w-full bg-background border border-primary rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none"
+                      />
+                      <button
+                        onClick={() => handleSaveRenameSession(s.id)}
+                        className="p-1 hover:text-primary text-muted-foreground"
+                      >
+                        <Check size={12} />
+                      </button>
+                      <button
+                        onClick={() => setEditingSessionId(null)}
+                        className="p-1 hover:text-destructive text-muted-foreground"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="truncate flex-1 select-none">{s.title || "Untitled Session"}</span>
+                  )}
+
+                  {/* Actions (Rename + Delete) */}
+                  {!isEditing && (
+                    <div
+                      className={cn(
+                        "items-center gap-0.5 shrink-0 transition-opacity",
+                        isActive ? "flex opacity-100" : "hidden group-hover:flex opacity-70 group-hover:opacity-100"
+                      )}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => handleStartRenameSession(s)}
+                        title="Rename"
+                        className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground"
+                      >
+                        <Edit3 size={12} />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteSession(e, s.id)}
+                        title="Delete conversation"
+                        className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Sidebar Footer */}
+        <div className="p-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+          <Link
+            href="/admin"
+            className="flex items-center gap-1.5 hover:text-foreground font-medium transition-colors"
+          >
+            <ArrowLeft size={14} />
+            <span>Dashboard</span>
+          </Link>
+          {sessions.length > 0 && (
+            <button
+              onClick={handleClearAllHistory}
+              className="text-[11px] hover:text-destructive transition-colors text-muted-foreground flex items-center gap-1"
+              title="Clear all chats"
+            >
+              <Trash2 size={12} /> Clear all
+            </button>
+          )}
+        </div>
+      </aside>
+
+      {/* Mobile Backdrop for Left Sidebar */}
+      {showLeftSidebar && (
+        <div
+          className="lg:hidden fixed inset-0 z-30 bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowLeftSidebar(false)}
+        />
+      )}
+
+      {/* 2. MIDDLE CHAT VIEWPORT */}
+      <div className="flex-1 flex flex-col min-w-0 h-full relative">
+        {/* Dynamic ambient background */}
+        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-gradient-to-tr from-primary/5 to-secondary/5 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
+
+        {/* Chat Header */}
+        <header className="h-[60px] bg-card/70 backdrop-blur-xl px-3 sm:px-6 flex items-center justify-between border-b border-border/60 shrink-0 z-20 shadow-sm">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {/* Sidebar Toggle Button */}
             <Button
               variant="ghost"
               size="icon"
-              asChild
-              className="rounded-full hover:bg-black/5 dark:hover:bg-white/5"
+              onClick={() => setShowLeftSidebar(!showLeftSidebar)}
+              className="rounded-xl h-9 w-9 text-muted-foreground hover:text-foreground shrink-0"
+              title={showLeftSidebar ? "Collapse sidebar" : "Expand sidebar"}
             >
-              <Link href="/admin">
-                <ArrowLeft size={20} className="text-foreground/70" />
-              </Link>
+              <PanelLeft size={18} />
             </Button>
 
-            <div className="relative">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                <Sparkles size={20} />
+            <div className="flex items-center gap-2.5 truncate">
+              <div className="relative shrink-0">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                  <Sparkles size={16} />
+                </div>
+                <div
+                  className={cn(
+                    "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-background",
+                    loading ? "bg-amber-500 animate-pulse" : "bg-emerald-500"
+                  )}
+                />
               </div>
-              <div className={cn(
-                "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-[#202c33]",
-                loading ? "bg-amber-500" : "bg-emerald-500"
-              )} />
-            </div>
-            <div>
-              <h2 className="text-[15px] font-bold leading-tight">Command AI</h2>
-              <p className="text-[11px] font-medium text-emerald-500">
-                {loading ? "AI is processing..." : "System Live"}
-              </p>
+              <div className="min-w-0">
+                <h2 className="text-sm font-bold leading-tight truncate">
+                  {currentSession?.title || "New Chat"}
+                </h2>
+                <p className="text-[10px] font-medium text-emerald-500">
+                  {loading ? "AI is processing..." : "AI Ready"}
+                </p>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Mobile Sidebar Toggle */}
+          <div className="flex items-center gap-1.5">
+            {/* Quick New Chat Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNewChat}
+              className="h-8 px-2.5 rounded-xl border-border hover:bg-muted text-xs font-semibold flex items-center gap-1 shadow-sm"
+              title="Start fresh conversation"
+            >
+              <Plus size={14} />
+              <span className="hidden sm:inline">New Chat</span>
+            </Button>
+
+            {/* Toggle Right Telemetry Sidebar */}
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden rounded-full hover:bg-black/5 dark:hover:bg-white/5"
-              onClick={() => setShowSidebarMobile(!showSidebarMobile)}
+              onClick={() => setShowRightSidebar(!showRightSidebar)}
+              className={cn(
+                "rounded-xl h-9 w-9 shrink-0 transition-colors",
+                showRightSidebar ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+              )}
+              title={showRightSidebar ? "Hide Tools Panel" : "Open Tools & Telemetry"}
             >
-              {showSidebarMobile ? <X size={20} className="text-foreground/70" /> : <Terminal size={20} className="text-foreground/70" />}
+              <Terminal size={18} />
             </Button>
           </div>
         </header>
 
         {/* Chat Feed */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 z-10 scrollbar-thin min-h-0">
-          <AnimatePresence initial={false}>
-            {messages.map((msg, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25 }}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div className={`flex gap-3 max-w-[85%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                  
-                  {/* Avatar */}
-                  {msg.role === "user" ? (
-                    <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-zinc-700 to-zinc-900 border border-zinc-600 flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm">
-                      <User size={14} />
-                    </div>
-                  ) : (
-                    <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-violet-600 to-indigo-600 border border-violet-500/30 flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-md shadow-violet-500/10">
-                      <Sparkles size={14} className="text-white animate-pulse" />
-                    </div>
-                  )}
-
-                  {/* Message card */}
-                  <div
-                    className={`rounded-2xl px-4 py-3 shadow-md border leading-relaxed text-sm ${
-                      msg.role === "user"
-                        ? "bg-primary text-primary-foreground border-primary/30 rounded-tr-none"
-                        : "bg-card/90 backdrop-blur-md text-foreground border-border rounded-tl-none"
-                    }`}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 z-10 scrollbar-thin min-h-0 flex flex-col">
+          {messagesLoading ? (
+            <div className="my-auto flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
+              <Loader2 size={24} className="animate-spin text-primary mb-2" />
+              <p className="text-xs">Loading conversation...</p>
+            </div>
+          ) : messages.length === 1 && !loading ? (
+            /* ChatGPT Welcome Hero for empty new chats */
+            <div className="my-auto max-w-xl mx-auto text-center space-y-4 py-8 px-4">
+              <div className="h-14 w-14 mx-auto rounded-3xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
+                <Sparkles size={28} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground">How can I assist you with your store?</h3>
+                <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
+                  I can inspect orders, adjust stock, manage coupons, review categories, and provide business analytics.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left pt-2">
+                {suggestionChips.map((chip, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSendMessage(chip.prompt)}
+                    className="p-3 rounded-xl border border-border bg-card/60 hover:bg-muted hover:border-primary/30 transition-all text-xs font-medium text-foreground flex items-center justify-between group shadow-sm"
                   >
-                    {msg.image && (
-                      <div className="mb-2 max-w-sm rounded-lg overflow-hidden border border-border/30 bg-black/5 dark:bg-white/5">
-                        <img 
-                          src={msg.image} 
-                          alt="Uploaded attachment" 
-                          className="max-h-48 w-full object-contain rounded-md" 
-                        />
+                    <span>{chip.label}</span>
+                    <ArrowUpRight size={13} className="opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <AnimatePresence initial={false}>
+              {messages.map((msg, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div className={`flex gap-3 max-w-[85%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
+                    {/* Avatar */}
+                    {msg.role === "user" ? (
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-zinc-700 to-zinc-900 border border-zinc-600 flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm">
+                        <User size={14} />
+                      </div>
+                    ) : (
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-violet-600 to-indigo-600 border border-violet-500/30 flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-md shadow-violet-500/10">
+                        <Sparkles size={14} className="text-white animate-pulse" />
                       </div>
                     )}
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
-                    {msg.role === "model" && msg.toolExecutions && renderToolWidgets(msg.toolExecutions, i)}
+
+                    {/* Message card */}
+                    <div
+                      className={`rounded-2xl px-4 py-3 shadow-md border leading-relaxed text-sm ${msg.role === "user"
+                          ? "bg-primary text-primary-foreground border-primary/30 rounded-tr-none"
+                          : "bg-card/90 backdrop-blur-md text-foreground border-border rounded-tl-none"
+                        }`}
+                    >
+                      {msg.image && (
+                        <div className="mb-2 max-w-sm rounded-lg overflow-hidden border border-border/30 bg-black/5 dark:bg-white/5">
+                          <img
+                            src={msg.image}
+                            alt="Uploaded attachment"
+                            className="max-h-48 w-full object-contain rounded-md"
+                          />
+                        </div>
+                      )}
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                      {msg.role === "model" && msg.toolExecutions && renderToolWidgets(msg.toolExecutions, i)}
+                      {msg.createdAt && (
+                        <span
+                          className={cn(
+                            "text-[10px] block mt-1.5 font-mono",
+                            msg.role === "user" ? "text-primary-foreground/70 text-right" : "text-muted-foreground/60 text-right"
+                          )}
+                        >
+                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          )}
 
           {loading && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
@@ -704,27 +1123,11 @@ export default function AdminAiChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Suggestion Chips */}
-        {messages.length === 1 && !loading && (
-          <div className="px-4 sm:px-6 py-3 flex flex-nowrap overflow-x-auto gap-2.5 z-10 border-t border-border bg-muted/10 backdrop-blur-md scrollbar-none">
-            {suggestionChips.map((chip, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleSendMessage(chip.prompt)}
-                className="text-[11px] px-4 py-2.5 rounded-full border border-border hover:border-primary/40 bg-card hover:bg-muted text-muted-foreground hover:text-foreground transition-all font-semibold flex items-center gap-1.5 shadow-sm whitespace-nowrap shrink-0"
-              >
-                {chip.label}
-                <ArrowUpRight size={11} className="opacity-50" />
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* User Input Bar */}
-        <footer className="p-3 md:p-6 bg-white dark:bg-[#202c33] border-t border-border/10 shrink-0 z-20 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
+        <footer className="p-3 md:p-5 bg-card/80 backdrop-blur-xl border-t border-border/60 shrink-0 z-20">
           <div className="max-w-3xl mx-auto space-y-3">
             {imagePreview && (
-              <div className="flex items-center gap-2 bg-[#f0f2f5] dark:bg-[#2a3942] p-2 rounded-xl w-fit border border-border/10">
+              <div className="flex items-center gap-2 bg-muted p-2 rounded-xl w-fit border border-border">
                 <div className="relative h-12 w-12 rounded-lg overflow-hidden border border-border bg-background">
                   <img src={imagePreview} alt="Upload preview" className="h-full w-full object-cover" />
                   {uploadingImage && (
@@ -747,7 +1150,7 @@ export default function AdminAiChatPage() {
               </div>
             )}
 
-            <div className="flex items-center gap-2 md:gap-4">
+            <div className="flex items-center gap-2 md:gap-3">
               <input
                 type="file"
                 accept="image/*"
@@ -762,7 +1165,8 @@ export default function AdminAiChatPage() {
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={loading || uploadingImage}
-                className="h-11 w-11 md:h-12 md:w-12 rounded-full hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] text-muted-foreground hover:text-foreground shrink-0"
+                className="h-11 w-11 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                title="Attach image"
               >
                 <Paperclip size={18} />
               </Button>
@@ -773,7 +1177,7 @@ export default function AdminAiChatPage() {
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={handleKeyPress}
                   placeholder="Ask AI to query products, list orders, create discounts..."
-                  className="w-full h-11 md:h-12 bg-[#f0f2f5] dark:bg-[#2a3942] border-none rounded-2xl px-4 md:px-5 text-[14px] md:text-[15px] focus-visible:ring-0 placeholder:text-muted-foreground/50 shadow-inner"
+                  className="w-full h-11 md:h-12 bg-muted/50 border-border/50 rounded-2xl px-4 md:px-5 text-[14px] md:text-[15px] focus-visible:ring-1 focus-visible:ring-primary/40 placeholder:text-muted-foreground/50 shadow-inner"
                 />
               </div>
               <Button
@@ -795,43 +1199,47 @@ export default function AdminAiChatPage() {
         </footer>
       </div>
 
-      {/* Telemetry Control Panel Sidebar */}
-      <div className={`w-full lg:w-72 bg-card/45 backdrop-blur-2xl p-5 flex-col border-t lg:border-t-0 border-border ${showSidebarMobile ? "flex" : "hidden lg:flex"}`} style={{ height: showSidebarMobile ? "100%" : undefined }}>
-
-        {/* Mobile Back Button */}
-        {showSidebarMobile && (
-          <button
-            onClick={() => setShowSidebarMobile(false)}
-            className="lg:hidden flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground mb-4 py-2 px-3 rounded-lg bg-muted/50 hover:bg-muted border border-border transition-all w-fit"
-          >
-            <ArrowLeft size={14} />
-            Back to Chat
-          </button>
+      {/* 3. RIGHT SIDEBAR: Telemetry & Tools (Collapsible / Toggleable) */}
+      <div
+        className={cn(
+          "w-full lg:w-72 bg-card/60 backdrop-blur-2xl p-4 flex-col border-l border-border shrink-0 transition-all duration-300",
+          showRightSidebar ? "flex fixed lg:static inset-y-0 right-0 z-40" : "hidden"
         )}
-        
+      >
+        <div className="flex items-center justify-between pb-3 border-b border-border/60">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <Terminal size={14} /> Telemetry & Tools
+          </h3>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowRightSidebar(false)}
+            className="rounded-lg h-7 w-7 text-muted-foreground hover:text-foreground"
+          >
+            <X size={14} />
+          </Button>
+        </div>
+
         {/* Tabs */}
-        <div className="flex border border-border rounded-lg p-1 bg-background text-xs gap-1">
+        <div className="flex border border-border rounded-lg p-1 bg-background text-xs gap-1 my-3">
           <button
             onClick={() => setActiveTab("chat")}
-            className={`flex-1 py-1.5 rounded-md font-semibold transition-all text-center ${
-              activeTab === "chat" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
-            }`}
+            className={`flex-1 py-1.5 rounded-md font-semibold transition-all text-center ${activeTab === "chat" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
           >
-            Terminal
+            Telemetry
           </button>
           <button
             onClick={() => setActiveTab("tools")}
-            className={`flex-1 py-1.5 rounded-md font-semibold transition-all text-center ${
-              activeTab === "tools" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
-            }`}
+            className={`flex-1 py-1.5 rounded-md font-semibold transition-all text-center ${activeTab === "tools" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
           >
             AI Tools
           </button>
           <button
             onClick={() => setActiveTab("commands")}
-            className={`flex-1 py-1.5 rounded-md font-semibold transition-all text-center ${
-              activeTab === "commands" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
-            }`}
+            className={`flex-1 py-1.5 rounded-md font-semibold transition-all text-center ${activeTab === "commands" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
           >
             Shortcuts
           </button>
@@ -841,18 +1249,18 @@ export default function AdminAiChatPage() {
           <div className="flex-1 flex flex-col gap-4 overflow-hidden">
             {/* Status indicators */}
             <div className="border border-border rounded-xl p-4 bg-background/50 space-y-3.5 shadow-sm">
-              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><Activity size={12} /> System Telemetry</h3>
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><Activity size={12} /> Live Engine Status</h3>
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Mongoose Agent</span>
+                  <span className="text-muted-foreground">Mongoose Sessions</span>
                   <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold"><span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse" /> Linked</span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Redis Session</span>
-                  <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold"><span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse" /> Running</span>
+                  <span className="text-muted-foreground">Active Session</span>
+                  <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[100px]">{currentSessionId ? `#${currentSessionId.slice(-6)}` : "New Session"}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Gemini LLM Core</span>
+                  <span className="text-muted-foreground">Gemini Core</span>
                   <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold"><span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse" /> Active</span>
                 </div>
               </div>
@@ -864,7 +1272,7 @@ export default function AdminAiChatPage() {
               <div className="text-[11px] font-mono text-muted-foreground space-y-1.5 overflow-y-auto flex-1 scrollbar-thin">
                 <p className="text-primary font-bold"># auth token status verified</p>
                 <p># database: clothing-ecommerce</p>
-                <p># schema: mongoose-prod-v9</p>
+                <p># total saved sessions: {sessions.length}</p>
                 <p># model: gemini-2.5-flash</p>
                 <p># function tools registered: 35</p>
                 <p className="text-emerald-600 dark:text-emerald-400"># ready for instructions</p>
@@ -873,8 +1281,8 @@ export default function AdminAiChatPage() {
           </div>
         ) : activeTab === "tools" ? (
           <div className="flex-1 flex flex-col gap-3 overflow-hidden">
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><Cpu size={12} /> Registered Tools</h3>
-            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 scrollbar-thin">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><Cpu size={12} /> Registered Tools (35)</h3>
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
               {[
                 { name: "searchProducts", desc: "Search products in catalog" },
                 { name: "updateProductStock", desc: "Update product stock levels" },
@@ -912,7 +1320,7 @@ export default function AdminAiChatPage() {
                 { name: "listBlogs", desc: "View editorial articles draft/live list" },
                 { name: "editBlog", desc: "Modify title, slug, html or cover image of articles" }
               ].map((tool, idx) => (
-                <div key={idx} className="p-2.5 border border-border bg-background/50 rounded-lg hover:border-primary/20 transition-all flex flex-col gap-0.5">
+                <div key={idx} className="p-2 border border-border bg-background/50 rounded-lg hover:border-primary/20 transition-all flex flex-col gap-0.5">
                   <span className="text-[11px] font-mono font-bold text-primary">{tool.name}()</span>
                   <span className="text-[10px] text-muted-foreground leading-snug">{tool.desc}</span>
                 </div>
@@ -922,12 +1330,12 @@ export default function AdminAiChatPage() {
         ) : (
           <div className="flex-1 flex flex-col gap-3 overflow-hidden">
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5 mb-1"><Terminal size={12} /> Command Shortcuts</h3>
-            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 scrollbar-thin">
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
               {quickCommands.map((item, idx) => (
                 <button
                   key={idx}
                   onClick={() => handleSendMessage(item.prompt)}
-                  className="w-full text-left p-3 border border-border bg-background hover:bg-muted rounded-xl transition-all group flex flex-col gap-1 shadow-sm"
+                  className="w-full text-left p-2.5 border border-border bg-background hover:bg-muted rounded-xl transition-all group flex flex-col gap-0.5 shadow-sm"
                 >
                   <span className="text-xs font-bold text-foreground group-hover:text-primary flex items-center justify-between">
                     {item.cmd}
@@ -939,10 +1347,9 @@ export default function AdminAiChatPage() {
             </div>
           </div>
         )}
-        
-        {/* Footer credits */}
-        <div className="text-[10px] text-muted-foreground font-mono text-center border-t border-border pt-4 mt-auto">
-          Command Engine v1.0.4
+
+        <div className="text-[10px] text-muted-foreground font-mono text-center border-t border-border pt-3 mt-auto">
+          Command Engine v1.1.0
         </div>
       </div>
     </div>

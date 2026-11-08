@@ -1,4 +1,4 @@
-import { sendUnifiedCapiEvent } from "../../services/tracking/multiPlatformCapiService.js";
+import { queueTrackingEvent } from "../../queues/tracking.queue.js";
 import logger from "../../utils/logger.js";
 
 /**
@@ -10,7 +10,7 @@ export class TrackingService {
    * @param {Function} [dependencies.capiSender]
    */
   constructor(dependencies = {}) {
-    this.capiSender = dependencies.capiSender || sendUnifiedCapiEvent;
+    this.capiSender = dependencies.capiSender || queueTrackingEvent;
   }
 
   /**

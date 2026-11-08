@@ -106,7 +106,8 @@ export const isAllowedOrigin = (origin) => {
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (isAllowedOrigin(origin)) {
+      // Allow requests with no origin (like mobile apps, curl, k6, server-to-server)
+      if (!origin || isAllowedOrigin(origin)) {
         callback(null, true);
       } else {
         logger.warn(`CORS rejected for unauthorized origin: ${origin}`);
@@ -130,7 +131,13 @@ app.use(
   })
 );
 
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
+if (process.env.NODE_ENV !== "production" || process.env.ENABLE_SWAGGER === "true") {
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
+} else {
+  app.use("/api-docs", (req, res) => {
+    res.status(404).json({ message: "API documentation endpoint is disabled in production." });
+  });
+}
 app.use("/api", apiLimiter);
 app.use(compression());
 

@@ -1,285 +1,587 @@
 "use client";
 
-import React, { useMemo, useRef, useEffect, useState } from "react";
-import dynamic from "next/dynamic";
+import React, { useEffect, useRef, useState, useId } from "react";
+import "quill/dist/quill.snow.css";
+import {
+  Code,
+  Eye,
+  Maximize2,
+  Minimize2,
+  Image as ImageIcon,
+  Sparkles,
+  Link as LinkIcon,
+  HelpCircle,
+  Clock,
+  FileText,
+  Upload,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import api from "@/lib/api";
+import { swalToast, swalError } from "@/utils/swal";
 
-// 🚀 Dynamically import Jodit to avoid SSR issues
-const JoditEditor = dynamic(() => import("jodit-react"), { 
-  ssr: false,
-  loading: () => <div className="h-[600px] w-full bg-accent/10 animate-pulse rounded-xl flex items-center justify-center font-black uppercase tracking-widest text-[10px] text-muted-foreground/30">Deploying Tactical Environment...</div>
-});
+// Curated blog starter templates for fashion / clothing e-commerce
+export const ARTICLE_TEMPLATES = [
+  {
+    title: "👗 Fashion Styling & Wardrobe Guide",
+    description: "Structured guide with styling tips, outfit pairings, and dos/don'ts",
+    html: `
+      <h2>The Philosophy Behind Effortless Styling</h2>
+      <p>True style isn't about following every passing trend; it's about curating silhouettes, textures, and palettes that reflect intentionality. In this guide, we break down how to elevate everyday staples into high-impact looks.</p>
+      
+      <blockquote>"Elegance is refusal. Choose garments that speak with quiet confidence rather than loud ornamentation."</blockquote>
 
-export default function RichTextEditor({ value, onChange, placeholder = "Initialize narrative data stream..." }) {
-  const editor = useRef(null);
-  const wrapperRef = useRef(null);
+      <h2>3 Core Rules for Everyday Versatility</h2>
+      <ul>
+        <li><strong>Balance Proportions:</strong> Pair oversized outerwear with structured trousers or tailored denim for architectural harmony.</li>
+        <li><strong>Play with Textures:</strong> Combine matte heavyweight cotton with subtle ribbed knitwear or raw denim.</li>
+        <li><strong>Anchor with Neutral Footwear:</strong> Ground your ensemble with minimalist sneakers or crafted leather boots.</li>
+      </ul>
+
+      <h2>Curated Outfit Pairings</h2>
+      <p>Transition from daytime work sessions to evening gatherings effortlessly. Layer an unlined linen blazer over a clean relaxed tee, paired with our relaxed-tapered chinos.</p>
+
+      <h2>Garment Care & Longevity</h2>
+      <p>Preserve the rich texture and dye of your garments by washing in cold water inside-out, and hanging to air dry away from direct sunlight.</p>
+    `,
+  },
+  {
+    title: "🧵 Sustainable Fabric & Craftsmanship Focus",
+    description: "Story spotlighting organic materials, weaving techniques, and eco-impact",
+    html: `
+      <h2>From Seed to Silhouette: The Story Behind Our Fabrics</h2>
+      <p>Every garment begins with the fiber. We believe luxury and environmental stewardship must coexist. This season, our focus turns to regenerative organic cotton and artisanal weave techniques.</p>
+
+      <blockquote>"When you know where your fabric was harvested and woven, wearing it becomes a conscious act."</blockquote>
+
+      <h2>Why Organic Long-Staple Cotton Matters</h2>
+      <p>Standard cotton relies heavily on chemical pesticides and extensive water irrigation. By sourcing certified organic fibers, we cut water consumption by up to 60% while delivering a softer, hypoallergenic hand-feel that softens with every wash.</p>
+
+      <h2>Artisanal Construction Details</h2>
+      <ul>
+        <li><strong>Reinforced Flat-Felled Seams:</strong> Ensures durability that withstands decades of active wear.</li>
+        <li><strong>Corozo Nut Buttons:</strong> 100% natural, biodegradable closures derived from fallen palm seeds.</li>
+        <li><strong>Low-Impact Reactive Dyes:</strong> Non-toxic pigmentation that preserves water tables and prevents fading.</li>
+      </ul>
+
+      <h2>How to Care for Conscious Clothing</h2>
+      <p>Extend the lifecycle of your wardrobe with gentle washing cycles, eco-friendly detergents, and periodic steaming rather than harsh iron heat.</p>
+    `,
+  },
+  {
+    title: "✨ New Season Collection Reveal",
+    description: "Announcement framework for seasonal drop, colorways, and lookbook notes",
+    html: `
+      <h2>Introducing the New Season Capsule</h2>
+      <p>We are proud to present our latest seasonal release—a cohesive collection inspired by contemporary architectural forms, earthen color palettes, and versatile transitional tailoring.</p>
+
+      <blockquote>"Designed for the modern commuter, thinker, and creator who values form, function, and comfort in equal measure."</blockquote>
+
+      <h2>The Palette: Earthen Hues & Clean Accents</h2>
+      <p>This capsule revolves around four foundational tones: Raw Ecru, Deep Indigo, Muted Slate, and Burnt Terracotta. Each shade was formulated to harmonize seamlessly with items already in your wardrobe.</p>
+
+      <h2>Hero Pieces in this Drop</h2>
+      <ul>
+        <li><strong>The Relaxed Heavyweight Overshirt:</strong> Cut from 380gsm brushed twill with deep utility chest pockets.</li>
+        <li><strong>The Architectural Wide-Leg Trouser:</strong> Tailored with front pleats, hidden elastic waistband, and horn buttons.</li>
+        <li><strong>The Everyday Supima Tee:</strong> Silky smooth 240gsm jersey built with a dense rib collar that never sags.</li>
+      </ul>
+
+      <h2>Availability & Limited Quantities</h2>
+      <p>Available now in limited batch runs online and across our flagship stores. Free domestic shipping and complimentary exchanges on all collection orders.</p>
+    `,
+  },
+  {
+    title: "🏷️ Artisan Heritage & Behind the Seams",
+    description: "Brand narrative celebrating designers, pattern-makers, and textile origins",
+    html: `
+      <h2>Behind the Seams: The Hands That Craft Our Pieces</h2>
+      <p>Behind every stitch, seam, and hem is a craftsman dedicated to the art of precision tailoring. Take an intimate look inside our partner atelier where heritage techniques meet modern silhouettes.</p>
+
+      <blockquote>"Machine efficiency can replicate speed, but only a seasoned artisan understands how fabric breathes and falls against the body."</blockquote>
+
+      <h2>The Pattern-Making Process</h2>
+      <p>Before a garment ever touches a sewing machine, dozens of paper patterns are drafted, draped, and fitted on diverse body forms. We obsess over fractions of a centimeter in armhole curvature and shoulder drop to ensure maximum range of motion.</p>
+
+      <h2>Timeless Quality Over Fast Trends</h2>
+      <p>In a world of disposable fashion, we stand firmly for slow, deliberate production. Each piece in our collection is produced in small numbered editions, ensuring strict quality inspection before reaching your doorstep.</p>
+    `,
+  },
+];
+
+export default function RichTextEditor({
+  value = "",
+  onChange,
+  placeholder = "Write your story here, add headers, format text, or select a template above...",
+}) {
+  const editorHostRef = useRef(null);
+  const quillRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const editorId = useId();
+
+  const [isMounted, setIsMounted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isSourceMode, setIsSourceMode] = useState(false);
+  const [sourceCode, setSourceCode] = useState(value || "");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
-  // 🛡️ Mutation Observer to handle full-screen escape from ancestor backdrop-filter/transforms
+  // Compute live word count & reading time
+  const stats = React.useMemo(() => {
+    const text = (isSourceMode ? sourceCode : value || "").replace(/<[^>]*>/g, " ");
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    const wordCount = words.length;
+    const charCount = text.replace(/\s/g, "").length;
+    const readingTime = `${Math.max(1, Math.ceil(wordCount / 200))} min read`;
+    return { wordCount, charCount, readingTime };
+  }, [value, sourceCode, isSourceMode]);
+
+  // Initialize Quill instance client-side cleanly without duplicate toolbars
   useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
+    setIsMounted(true);
+    let isCancelled = false;
 
-    const observer = new MutationObserver(() => {
-      const isFull = !!wrapper.querySelector(".jodit_fullsize");
-      setIsFullscreen(isFull);
-      if (isFull) {
-        document.body.classList.add("vanguard-editor-fullscreen");
-        document.documentElement.classList.add("vanguard-editor-fullscreen");
-      } else {
-        document.body.classList.remove("vanguard-editor-fullscreen");
-        document.documentElement.classList.remove("vanguard-editor-fullscreen");
+    const initQuill = async () => {
+      const { default: Quill } = await import("quill");
+      if (isCancelled || !editorHostRef.current) return;
+      if (quillRef.current) return;
+
+      // Wipe out any existing toolbars or child containers to guarantee a single toolbar
+      editorHostRef.current.innerHTML = "";
+
+      // Create editor target container inside host element
+      const editorDiv = document.createElement("div");
+      editorDiv.className = "quill-editor-target flex-1 min-h-[420px]";
+      editorHostRef.current.appendChild(editorDiv);
+
+      // Custom Toolbar
+      const toolbarOptions = [
+        [{ header: [2, 3, 4, false] }],
+        ["bold", "italic", "underline", "strike"],
+        ["blockquote", "code-block"],
+        [{ list: "ordered" }, { list: "bullet" }],
+        [{ align: [] }],
+        ["link", "image"],
+        ["clean"],
+      ];
+
+      const quill = new Quill(editorDiv, {
+        theme: "snow",
+        placeholder: placeholder,
+        modules: {
+          toolbar: toolbarOptions,
+        },
+      });
+
+      // Override image handler to use direct server upload or prompt
+      const toolbar = quill.getModule("toolbar");
+      toolbar.addHandler("image", () => {
+        if (fileInputRef.current) {
+          fileInputRef.current.click();
+        }
+      });
+
+      // Set initial value
+      if (value) {
+        quill.clipboard.dangerouslyPasteHTML(value);
       }
-    });
 
-    observer.observe(wrapper, {
-      attributes: true,
-      subtree: true,
-      attributeFilter: ["class"]
-    });
+      // Sync changes to parent
+      quill.on("text-change", () => {
+        const html = quill.root.innerHTML === "<p><br></p>" ? "" : quill.root.innerHTML;
+        onChange?.(html);
+        setSourceCode(html);
+      });
+
+      // Ensure no orphan or duplicate toolbars remain in the DOM
+      if (editorHostRef.current) {
+        const toolbars = editorHostRef.current.querySelectorAll(".ql-toolbar");
+        if (toolbars.length > 1) {
+          for (let i = 1; i < toolbars.length; i++) {
+            toolbars[i].remove();
+          }
+        }
+      }
+
+      quillRef.current = quill;
+    };
+
+    const host = editorHostRef.current;
+    initQuill();
 
     return () => {
-      observer.disconnect();
-      document.body.classList.remove("vanguard-editor-fullscreen");
-      document.documentElement.classList.remove("vanguard-editor-fullscreen");
+      isCancelled = true;
+      if (quillRef.current) {
+        quillRef.current = null;
+      }
+      if (host) {
+        host.innerHTML = "";
+      }
     };
-  }, []);
+  }, []); // Run once on mount
 
-  const toggleFullscreen = () => {
-    const fullsizeBtn = wrapperRef.current?.querySelector(".jodit-toolbar-button_fullsize button");
-    if (fullsizeBtn) {
-      fullsizeBtn.click();
+  // Sync incoming value prop if changed externally (e.g. from template or reset)
+  useEffect(() => {
+    if (quillRef.current && value !== undefined) {
+      const currentHtml = quillRef.current.root.innerHTML;
+      if (value !== currentHtml && (value !== "" || currentHtml !== "<p><br></p>")) {
+        const sel = quillRef.current.getSelection();
+        quillRef.current.clipboard.dangerouslyPasteHTML(value);
+        if (sel) {
+          quillRef.current.setSelection(sel);
+        }
+      }
+    }
+    setSourceCode(value || "");
+  }, [value]);
+
+  // Handle image upload from file picker
+  const handleImageFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingImage(true);
+    swalToast("Uploading image to CDN...", "info");
+
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const res = await api.post("/upload/blog-image", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const imageUrl = res.data?.url;
+      if (imageUrl && quillRef.current) {
+        const range = quillRef.current.getSelection(true) || { index: 0 };
+        quillRef.current.insertEmbed(range.index, "image", imageUrl);
+        quillRef.current.setSelection(range.index + 1);
+        swalToast("Image inserted successfully", "success");
+      }
+    } catch (err) {
+      // Fallback: convert to base64 or show error
+      console.warn("Direct image upload failed, falling back to base64 preview:", err);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (reader.result && quillRef.current) {
+          const range = quillRef.current.getSelection(true) || { index: 0 };
+          quillRef.current.insertEmbed(range.index, "image", reader.result);
+          quillRef.current.setSelection(range.index + 1);
+          swalToast("Image embedded locally", "info");
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const config = useMemo(() => ({
-    readonly: false,
-    placeholder: placeholder,
-    theme: "dark",
-    minHeight: 600,
-    maxHeight: "100vh",
-    autofocus: false,
-    spellcheck: true,
-    // Editor Theme Styling
-    style: {
-      background: "#09090b",
-      color: "#e4e4e7",
-      fontSize: "15px",
-      lineHeight: "1.8",
-      fontFamily: "var(--font-geist-sans), Inter, sans-serif",
-    },
-    // Optimized Toolbar (Source & Fullsize at start)
-    buttons: [
-      "source", "preview", "fullsize", "|",
-      "bold", "italic", "underline", "strikethrough", "|",
-      "font", "fontsize", "brush", "paragraph", "|",
-      "image", "video", "table", "link", "|",
-      "ul", "ol", "outdent", "indent", "|",
-      "align", "undo", "redo", "|",
-      "hr", "eraser", "symbol", "print"
-    ],
-    // 🖼️ Advanced Media
-    uploader: {
-      insertImageAsBase64URI: true,
-    },
-    // 🧩 Ultimate Optimization
-    toolbarAdaptive: false,
-    toolbarSticky: true,
-    showCharsCounter: true,
-    showWordsCounter: true,
-    showXPathInStatusbar: true,
-    beautifyHTML: true,
-    // Ensure handles are always visible for resizing
-    observer: {
-      timeout: 100
-    },
-    // Fix for fullscreen mode in fixed layouts
-    zIndex: 10000,
-  }), [placeholder]);
+  // Insert a starter template
+  const handleApplyTemplate = (templateHtml) => {
+    if (value && value.trim().length > 30) {
+      const confirmReplace = window.confirm(
+        "Applying a template will replace current content. Do you want to proceed?"
+      );
+      if (!confirmReplace) return;
+    }
+
+    if (quillRef.current) {
+      quillRef.current.clipboard.dangerouslyPasteHTML(templateHtml);
+    }
+    onChange?.(templateHtml);
+    setSourceCode(templateHtml);
+    swalToast("Starter template loaded!", "success");
+  };
+
+  // Toggle between visual WYSIWYG and HTML source code
+  const toggleSourceMode = () => {
+    if (isSourceMode) {
+      // Switching back to visual mode: update quill with edited source code
+      if (quillRef.current) {
+        quillRef.current.clipboard.dangerouslyPasteHTML(sourceCode);
+      }
+      onChange?.(sourceCode);
+      setIsSourceMode(false);
+    } else {
+      // Switching to HTML source code mode
+      if (quillRef.current) {
+        const html = quillRef.current.root.innerHTML;
+        setSourceCode(html);
+      }
+      setIsSourceMode(true);
+    }
+  };
 
   return (
-    <div ref={wrapperRef} className="vanguard-editor-wrapper">
-      {isFullscreen && (
-        <button
-          type="button"
-          onClick={toggleFullscreen}
-          className="vanguard-editor-close-btn"
-          title="Exit Fullscreen (Esc)"
-          aria-label="Exit Fullscreen"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      )}
-
-      <JoditEditor
-        ref={editor}
-        value={value}
-        config={config}
-        onBlur={(newContent) => onChange(newContent)}
-        onChange={(newContent) => {}}
+    <div
+      className={`rich-editor-wrapper transition-all duration-200 ${
+        isFullscreen
+          ? "fixed inset-0 z-50 bg-background flex flex-col p-6 sm:p-10 overflow-hidden shadow-2xl"
+          : "relative flex flex-col rounded-2xl border border-border/60 bg-card overflow-hidden shadow-2xs"
+      }`}
+    >
+      {/* Hidden file input for image upload button */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleImageFileSelect}
+        className="hidden"
       />
+
+      {/* Editor Sub-Header Utility Bar */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/60 bg-muted/30 shrink-0 text-xs text-muted-foreground flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          {/* Templates Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-xl text-xs font-semibold gap-1.5 border-border/60 bg-background/80 hover:bg-muted text-foreground cursor-pointer shadow-2xs"
+              >
+                <Sparkles className="size-3.5 text-primary" />
+                <span>Templates</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-80 rounded-2xl p-2 bg-card border-border shadow-xl">
+              <DropdownMenuLabel className="text-xs font-bold text-foreground px-2 py-1.5">
+                Quick Content Starters
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {ARTICLE_TEMPLATES.map((tmpl, idx) => (
+                <DropdownMenuItem
+                  key={idx}
+                  onClick={() => handleApplyTemplate(tmpl.html)}
+                  className="p-2.5 rounded-xl cursor-pointer hover:bg-muted/80 flex flex-col items-start gap-1 focus:bg-muted/80"
+                >
+                  <span className="text-xs font-bold text-foreground">{tmpl.title}</span>
+                  <span className="text-[11px] text-muted-foreground leading-snug">
+                    {tmpl.description}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Source HTML Mode Toggle */}
+          <Button
+            type="button"
+            variant={isSourceMode ? "secondary" : "ghost"}
+            size="sm"
+            onClick={toggleSourceMode}
+            className="h-8 rounded-xl text-xs font-medium gap-1.5 text-muted-foreground hover:text-foreground cursor-pointer"
+            title="Toggle Raw HTML Mode"
+          >
+            <Code className="size-3.5" />
+            <span>{isSourceMode ? "Visual Editor" : "HTML Source"}</span>
+          </Button>
+        </div>
+
+        {/* Right stats and Fullscreen toggle */}
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-3 text-[11px] font-medium text-muted-foreground tabular-nums">
+            <span className="flex items-center gap-1">
+              <FileText className="size-3 text-muted-foreground/70" />
+              {stats.wordCount.toLocaleString()} words
+            </span>
+            <span>•</span>
+            <span className="flex items-center gap-1">
+              <Clock className="size-3 text-muted-foreground/70" />
+              {stats.readingTime}
+            </span>
+          </div>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            className="h-8 px-2.5 rounded-xl text-xs font-medium gap-1.5 text-muted-foreground hover:text-foreground cursor-pointer"
+            title={isFullscreen ? "Exit Fullscreen (Esc)" : "Distraction-Free Zen Fullscreen"}
+          >
+            {isFullscreen ? (
+              <>
+                <Minimize2 className="size-3.5" />
+                <span className="hidden sm:inline">Exit Fullscreen</span>
+              </>
+            ) : (
+              <>
+                <Maximize2 className="size-3.5" />
+                <span className="hidden sm:inline">Zen Mode</span>
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {/* Editor Content Area */}
+      <div className={`relative flex-1 flex flex-col ${isFullscreen ? "overflow-y-auto" : ""}`}>
+        {isSourceMode && (
+          <textarea
+            value={sourceCode}
+            onChange={(e) => {
+              setSourceCode(e.target.value);
+              onChange?.(e.target.value);
+            }}
+            placeholder="Type or paste raw HTML here..."
+            className="w-full min-h-[460px] p-6 font-mono text-xs leading-relaxed bg-background/50 border-none outline-none focus:ring-0 resize-y text-foreground"
+          />
+        )}
+        <div
+          ref={editorHostRef}
+          className={`quill-editor-host flex-1 flex flex-col bg-background ${isSourceMode ? "hidden" : ""}`}
+        />
+      </div>
+
+      {/* Modern Quill Theme Styling */}
       <style jsx global>{`
-        /* 🛡️ Neutralize Jodit Body/HTML Collapse to 0px */
-        html.vanguard-editor-fullscreen,
-        body.vanguard-editor-fullscreen {
-          width: 100vw !important;
-          height: 100vh !important;
-          position: relative !important;
-          overflow: hidden !important;
-          background: #09090b !important;
-        }
-
-        /* 🛡️ Disable Containing Blocks on Ancestors to allow absolute viewport takeover */
-        body.vanguard-editor-fullscreen .layout-root,
-        body.vanguard-editor-fullscreen .admin-root,
-        body.vanguard-editor-fullscreen main,
-        body.vanguard-editor-fullscreen .max-w-7xl,
-        body.vanguard-editor-fullscreen .grid,
-        body.vanguard-editor-fullscreen .lg\:col-span-8,
-        body.vanguard-editor-fullscreen .group\/card,
-        body.vanguard-editor-fullscreen .quill-modern-container {
-          backdrop-filter: none !important;
-          filter: none !important;
-          transform: none !important;
-          overflow: visible !important;
-        }
-
-        /* 🛡️ Fullscreen Viewport Takeover */
-        body.vanguard-editor-fullscreen .vanguard-editor-wrapper {
-          position: fixed !important;
-          top: 0 !important;
-          left: 0 !important;
-          width: 100vw !important;
-          height: 100vh !important;
-          z-index: 99999999 !important;
-          background: #09090b !important;
-          margin: 0 !important;
-          padding: 0 !important;
-        }
-
-        body.vanguard-editor-fullscreen .jodit-container {
-          height: 100vh !important;
-          width: 100vw !important;
-          border-radius: 0 !important;
+        /* Quill Snow Container Overrides */
+        .rich-editor-wrapper .ql-toolbar.ql-snow {
           border: none !important;
-          background: #09090b !important;
+          border-bottom: 1px solid var(--border) !important;
+          background: color-mix(in srgb, var(--card) 90%, var(--muted) 10%) !important;
+          padding: 8px 14px !important;
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 2px;
         }
 
-        /* 🛡️ Strict Dark Theme Enforcement to override default white inline styles */
-        .jodit_fullsize,
-        .jodit-container_fullsize,
-        .jodit-container.jodit_fullsize,
-        .jodit-container,
-        .jodit-workplace,
-        .jodit-wysiwyg,
-        .jodit-iframe,
-        .jodit-editor__area {
-          background: #09090b !important;
-          background-color: #09090b !important;
-          color: #e4e4e7 !important;
+        /* Prevent duplicate toolbar display */
+        .rich-editor-wrapper .ql-toolbar ~ .ql-toolbar,
+        .quill-editor-host .ql-toolbar ~ .ql-toolbar {
+          display: none !important;
         }
 
-        .jodit-wysiwyg p,
-        .jodit-wysiwyg span,
-        .jodit-wysiwyg div {
-          color: #e4e4e7 !important;
+        .rich-editor-wrapper .ql-container.ql-snow {
+          border: none !important;
+          font-family: inherit !important;
+          font-size: 15px !important;
+          line-height: 1.8 !important;
         }
 
-        .jodit_fullsize {
-          position: fixed !important;
-          top: 0 !important;
-          left: 0 !important;
-          width: 100vw !important;
-          height: 100vh !important;
-          z-index: 1000000 !important;
-          margin: 0 !important;
-          border-radius: 0 !important;
-          overflow: hidden !important;
+        .rich-editor-wrapper .ql-editor {
+          min-height: 420px !important;
+          padding: 24px 28px !important;
+          color: var(--foreground) !important;
         }
 
-        .jodit-container {
-          border: 1px solid rgba(255, 255, 255, 0.08) !important;
-          background: #09090b !important;
+        .rich-editor-wrapper .ql-editor.ql-blank::before {
+          color: var(--muted-foreground) !important;
+          opacity: 0.55 !important;
+          font-style: normal !important;
+          font-weight: 400 !important;
+          left: 28px !important;
+        }
+
+        /* SVG Icons in Toolbar */
+        .rich-editor-wrapper .ql-snow .ql-stroke {
+          stroke: var(--foreground) !important;
+          opacity: 0.75 !important;
+        }
+
+        .rich-editor-wrapper .ql-snow .ql-fill {
+          fill: var(--foreground) !important;
+          opacity: 0.75 !important;
+        }
+
+        .rich-editor-wrapper .ql-snow .ql-picker {
+          color: var(--foreground) !important;
+          font-size: 12px !important;
+          font-weight: 500 !important;
+        }
+
+        .rich-editor-wrapper .ql-snow button:hover .ql-stroke,
+        .rich-editor-wrapper .ql-snow .ql-picker:hover {
+          stroke: var(--primary) !important;
+          color: var(--primary) !important;
+          opacity: 1 !important;
+        }
+
+        .rich-editor-wrapper .ql-snow button:hover .ql-fill {
+          fill: var(--primary) !important;
+          opacity: 1 !important;
+        }
+
+        .rich-editor-wrapper .ql-snow button.ql-active .ql-stroke {
+          stroke: var(--primary) !important;
+          opacity: 1 !important;
+        }
+
+        .rich-editor-wrapper .ql-snow button.ql-active .ql-fill {
+          fill: var(--primary) !important;
+          opacity: 1 !important;
+        }
+
+        .rich-editor-wrapper .ql-snow .ql-picker-options {
+          background: var(--card) !important;
+          border: 1px solid var(--border) !important;
           border-radius: 12px !important;
-          overflow: hidden;
+          padding: 6px !important;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2) !important;
         }
 
-        .jodit-toolbar__box {
-          background: #09090b !important;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-          padding: 12px 24px !important;
+        .rich-editor-wrapper .ql-snow .ql-picker-item {
+          color: var(--foreground) !important;
+          border-radius: 6px !important;
+          padding: 4px 8px !important;
         }
 
-        .jodit-workplace {
-          background: transparent !important;
-          padding: 30px !important;
+        .rich-editor-wrapper .ql-snow .ql-picker-item:hover {
+          background: var(--muted) !important;
+          color: var(--primary) !important;
         }
 
-        .jodit-status-bar {
-          background: #09090b !important;
-          border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-          color: #71717a !important;
-          padding: 10px 24px !important;
+        /* Prose element rendering inside editor */
+        .rich-editor-wrapper .ql-editor h2 {
+          font-size: 1.6rem !important;
+          font-weight: 800 !important;
+          margin-top: 1.5rem !important;
+          margin-bottom: 0.75rem !important;
+          line-height: 1.3 !important;
         }
 
-        .jodit-toolbar-button__button {
-          color: #a1a1aa !important;
+        .rich-editor-wrapper .ql-editor h3 {
+          font-size: 1.3rem !important;
+          font-weight: 700 !important;
+          margin-top: 1.25rem !important;
+          margin-bottom: 0.5rem !important;
         }
 
-        .jodit-toolbar-button__button:hover {
-          background: rgba(225, 29, 72, 0.1) !important;
-          color: #f43f5e !important;
+        .rich-editor-wrapper .ql-editor blockquote {
+          border-left: 3px solid var(--primary) !important;
+          padding-left: 1.25rem !important;
+          font-style: italic !important;
+          color: var(--muted-foreground) !important;
+          margin: 1.25rem 0 !important;
         }
 
-        /* Tactical Tooltip/Dropdown Fixes */
-        .jodit-ui-panel, .jodit-ui-popup {
-          background: #18181b !important;
-          border: 1px solid rgba(255, 255, 255, 0.1) !important;
-          border-radius: 8px !important;
-          color: white !important;
-          z-index: 1000001 !important;
+        .rich-editor-wrapper .ql-editor img {
+          border-radius: 1rem !important;
+          max-width: 100% !important;
+          height: auto !important;
+          margin: 1.5rem auto !important;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
         }
 
-        /* 🛡️ High-Premium Glassmorphic Floating Close Button */
-        .vanguard-editor-close-btn {
-          position: fixed !important;
-          top: 16px !important;
-          right: 20px !important;
-          z-index: 100000005 !important;
-          width: 44px !important;
-          height: 44px !important;
-          border-radius: 50% !important;
-          background: rgba(24, 24, 27, 0.9) !important; /* Lighter zinc for contrast */
-          backdrop-filter: blur(16px) !important;
-          -webkit-backdrop-filter: blur(16px) !important;
-          border: 1.5px solid rgba(244, 63, 94, 0.3) !important; /* Rose tinted border */
-          color: #f43f5e !important; /* Striking tactical rose/red color */
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          cursor: pointer !important;
-          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
-          box-shadow: 0 4px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(244, 63, 94, 0.25) !important; /* Gorgeous soft glow */
-          padding: 0 !important;
+        .rich-editor-wrapper .ql-editor a {
+          color: var(--primary) !important;
+          text-decoration: underline !important;
         }
 
-        .vanguard-editor-close-btn:hover {
-          background: #f43f5e !important; /* Solid red on hover */
-          border-color: #f43f5e !important;
-          color: white !important;
-          transform: scale(1.1) rotate(90deg) !important;
-          box-shadow: 0 0 25px rgba(244, 63, 94, 0.6) !important;
-        }
-
-        .vanguard-editor-close-btn svg {
-          width: 20px !important;
-          height: 20px !important;
-          transition: transform 0.4s ease !important;
-        }
-
-        .vanguard-editor-close-btn:active {
-          transform: scale(0.9) rotate(90deg) !important;
+        .rich-editor-wrapper .ql-editor ul,
+        .rich-editor-wrapper .ql-editor ol {
+          padding-left: 1.5rem !important;
+          margin: 1rem 0 !important;
         }
       `}</style>
     </div>

@@ -35,10 +35,10 @@ export const useAdminBlogs = (params = {}, adminView = false, id = null, isId = 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["blogs"] });
-      swalToast("Narrative deployed successfully!", "success");
+      swalToast("Article created successfully!", "success");
     },
     onError: (err) => {
-      swalError("Deployment failed", err.response?.data?.message);
+      swalError("Creation failed", err.response?.data?.message);
     },
   });
 
@@ -55,7 +55,7 @@ export const useAdminBlogs = (params = {}, adminView = false, id = null, isId = 
       queryClient.invalidateQueries({ queryKey: ["blogs"] });
       queryClient.invalidateQueries({ queryKey: ["blog", variables.id, true] });
       queryClient.invalidateQueries({ queryKey: ["blog", variables.id, false] });
-      swalToast("Archive reconfigured successfully!", "success");
+      swalToast("Article updated successfully!", "success");
     },
     onError: (err) => {
       swalError("Update failed", err.response?.data?.message);
@@ -71,7 +71,7 @@ export const useAdminBlogs = (params = {}, adminView = false, id = null, isId = 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["blogs"] });
-      swalToast("Narrative purged successfully.", "success");
+      swalToast("Article deleted successfully.", "success");
     },
     onError: (err) => {
       swalError("Purge failed", err.response?.data?.message);

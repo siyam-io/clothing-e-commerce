@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, Suspense } from "react";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { useAdminOrders } from "@/app/admin/orders/lib/useAdminOrders";
 import { useAdminCategories } from "@/app/admin/categories/lib/useAdminCategories";
 import { useAuthStore } from "@/store/authStore";
 import { useAppStore } from "@/store/appStore";
-import { notify } from "@/utils/swal";
+import { notify, swalToast } from "@/utils/swal";
+import Loader from "@/components/common/Loader";
 
 // POS Modular Components & Audio
 import PosHeader from "@/app/admin/orders/components/pos/PosHeader";
@@ -17,20 +19,42 @@ import PosReceiptModal from "@/app/admin/orders/components/pos/PosReceiptModal";
 import PosHeldOrdersModal from "@/app/admin/orders/components/pos/PosHeldOrdersModal";
 import { playBeep, playErrorSound, playSuccessChime, playParkSound } from "@/app/admin/orders/lib/posAudio";
 
-export default function PosNewOrderPage() {
+function PosOrderTerminalContent({ editingOrderId: propEditingOrderId }) {
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const editingOrderId = propEditingOrderId || params?.id || searchParams?.get("orderId") || null;
+  const isEditing = Boolean(editingOrderId);
+
   const { user } = useAuthStore();
   const { settings } = useAppStore();
   const storeName = settings?.branding?.siteName || "Store";
 
-  const { searchAdminUsers, createAdminOrder, isCreating } = useAdminOrders();
+  const {
+    searchAdminUsers,
+    createAdminOrder,
+    isCreating,
+    orderDetails: editingOrder,
+    orderDetailsLoading: isLoadingEditingOrder,
+    updateOrder,
+    isUpdating,
+  } = useAdminOrders({}, editingOrderId);
+
   const { categories } = useAdminCategories();
+  const isSubmitting = isEditing ? isUpdating : isCreating;
 
   const searchInputRef = useRef(null);
+  const hasInitializedFromOrder = useRef(false);
 
   // Set document title
   useEffect(() => {
-    document.title = `POS Terminal | ${storeName} Admin`;
-  }, [storeName]);
+    if (isEditing) {
+      document.title = `Edit Order #${editingOrderId?.slice(-8).toUpperCase()} | POS Terminal`;
+    } else {
+      document.title = `POS Terminal | ${storeName} Admin`;
+    }
+  }, [storeName, isEditing, editingOrderId]);
 
   // Global F2 shortcut to focus barcode search
   useEffect(() => {
@@ -77,9 +101,89 @@ export default function PosNewOrderPage() {
   // 2. Cart & Items State
   const [items, setItems] = useState([]);
 
+  // Prepopulate form when editing an existing order
+  useEffect(() => {
+    if (editingOrder && isEditing && !hasInitializedFromOrder.current) {
+      hasInitializedFromOrder.current = true;
+
+      // 1. Items
+      const loadedItems = (editingOrder.orderItems || []).map((item) => {
+        const rawSizeId = item.size?._id || item.size;
+        let resolvedSizeName = item.size?.name || item.sizeName || "";
+        if (!resolvedSizeName || /^[0-9a-fA-F]{24}$/.test(resolvedSizeName)) {
+          const foundSize = item.product?.sizes?.find(
+            (s) => (s.size?._id || s.size)?.toString() === rawSizeId?.toString()
+          );
+          resolvedSizeName = foundSize?.size?.name || foundSize?.name || "Standard";
+        }
+
+        return {
+          product: item.product?._id || item.product,
+          name: item.product?.name || item.name || "Product",
+          image: item.product?.images?.[0] || "",
+          size: rawSizeId,
+          sizeName: resolvedSizeName,
+          quantity: item.quantity,
+          price: item.price,
+          maxStock: 999,
+        };
+      });
+      setItems(loadedItems);
+
+      // 2. Customer
+      const isMember = Boolean(editingOrder.user && (editingOrder.user._id || editingOrder.user.id));
+      const customerName = editingOrder.user?.name || editingOrder.shippingAddress?.name || "";
+      const customerPhone = editingOrder.user?.phone || editingOrder.shippingAddress?.phone || "";
+      const customerAddress = editingOrder.shippingAddress?.address || editingOrder.shippingAddress?.street || "";
+
+      if (isMember) {
+        setCustomerMode("member");
+        setCustomerData({
+          selectedUser: editingOrder.user,
+          name: customerName,
+          phone: customerPhone,
+          address: customerAddress,
+        });
+      } else {
+        setCustomerMode("walkin");
+        setWalkinPhone(customerPhone);
+        setCustomerData({
+          selectedUser: null,
+          name: customerName,
+          phone: customerPhone,
+          address: customerAddress,
+        });
+      }
+
+      // 3. Delivery
+      const isCounter = editingOrder.deliveryZone === "pos" || (!editingOrder.shippingPrice && !editingOrder.deliveryZone);
+      if (isCounter) {
+        setDeliveryType("counter");
+      } else {
+        setDeliveryType("delivery");
+        setShippingRegion(editingOrder.deliveryZone || (editingOrder.shippingPrice === 60 ? "dhaka" : "outside"));
+        setCustomShippingPrice(editingOrder.shippingPrice || 60);
+      }
+
+      // 4. Financials & Payment
+      setCouponCode(editingOrder.couponCode || "");
+      if (editingOrder.discountAmount > 0) {
+        setManualDiscountType("flat");
+        setManualDiscountValue(editingOrder.discountAmount);
+      }
+      setPaymentMethod(editingOrder.paymentMethod || "Cash");
+      setOrderNote(editingOrder.note || "");
+      setTransactionId(editingOrder.paymentResult?.transactionId || "");
+    }
+  }, [editingOrder, isEditing]);
+
   const handleAddItem = (product, size) => {
     const sizeId = typeof size === "object" && size ? size._id : size;
-    const sizeName = typeof size === "object" && size ? size.name : (size || "Standard");
+    let sizeName = typeof size === "object" && size ? size.name : (size || "Standard");
+    if (!sizeName || /^[0-9a-fA-F]{24}$/.test(sizeName)) {
+      const found = product.sizes?.find((s) => (s.size?._id || s.size)?.toString() === sizeId?.toString());
+      sizeName = found?.size?.name || found?.name || "Standard";
+    }
 
     const unitPrice = product.discount > 0
       ? Math.round(product.price * (1 - product.discount / 100))
@@ -97,11 +201,11 @@ export default function PosNewOrderPage() {
     }
 
     const existingIndex = items.findIndex(
-      (item) => item.product === product._id && item.size === sizeId
+      (item) => (item.product?._id || item.product) === product._id && item.size === sizeId
     );
 
     if (existingIndex > -1) {
-      if (items[existingIndex].quantity >= maxStock) {
+      if (!isEditing && items[existingIndex].quantity >= maxStock) {
         playErrorSound();
         notify.error("Stock Limit", `Only ${maxStock} available in stock for size ${sizeName}.`);
         return;
@@ -111,7 +215,7 @@ export default function PosNewOrderPage() {
       updated[existingIndex].quantity += 1;
       setItems(updated);
     } else {
-      if (maxStock < 1) {
+      if (!isEditing && maxStock < 1) {
         playErrorSound();
         notify.error("Out of Stock", `${product.name} is currently out of stock.`);
         return;
@@ -144,7 +248,7 @@ export default function PosNewOrderPage() {
       return;
     }
 
-    if (delta > 0 && newQty > current.maxStock) {
+    if (!isEditing && delta > 0 && newQty > current.maxStock) {
       playErrorSound();
       notify.error("Stock Limit", `Only ${current.maxStock} available in stock.`);
       return;
@@ -205,14 +309,14 @@ export default function PosNewOrderPage() {
       if (saved) {
         setHeldOrders(JSON.parse(saved));
       }
-    } catch {}
+    } catch { }
   }, []);
 
   // Save held orders to localStorage
   useEffect(() => {
     try {
       localStorage.setItem("pos_held_orders_v1", JSON.stringify(heldOrders));
-    } catch {}
+    } catch { }
   }, [heldOrders]);
 
   const handleHoldOrder = () => {
@@ -318,11 +422,64 @@ export default function PosNewOrderPage() {
   const parsedCash = Number(cashReceived) || 0;
   const changeDue = parsedCash >= grandTotal ? parsedCash - grandTotal : 0;
 
-  // 7. Complete Order Submission
+  // 7. Update Existing Order in Edit Mode
+  const handleUpdateOrder = async () => {
+    const cleanItems = items.map((i) => ({
+      product: i.product?._id || i.product,
+      size: i.size?._id || i.size,
+      quantity: i.quantity,
+      price: i.price,
+    }));
+
+    const isDelivery = deliveryType === "delivery";
+    const deliveryZone = isDelivery ? shippingRegion : "pos";
+    const shippingCharge = isDelivery ? shippingPrice : 0;
+
+    let shippingAddress = {
+      name: customerData.name?.trim() || editingOrder?.shippingAddress?.name || "Customer",
+      email: customerData.selectedUser?.email || editingOrder?.shippingAddress?.email || "",
+      phone: customerData.phone?.trim() || walkinPhone.trim() || editingOrder?.shippingAddress?.phone || "01700000000",
+      address: customerData.address?.trim() || editingOrder?.shippingAddress?.address || (isDelivery ? "Customer Delivery Address" : "In-Store / POS Store"),
+    };
+
+    let finalPaymentMethod = paymentMethod;
+    if (paymentMethod === "Split") {
+      finalPaymentMethod = `Split (${splitMethod} + Cash)`;
+    }
+
+    try {
+      await updateOrder({
+        id: editingOrderId,
+        data: {
+          orderItems: cleanItems,
+          shippingAddress,
+          paymentMethod: finalPaymentMethod,
+          shippingPrice: shippingCharge,
+          deliveryZone,
+          note: orderNote?.trim() || undefined,
+        },
+      });
+
+      playSuccessChime();
+      swalToast(`Order #${editingOrderId.slice(-8).toUpperCase()} updated successfully!`, "success");
+      router.push(`/admin/orders/${editingOrderId}`);
+    } catch (err) {
+      playErrorSound();
+      console.error(err);
+      notify.error("Update Failed", err.response?.data?.message || "Failed to update order.");
+    }
+  };
+
+  // 8. Complete Order Submission (New Sale or Edit Update)
   const handleSubmitOrder = async () => {
     if (items.length === 0) {
       playErrorSound();
       notify.error("Cart Empty", "Please add at least one product to the register.");
+      return;
+    }
+
+    if (isEditing) {
+      await handleUpdateOrder();
       return;
     }
 
@@ -351,7 +508,6 @@ export default function PosNewOrderPage() {
         address: customerData.address?.trim() || u.address || (isDelivery ? "Customer Delivery Address" : "In-Store / POS Store"),
       };
     } else {
-      // Walk-in Customer (with optional delivery details)
       isGuest = true;
       userId = null;
       shippingAddress = {
@@ -361,7 +517,6 @@ export default function PosNewOrderPage() {
       };
     }
 
-    // Determine final paymentMethod string and transactionId
     let finalPaymentMethod = paymentMethod;
     let finalTransactionId = transactionId?.trim();
 
@@ -377,8 +532,8 @@ export default function PosNewOrderPage() {
     const payload = {
       user: userId,
       orderItems: items.map((i) => ({
-        product: i.product,
-        size: i.size,
+        product: i.product?._id || i.product,
+        size: i.size?._id || i.size,
         quantity: i.quantity,
       })),
       shippingAddress,
@@ -406,6 +561,14 @@ export default function PosNewOrderPage() {
     }
   };
 
+  const handleCancelEdit = () => {
+    if (editingOrderId) {
+      router.push(`/admin/orders/${editingOrderId}`);
+    } else {
+      router.push("/admin/orders");
+    }
+  };
+
   const handleNewSale = () => {
     setShowReceiptModal(false);
     setCompletedOrder(null);
@@ -425,6 +588,17 @@ export default function PosNewOrderPage() {
     searchInputRef.current?.focus();
   };
 
+  if (isEditing && isLoadingEditingOrder) {
+    return (
+      <div className="flex flex-col min-h-screen bg-background items-center justify-center">
+        <Loader />
+        <p className="mt-4 text-xs font-black uppercase tracking-widest text-muted-foreground animate-pulse">
+          Loading Order #{editingOrderId?.slice(-8).toUpperCase()} into POS...
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       {/* POS Top Navigation Header */}
@@ -433,6 +607,9 @@ export default function PosNewOrderPage() {
         onResetCart={handleClearCart}
         heldOrdersCount={heldOrders.length}
         onOpenHeldOrders={() => setShowHeldModal(true)}
+        isEditing={isEditing}
+        editingOrderId={editingOrderId}
+        onCancelEdit={handleCancelEdit}
       />
 
       {/* POS Main Workspace Split Screen */}
@@ -507,7 +684,11 @@ export default function PosNewOrderPage() {
             onOpenHeldOrders={() => setShowHeldModal(true)}
 
             onSubmitOrder={handleSubmitOrder}
-            isSubmitting={isCreating}
+            isSubmitting={isSubmitting}
+
+            isEditing={isEditing}
+            editingOrderId={editingOrderId}
+            onCancelEdit={handleCancelEdit}
           />
         </section>
 
@@ -536,5 +717,17 @@ export default function PosNewOrderPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function PosNewOrderPage(props) {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col min-h-screen bg-background items-center justify-center">
+        <Loader />
+      </div>
+    }>
+      <PosOrderTerminalContent {...props} />
+    </Suspense>
   );
 }

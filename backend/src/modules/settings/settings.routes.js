@@ -9,6 +9,7 @@ const router = express.Router();
 
 
 router.get('/', optionalAuth, cacheMiddleware(3600), getSettings); // Cache for 1 hour
+router.get('/public', optionalAuth, cacheMiddleware(3600), getSettings);
 
 
 router.put('/', requireAuth, admin, upload.fields([

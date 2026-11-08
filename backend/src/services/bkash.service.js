@@ -75,15 +75,24 @@ export class BkashService {
    * @returns {Promise<{ bkashURL: string, paymentID: string }>} Redirection details.
    */
   async createPayment(amount, orderId, callbackURL, credentials) {
+    const numericAmount = Number(amount);
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      throw new Error("Invalid payment amount: must be a positive number");
+    }
+
+    if (!orderId || typeof orderId !== "string" || !orderId.trim()) {
+      throw new Error("Invalid orderId protocol");
+    }
+
     const token = await this.getToken(credentials);
     const payload = {
       mode: "0011",
-      payerReference: orderId,
+      payerReference: orderId.trim(),
       callbackURL,
-      amount: String(amount),
+      amount: numericAmount.toFixed(2),
       currency: "BDT",
       intent: "sale",
-      merchantInvoiceNumber: orderId,
+      merchantInvoiceNumber: orderId.trim(),
     };
 
     try {
@@ -106,7 +115,7 @@ export class BkashService {
     } catch (error) {
       logger.error("bKash payment initialization error:", {
         orderId,
-        error: error.response?.data || error.message,
+        error: error.response?.data?.message || error.message,
       });
       throw new Error("Failed to initialize bKash payment transaction");
     }
@@ -120,12 +129,16 @@ export class BkashService {
    * @returns {Promise<Object>} Execution receipt payload.
    */
   async executePayment(paymentID, credentials) {
+    if (!paymentID || typeof paymentID !== "string" || !paymentID.trim()) {
+      throw new Error("Invalid bKash paymentID");
+    }
+    const safePaymentID = paymentID.trim();
     const token = await this.getToken(credentials);
 
     try {
       const response = await this.http.post(
         `${credentials.baseURL}/tokenized/checkout/execute`,
-        { paymentID },
+        { paymentID: safePaymentID },
         {
           headers: {
             Authorization: token,
@@ -138,8 +151,8 @@ export class BkashService {
       return response.data;
     } catch (error) {
       logger.error("bKash payment execution failure:", {
-        paymentID,
-        error: error.response?.data || error.message,
+        paymentID: safePaymentID,
+        error: error.response?.data?.message || error.message,
       });
       throw new Error("Failed to execute bKash payment capture");
     }

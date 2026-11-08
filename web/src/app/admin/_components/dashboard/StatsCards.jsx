@@ -37,11 +37,11 @@ export function StatsCards({ revenue, customers, inventory, recentOrdersCount, i
       description: "Active catalog items",
     },
     {
-      label: "Recent Orders",
-      value: recentOrdersCount?.toLocaleString() || "0",
+      label: "Total Orders",
+      value: (recentOrdersCount || 0).toLocaleString(),
       icon: <ShoppingCart className="size-4 text-primary" />,
       iconBg: "bg-primary/10 border-primary/20",
-      description: "Orders placed recently",
+      description: "Completed & COD orders",
     },
   ];
 

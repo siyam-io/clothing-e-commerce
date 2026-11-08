@@ -20,22 +20,23 @@ export const authorize = (requiredPermission) => {
         return res.status(403).json({ message: "Access denied, no role assigned" });
       }
 
-      // 3. SuperAdmin has access to everything
-      // We assume "superadmin" is a reserved role name
-      if (user.role.name === "superadmin") {
+      // 3. SuperAdmin has access to everything (case-insensitive check)
+      const roleName = String(user.role.name || "").toLowerCase().trim();
+      if (roleName === "superadmin") {
         return next();
       }
 
-      // 4. Check for granular permission
+      // 4. Check for granular permission safely
       const permissionsToCheck = Array.isArray(requiredPermission) ? requiredPermission : [requiredPermission];
-      const hasPermission = permissionsToCheck.some(p => user.role.permissions.includes(p));
+      const userPermissions = Array.isArray(user.role.permissions) ? user.role.permissions : [];
+      const hasPermission = permissionsToCheck.some(p => userPermissions.includes(p));
 
       if (hasPermission) {
         return next();
       }
 
-      // 5. Special check for "all" permission if defined
-      if (user.role.permissions.includes("all")) {
+      // 5. Special check for "all" wildcard permission if defined
+      if (userPermissions.includes("all")) {
         return next();
       }
 

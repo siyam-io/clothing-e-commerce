@@ -13,7 +13,7 @@ export const protect = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
     // Populate role to get its name and permissions
     const user = await User.findById(decoded.id).select("-password").populate("role");
     
@@ -46,7 +46,7 @@ export const optionalAuth = async (req, res, next) => {
   }
   if (token) {
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
       const user = await User.findById(decoded.id).select("-password").populate("role");
       if (user && user.isActive !== false) req.user = user;
     } catch (error) {

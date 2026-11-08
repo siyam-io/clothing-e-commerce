@@ -1,5 +1,6 @@
 import authService from "./auth.service.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
+import auditLogService from "../auditLog/auditLog.service.js";
 
 /**
  * Controller handling user registration, authentication, token lifecycle, and federated login.
@@ -29,6 +30,22 @@ export class AuthController {
     const { email, password } = req.body;
     const guestId = req.headers["x-guest-id"];
     const result = await this.service.login({ email, password, guestId });
+
+    if (result?.user) {
+      const roleName = String(result.user.role?.name || result.user.role || "").toLowerCase();
+      if (roleName !== "customer" && roleName !== "user") {
+        auditLogService.recordLog({
+          req,
+          user: result.user,
+          action: "LOGIN",
+          module: "Auth",
+          resourceId: result.user._id,
+          description: `Administrator ${result.user.name} logged into the system`,
+          status: "SUCCESS",
+        });
+      }
+    }
+
     res.status(200).json(result);
   });
 

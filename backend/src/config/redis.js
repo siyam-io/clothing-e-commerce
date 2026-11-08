@@ -3,30 +3,33 @@ import Redis from 'ioredis';
 
 let redisClient = null;
 let hasLoggedConnection = false;
+export let isRedisQuotaExceeded = false;
 
-const createClient = () => {
-  if (process.env.NODE_ENV === 'test') {
+export const getRedisConnectionOptions = () => {
+  if (!process.env.REDIS_URL || process.env.NODE_ENV === 'test' || isRedisQuotaExceeded) {
     return null;
   }
 
-  if (!process.env.REDIS_URL) {
-    if (process.env.NODE_ENV === 'production') {
-      console.warn(' Redis not configured. Performance will be degraded.');
-    }
-    return null;
-  }
+  const isTls =
+    process.env.REDIS_URL.startsWith('rediss://') ||
+    process.env.REDIS_URL.includes('upstash.io');
 
-  const isTls = process.env.REDIS_URL.startsWith('rediss://');
-  const redisOptions = {
+  const options = {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     enableOfflineQueue: false,
-    connectTimeout: 10000,
+    connectTimeout: 5000,
     keepAlive: 10000,
     retryStrategy: (times) => {
-      return Math.min(times * 200, 3000);
+      if (isRedisQuotaExceeded) return null;
+      if (times > 5) return null;
+      return Math.min(times * 200, 2000);
     },
     reconnectOnError: (err) => {
+      if (err.message && err.message.includes("max requests limit exceeded")) {
+        isRedisQuotaExceeded = true;
+        return false;
+      }
       const targetError = "READONLY";
       if (err.message.includes(targetError)) {
         return true;
@@ -39,28 +42,58 @@ const createClient = () => {
   };
 
   if (isTls) {
-    redisOptions.tls = {
-      rejectUnauthorized: false
+    options.tls = {
+      rejectUnauthorized: false,
     };
   }
 
-  const client = new Redis(process.env.REDIS_URL, redisOptions);
+  return options;
+};
 
-  client.on('connect', () => {
-    if (!hasLoggedConnection) {
-      console.log(' Redis connection established');
-      hasLoggedConnection = true;
+const createClient = () => {
+  if (process.env.NODE_ENV === 'test' || isRedisQuotaExceeded) {
+    return null;
+  }
+
+  if (!process.env.REDIS_URL) {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn(' Redis not configured. Performance will be degraded.');
     }
-  });
+    return null;
+  }
 
-  client.on('error', (err) => {
-    // Only log actual errors, not just disconnects if we already have a connection
-    if (client.status !== 'reconnecting' || process.env.NODE_ENV === 'development') {
-      console.error(' Redis error:', err.message);
-    }
-  });
+  const redisOptions = getRedisConnectionOptions();
+  if (!redisOptions) return null;
 
-  return client;
+  try {
+    const client = new Redis(process.env.REDIS_URL, redisOptions);
+
+    client.on('connect', () => {
+      if (!hasLoggedConnection) {
+        console.log(' Redis connection established');
+        hasLoggedConnection = true;
+      }
+    });
+
+    client.on('error', (err) => {
+      if (err.message && err.message.includes("max requests limit exceeded")) {
+        if (!isRedisQuotaExceeded) {
+          isRedisQuotaExceeded = true;
+          console.warn(' Upstash Redis quota limit exceeded. Gracefully bypassing Redis operations.');
+        }
+        return;
+      }
+      // Only log actual errors, not disconnects if already reconnecting
+      if (client.status !== 'reconnecting' || process.env.NODE_ENV === 'development') {
+        console.error(' Redis error:', err.message);
+      }
+    });
+
+    return client;
+  } catch (error) {
+    console.warn(' Failed to construct Redis client, bypassing:', error.message);
+    return null;
+  }
 };
 
 if (!redisClient) {

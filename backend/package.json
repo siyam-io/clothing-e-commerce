@@ -8,7 +8,9 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --detectOpenHandles --forceExit",
-    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --detectOpenHandles --forceExit"
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --detectOpenHandles --forceExit",
+    "seed:audit": "node src/scripts/seedAuditLogs.js",
+    "seed:roles": "node src/scripts/seedRoles.js"
   },
   "keywords": [],
   "author": "",
@@ -18,6 +20,7 @@
     "@socket.io/redis-adapter": "^8.3.0",
     "axios": "^1.14.0",
     "bcryptjs": "^3.0.3",
+    "bullmq": "^6.7.2",
     "cloudinary": "^2.9.0",
     "compression": "^1.8.1",
     "connect-mongo": "^6.0.0",

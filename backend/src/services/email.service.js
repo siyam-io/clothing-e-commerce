@@ -7,6 +7,33 @@ import logger from "../utils/logger.js";
 const SETTINGS_CACHE_TTL_MS = 60 * 1000;
 
 /**
+ * Escape HTML special characters to prevent HTML/XSS injection in email templates.
+ *
+ * @param {*} str - Raw string or value.
+ * @returns {string} Escaped string.
+ */
+export function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * Sanitize email headers to prevent SMTP header injection (CRLF attacks).
+ *
+ * @param {*} val - Header value.
+ * @returns {string} Sanitized single-line string.
+ */
+export function sanitizeHeader(val) {
+  if (val == null) return "";
+  return String(val).replace(/[\r\n]/g, "").trim();
+}
+
+/**
  * Service managing transactional email templates and SMTP transport.
  */
 export class EmailService {
@@ -129,14 +156,17 @@ export class EmailService {
     const config = await this.getConfiguration();
     const transporter = this.createTransporter(config);
 
+    const safeTo = sanitizeHeader(to);
+    const safeSubject = sanitizeHeader(subject);
+
     const result = await transporter.sendMail({
       from: config.from,
-      to,
-      subject,
+      to: safeTo,
+      subject: safeSubject,
       html,
     });
 
-    logger.info(`Email dispatched: ${subject} to ${to}`);
+    logger.info(`Email dispatched: ${safeSubject} to ${safeTo}`);
     return result;
   }
 
@@ -179,6 +209,9 @@ export class EmailService {
    * @returns {Promise<Object>}
    */
   async sendOrderConfirmationEmail(order) {
+    if (!order?.shippingAddress?.email) {
+      return null;
+    }
     const config = await this.getConfiguration();
     const shortOrderId = order._id.toString().slice(-6).toUpperCase();
 
@@ -196,6 +229,9 @@ export class EmailService {
    * @returns {Promise<Object>}
    */
   async sendOrderStatusUpdateEmail(order) {
+    if (!order?.shippingAddress?.email) {
+      return null;
+    }
     const config = await this.getConfiguration();
     const shortOrderId = order._id.toString().slice(-6).toUpperCase();
 
@@ -207,24 +243,28 @@ export class EmailService {
   }
 
   renderVerificationHtml(siteName, url) {
+    const safeSiteName = escapeHtml(siteName);
+    const safeUrl = encodeURI(url);
     return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Welcome to ${siteName}</h2>
+        <h2>Welcome to ${safeSiteName}</h2>
         <p>Please verify your email address by selecting the button below:</p>
-        <a href="${url}" style="display: inline-block; padding: 10px 20px; background-color: #000; color: #fff; text-decoration: none; border-radius: 5px;">Verify Email</a>
-        <p>Or paste this link into your browser: ${url}</p>
+        <a href="${safeUrl}" style="display: inline-block; padding: 10px 20px; background-color: #000; color: #fff; text-decoration: none; border-radius: 5px;">Verify Email</a>
+        <p>Or paste this link into your browser: ${safeUrl}</p>
         <p>This verification link expires in 24 hours.</p>
       </div>
     `;
   }
 
   renderPasswordResetHtml(siteName, url) {
+    const safeSiteName = escapeHtml(siteName);
+    const safeUrl = encodeURI(url);
     return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2>Password Reset Request</h2>
         <p>Select the link below to set a new password:</p>
-        <a href="${url}" style="display: inline-block; padding: 10px 20px; background-color: #000; color: #fff; text-decoration: none; border-radius: 5px;">Reset Password</a>
-        <p>Or paste this link into your browser: ${url}</p>
+        <a href="${safeUrl}" style="display: inline-block; padding: 10px 20px; background-color: #000; color: #fff; text-decoration: none; border-radius: 5px;">Reset Password</a>
+        <p>Or paste this link into your browser: ${safeUrl}</p>
         <p>This link expires in 15 minutes.</p>
         <p>If you did not initiate this request, no action is needed.</p>
       </div>
@@ -232,11 +272,17 @@ export class EmailService {
   }
 
   renderOrderConfirmationHtml(siteName, order, shortOrderId) {
+    const safeSiteName = escapeHtml(siteName);
+    const safeShortOrderId = escapeHtml(shortOrderId);
+    const customerName = escapeHtml(order.shippingAddress?.name || "Customer");
+    const address = escapeHtml(order.shippingAddress?.address || "");
+    const phone = escapeHtml(order.shippingAddress?.phone || "");
+
     const itemsHtml = (order.orderItems || [])
       .map(
         (item) => `
         <tr>
-          <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.name} x ${item.quantity}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(item.name)} x ${item.quantity}</td>
           <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">${item.price * item.quantity}</td>
         </tr>
       `
@@ -246,8 +292,8 @@ export class EmailService {
     return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
         <h2 style="color: #000;">Order Confirmation</h2>
-        <p>Hello ${order.shippingAddress?.name || "Customer"},</p>
-        <p>Your order <strong>#${shortOrderId}</strong> has been received and is being processed.</p>
+        <p>Hello ${customerName},</p>
+        <p>Your order <strong>#${safeShortOrderId}</strong> has been received and is being processed.</p>
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
           <thead>
             <tr style="background-color: #f9f9f9;">
@@ -278,20 +324,25 @@ export class EmailService {
         </table>
         <div style="margin-top: 30px; padding: 20px; background-color: #f9f9f9; border-radius: 10px;">
           <h4 style="margin-top: 0;">Shipping Details:</h4>
-          <p style="margin-bottom: 0;">${order.shippingAddress?.address || ""}<br>Phone: ${order.shippingAddress?.phone || ""}</p>
+          <p style="margin-bottom: 0;">${address}<br>Phone: ${phone}</p>
         </div>
       </div>
     `;
   }
 
   renderOrderStatusUpdateHtml(siteName, order, shortOrderId) {
+    const safeSiteName = escapeHtml(siteName);
+    const customerName = escapeHtml(order.shippingAddress?.name || "Customer");
+    const safeShortOrderId = escapeHtml(shortOrderId);
+    const safeStatus = escapeHtml(order.orderStatus);
+
     return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
         <h2 style="color: #000;">Order Status Update</h2>
-        <p>Hello ${order.shippingAddress?.name || "Customer"},</p>
-        <p>The status of your order <strong>#${shortOrderId}</strong> has been updated to:</p>
+        <p>Hello ${customerName},</p>
+        <p>The status of your order <strong>#${safeShortOrderId}</strong> has been updated to:</p>
         <div style="margin: 25px 0; padding: 15px; background-color: #000; color: #fff; border-radius: 8px; text-align: center; font-size: 20px; font-weight: bold; text-transform: uppercase;">
-          ${order.orderStatus}
+          ${safeStatus}
         </div>
         <p>You can track shipment progress from your customer account dashboard.</p>
       </div>

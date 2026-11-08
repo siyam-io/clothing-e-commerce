@@ -10,7 +10,17 @@ import {
   getDashboardCustomerGrowth,
   getDashboardRetention,
 } from "./admin.controller.js";
-import { handleAdminAiChat, handleAdminAiChatUndo } from "./ai-chat.controller.js";
+import {
+  handleAdminAiChat,
+  handleAdminAiChatUndo,
+  getAdminAiChatHistory,
+  clearAdminAiChatHistory,
+  getAdminAiChatSessions,
+  createAdminAiChatSession,
+  getAdminAiChatSessionMessages,
+  deleteAdminAiChatSession,
+  renameAdminAiChatSession,
+} from "./ai-chat.controller.js";
 import { protect } from "../../middleware/auth.js";
 import { authorize } from "../../middleware/rbac.js";
 import { cacheMiddleware } from "../../middleware/cacheMiddleware.js";
@@ -22,11 +32,29 @@ import adminProductRoutes from "../product/routes/admin.product.routes.js";
 import adminCategoryRoutes from "../category/routes/admin.category.routes.js";
 import adminFlashSaleRoutes from "../flashSale/routes/admin.flashSale.routes.js";
 import adminOrderRoutes from "../order/routes/admin.order.routes.js";
+import auditLogRoutes from "../auditLog/auditLog.routes.js";
 
 const router = express.Router();
 
 router.use(protect);
 
+// Defense-in-Depth: Reject unprivileged roles across all admin endpoints
+router.use((req, res, next) => {
+  const roleName = String(req.user?.role?.name || "").toLowerCase().trim();
+  if (!roleName || roleName === "customer" || roleName === "user") {
+    return res.status(403).json({ message: "Forbidden: Administrative clearance required." });
+  }
+  next();
+});
+
+router.get("/ai-chat/sessions", authorize(["ai-chat:view"]), getAdminAiChatSessions);
+router.post("/ai-chat/sessions", authorize(["ai-chat:view"]), createAdminAiChatSession);
+router.get("/ai-chat/sessions/:sessionId", authorize(["ai-chat:view"]), getAdminAiChatSessionMessages);
+router.delete("/ai-chat/sessions/:sessionId", authorize(["ai-chat:view"]), deleteAdminAiChatSession);
+router.patch("/ai-chat/sessions/:sessionId", authorize(["ai-chat:view"]), renameAdminAiChatSession);
+
+router.get("/ai-chat/history", authorize(["ai-chat:view"]), getAdminAiChatHistory);
+router.delete("/ai-chat/history", authorize(["ai-chat:view"]), clearAdminAiChatHistory);
 router.post("/ai-chat", authorize(["ai-chat:view"]), handleAdminAiChat);
 router.post("/ai-chat/undo", authorize(["ai-chat:view"]), handleAdminAiChatUndo);
 router.post(
@@ -95,11 +123,16 @@ router.get(
   cacheMiddleware(300),
   getDashboardRetention
 );
-router.get("/counts", getAdminCounts);
+router.get(
+  "/counts",
+  authorize(["dashboard:view", "reports:view"]),
+  getAdminCounts
+);
 
 router.use("/products", adminProductRoutes);
 router.use("/categories", adminCategoryRoutes);
 router.use("/flash-sales", adminFlashSaleRoutes);
 router.use("/orders", adminOrderRoutes);
+router.use("/audit-logs", auditLogRoutes);
 
 export default router;

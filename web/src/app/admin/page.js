@@ -4,7 +4,6 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import { 
   useDashboardStats,
-  useDashboardRecentOrders,
   useDashboardInventoryAlerts,
   useDashboardRevenueTrend,
   useDashboardCategoryStats,
@@ -31,8 +30,9 @@ const CategoryPie = dynamic(() => import("@/app/admin/_components/dashboard/Cate
   loading: () => <div className="min-h-[300px] md:min-h-[400px] w-full bg-card animate-pulse rounded-[3rem] border border-border" />
 });
 
-const RecentOrders = dynamic(() => import("@/app/admin/_components/dashboard/RecentOrders").then(mod => mod.RecentOrders), {
-  ssr: false
+const OperationsHub = dynamic(() => import("@/app/admin/_components/dashboard/OperationsHub").then(mod => mod.OperationsHub), {
+  ssr: false,
+  loading: () => <div className="min-h-[280px] w-full bg-card animate-pulse rounded-2xl border border-border" />
 });
 
 const InventoryAlerts = dynamic(() => import("@/app/admin/_components/dashboard/InventoryAlerts").then(mod => mod.InventoryAlerts), {
@@ -60,7 +60,6 @@ export default function Dashboard() {
 
   // 🚀 Segmented parallel fetch calls for instant progressive rendering
   const { data: statsData, isLoading: statsLoading, isFetching: statsFetching } = useDashboardStats();
-  const { data: recentOrders, isLoading: recentOrdersLoading } = useDashboardRecentOrders();
   const { data: inventoryAlertsData, isLoading: inventoryAlertsLoading } = useDashboardInventoryAlerts();
   const { data: trendData, isLoading: trendLoading, isFetching: trendFetching } = useDashboardRevenueTrend({ year: revYear, month: revMonth });
   const { data: categoryStatsData, isLoading: categoryStatsLoading, isFetching: categoryStatsFetching } = useDashboardCategoryStats();
@@ -130,7 +129,7 @@ export default function Dashboard() {
         revenue={revenue} 
         customers={{ ...customers, retentionRate: analytics.retentionRate }} 
         inventory={inventory} 
-        recentOrdersCount={recentOrders?.length || 0} 
+        recentOrdersCount={statsData?.revenue?.count || 0} 
         isLoading={statsLoading}
       />
 
@@ -177,9 +176,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 5. DATA TABLES */}
+      {/* 5. DATA TABLES & OPERATIONS HUB */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <RecentOrders recentOrders={recentOrders || []} isLoading={recentOrdersLoading} />
+        <OperationsHub isLoading={statsLoading} />
         <UsersTable users={customers.recent} isLoading={customerGrowthLoading} />
       </div>
 

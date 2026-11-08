@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -11,7 +11,7 @@ import { getTranslation } from "@/utils/typography/handler";
 import { Eye, EyeOff } from "lucide-react";
 import SocialAuthButtons from "@/components/common/SocialAuthButtons";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login, isLoading } = useAuthStore();
@@ -54,7 +54,7 @@ export default function LoginPage() {
   return (
     <div className="w-full max-w-md mx-auto p-8 sm:p-12 bg-background border border-border/10 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-accent-secondary/0 via-accent-secondary/50 to-accent-secondary/0" />
-      
+
       <div className="text-center mb-10">
         <motion.h1
           initial={{ opacity: 0, y: -20 }}
@@ -74,10 +74,13 @@ export default function LoginPage() {
             {t.emailLabel}
           </label>
           <input
+            id="login-email"
+            name="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            autoComplete="email"
             className="w-full bg-accent/10 border border-border/5 rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-accent-secondary/30 transition-all text-sm font-bold placeholder:text-muted-foreground/20"
             placeholder="name@example.com"
           />
@@ -89,10 +92,13 @@ export default function LoginPage() {
           </label>
           <div className="relative">
             <input
+              id="login-password"
+              name="password"
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoComplete="current-password"
               className="w-full bg-accent/10 border border-border/5 rounded-2xl pl-6 pr-14 py-4 outline-none focus:ring-2 focus:ring-accent-secondary/30 transition-all text-sm font-bold placeholder:text-muted-foreground/20"
               placeholder="••••••••"
             />
@@ -144,5 +150,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

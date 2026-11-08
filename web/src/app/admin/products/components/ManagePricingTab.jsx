@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { DollarSign } from "lucide-react";
 import { swalToast, swalError } from "@/utils/swal";
 
-export default function ManagePricingTab({ product, updateProduct }) {
+export default function ManagePricingTab({ product, updateProduct, patchProduct, setProduct }) {
   const { register, handleSubmit, setValue } = useForm();
+  const updater = updateProduct || patchProduct;
 
   useEffect(() => {
     if (product) {
@@ -20,10 +21,14 @@ export default function ManagePricingTab({ product, updateProduct }) {
 
   const onPricingSubmit = async (data) => {
     try {
-      await updateProduct({ 
+      const payload = { price: Number(data.price), discount: Number(data.discount) };
+      await updater({ 
         id: product._id, 
-        data: { price: Number(data.price), discount: Number(data.discount) } 
+        data: payload
       });
+      if (setProduct) {
+        setProduct((prev) => ({ ...prev, ...payload }));
+      }
       swalToast("Prices updated", "success");
     } catch (err) {
       swalError("Error", err.message);

@@ -37,6 +37,37 @@ const getUserIdFromReq = (req) => {
   return sanitizeGuestId(req.headers["x-guest-id"]);
 };
 
+let cachedPageSetting = null;
+let cachedPageSettingExpiry = 0;
+let cachedApiKey = null;
+let cachedApiKeyExpiry = 0;
+
+export const getCachedPageSettings = async () => {
+  const now = Date.now();
+  if (cachedPageSetting && now < cachedPageSettingExpiry) {
+    return cachedPageSetting;
+  }
+  const settings = await PageSetting.findOne();
+  if (settings) {
+    cachedPageSetting = settings;
+    cachedPageSettingExpiry = now + 60000;
+  }
+  return settings;
+};
+
+export const getCachedApiKeys = async () => {
+  const now = Date.now();
+  if (cachedApiKey && now < cachedApiKeyExpiry) {
+    return cachedApiKey;
+  }
+  const apiKeys = await ApiKey.findOne();
+  if (apiKeys) {
+    cachedApiKey = apiKeys;
+    cachedApiKeyExpiry = now + 60000;
+  }
+  return apiKeys;
+};
+
 export const initPayment = asyncHandler(async (req, res) => {
   logger.info("Order initiation requested", {
     userId: getUserIdFromReq(req),
@@ -53,7 +84,7 @@ export const initPayment = asyncHandler(async (req, res) => {
     deliveryZone,
     paymentMethod = "ssl",
   } = req.body;
-  
+
   const isRegisteredUser = Boolean(req.user && req.user._id);
   const registeredUserId = isRegisteredUser ? req.user._id : undefined;
   const guestId = !isRegisteredUser ? sanitizeGuestId(req.headers["x-guest-id"]) : undefined;
@@ -65,12 +96,12 @@ export const initPayment = asyncHandler(async (req, res) => {
     });
   }
 
-  const settings = await PageSetting.findOne();
-  const apiKeys = await ApiKey.findOne();
-  
+  const settings = await getCachedPageSettings();
+  const apiKeys = await getCachedApiKeys();
+
   if (!settings) {
-     console.error(" SETTINGS NOT INITIALIZED");
-     throw new Error("Settings not initialized.");
+    console.error(" SETTINGS NOT INITIALIZED");
+    throw new Error("Settings not initialized.");
   }
 
   const sslCreds = {
@@ -94,7 +125,7 @@ export const initPayment = asyncHandler(async (req, res) => {
     );
 
     const orderPayload = {
-      user: registeredUserId, 
+      user: registeredUserId,
       isGuest: !isRegisteredUser,
       guestId: guestId,
       orderItems: orderData.validatedItems,
@@ -115,32 +146,33 @@ export const initPayment = asyncHandler(async (req, res) => {
     if (paymentMethod === "cod") {
       const order = await createOrderWithTransaction(orderPayload, true);
       clearCache('cache:/api/admin/dashboard*');
-      
+
       const io = req.app.get('io');
       if (io) {
         io.emit('new_order', order);
         logger.info('COD order created, socket emitted', { orderId: order._id });
       }
-      
+
       res.json(await handleCODGateway(order));
     } else if (paymentMethod === "bkash") {
       const order = await createOrderWithTransaction(orderPayload, false);
       clearCache('cache:/api/admin/dashboard*');
-      
+
       const io = req.app.get('io');
       if (io) {
         io.emit('new_order', order);
         logger.info('bKash order created, socket emitted', { orderId: order._id });
       }
-      
+
       const bkashData = await initiateBkash(order, bkashCreds);
-      order.paymentResult.bkashPaymentID = bkashData.paymentID;
-      await order.save();
+      await Order.findByIdAndUpdate(order._id, {
+        $set: { "paymentResult.bkashPaymentID": bkashData.paymentID },
+      });
       res.json({ url: bkashData.url });
     } else {
       const order = await createOrderWithTransaction(orderPayload, false);
       clearCache('cache:/api/admin/dashboard*');
-      
+
       const io = req.app.get('io');
       if (io) {
         io.emit('new_order', order);
@@ -148,15 +180,15 @@ export const initPayment = asyncHandler(async (req, res) => {
       } else {
         logger.warn('SSL ORDER: Socket.io instance not available');
       }
-      
+
       const sslUrl = await initiateSSLCommerz(order, sslCreds);
       res.json({ url: sslUrl });
     }
   } catch (err) {
     console.error(" ORDER PROCESSING ERROR:", err);
-    res.status(400).json({ 
-        success: false, 
-        message: err.message || "Order protocol failure." 
+    res.status(400).json({
+      success: false,
+      message: err.message || "Order protocol failure."
     });
   }
 });
@@ -224,13 +256,13 @@ export const paymentSuccess = asyncHandler(async (req, res) => {
     await order.save();
     await finalizeOrderProcessing(order);
     clearCache('cache:/api/admin/dashboard*');
-    
+
     const io = req.app.get('io');
     if (io) {
       io.emit('new_order', order);
       logger.info('SSL payment verified, new_order event emitted', { orderId: order._id });
     }
-    
+
     return res.redirect(`${frontendUrl}/payment/success?orderId=${order._id}`);
   } catch (err) {
     logger.error(`SSLCommerz verification failed for tran_id=${tran_id}:`, { error: err.message });
@@ -254,23 +286,47 @@ export const bkashSuccess = asyncHandler(async (req, res) => {
     return res.redirect(`${frontendUrl}/payment/failed?reason=Order not found`);
   }
 
+  // Idempotency / Replay Attack Guard
+  if (order.paymentResult?.status === "Completed") {
+    logger.info(`bkashSuccess: Order ${orderId} already completed, skipping duplicate processing`);
+    return res.redirect(`${frontendUrl}/payment/success?orderId=${order._id}`);
+  }
+
+  // PaymentID Binding Validation (CWE-346 Origin & Token binding)
+  if (order.paymentResult?.bkashPaymentID && paymentID && order.paymentResult.bkashPaymentID !== paymentID) {
+    logger.error(`bkashSuccess: PaymentID mismatch for order ${orderId}. Expected ${order.paymentResult.bkashPaymentID}, received ${paymentID}`);
+    return res.redirect(`${frontendUrl}/payment/failed?reason=Payment%20identification%20mismatch`);
+  }
+
   if (status === "success" && paymentID) {
     try {
       const executeResult = await bkashService.executePayment(paymentID, bkashCreds);
       if (executeResult.transactionStatus === "Completed") {
+        const paidAmount = Number(executeResult.amount || 0);
+        const expectedAmount = Number(order.totalPrice);
+
+        // Price tampering defense (0.01 BDT delta tolerance)
+        if (Math.abs(paidAmount - expectedAmount) > 0.01) {
+          logger.error(`bKash price discrepancy detected: Order ${order._id} Expected ${expectedAmount}, Paid ${paidAmount}`);
+          order.paymentResult.status = "Failed";
+          order.orderStatus = "Cancelled";
+          await order.save();
+          return res.redirect(`${frontendUrl}/payment/failed?reason=Amount%20mismatch%20detected`);
+        }
+
         order.paymentResult.status = "Completed";
         order.paymentResult.transactionId = executeResult.trxID;
         order.orderStatus = "Processing";
         await order.save();
         await finalizeOrderProcessing(order);
         clearCache('cache:/api/admin/dashboard*');
-        
+
         const io = req.app.get('io');
         if (io) {
           io.emit('new_order', order);
           logger.info('bKash payment success, new_order event emitted', { orderId: order._id });
         }
-        
+
         return res.redirect(`${frontendUrl}/payment/success?orderId=${order._id}`);
       }
     } catch (err) {
@@ -378,7 +434,7 @@ export const getMyOrders = asyncHandler(async (req, res) => {
       .limit(limit)
       .populate("orderItems.product", "name images slug")
       .populate("orderItems.size", "name");
-    
+
     return res.json({
       orders,
       total,
@@ -391,7 +447,7 @@ export const getMyOrders = asyncHandler(async (req, res) => {
     .sort("-createdAt")
     .populate("orderItems.product", "name images slug")
     .populate("orderItems.size", "name");
-  
+
   res.json(orders);
 });
 
@@ -412,7 +468,7 @@ export const getOrderById = asyncHandler(async (req, res) => {
       .populate({ path: "user", select: "name email avatar role", populate: { path: "role" } })
       .populate("orderItems.product", "name images slug")
       .populate("orderItems.size", "name");
-    
+
     order = orders.find(o => o._id.toString().toLowerCase().endsWith(id.toLowerCase()));
   } else {
     return res.status(400).json({ message: "Invalid Order ID protocol." });
@@ -433,9 +489,9 @@ export const getOrderById = asyncHandler(async (req, res) => {
   const isGuestOwner = Boolean(
     order.isGuest && sanitizedGuestId && order.guestId === sanitizedGuestId
   );
-  
+
   const isPhoneMatch = Boolean(
-    phone && typeof phone === "string" && order.shippingAddress?.phone === phone.trim()
+    order.isGuest && phone && typeof phone === "string" && order.shippingAddress?.phone === phone.trim()
   );
 
   if (!isRegisteredOwner && !isGuestOwner && !isAdmin && !isPhoneMatch) {
@@ -469,10 +525,10 @@ export const getOrderReport = asyncHandler(async (req, res) => {
   const isGuestOwner = Boolean(
     order.isGuest && sanitizedGuestId && order.guestId === sanitizedGuestId
   );
-  
+
   const { phone } = req.query;
   const isPhoneMatch = Boolean(
-    phone && typeof phone === "string" && order.shippingAddress?.phone === phone.trim()
+    order.isGuest && phone && typeof phone === "string" && order.shippingAddress?.phone === phone.trim()
   );
 
   if (!isRegisteredOwner && !isGuestOwner && !isAdmin && !isPhoneMatch) {
@@ -490,7 +546,7 @@ export const getOrderReport = asyncHandler(async (req, res) => {
   // Brand Header
   const settings = await PageSetting.findOne();
   const siteName = settings?.branding?.siteName || "Store";
-  
+
   doc.fontSize(25).font('Helvetica-Bold').text(siteName.toUpperCase(), { align: 'right' });
   doc.fontSize(10).font('Helvetica').text("Official Order Receipt", { align: 'right' });
   doc.moveDown();
@@ -522,11 +578,11 @@ export const getOrderReport = asyncHandler(async (req, res) => {
   doc.text("Total", 500, tableTop, { align: 'right' });
 
   doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
-  
+
   // Table Items
   let currentY = tableTop + 25;
   doc.font('Helvetica');
-  
+
   order.orderItems.forEach(item => {
     doc.text(item.name, 50, currentY, { width: 190 });
     doc.text(item.size?.name || "Standard", 250, currentY);

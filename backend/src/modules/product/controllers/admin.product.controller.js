@@ -7,6 +7,7 @@ import { clearCache } from '../../../middleware/cacheMiddleware.js';
 import { uploadMultipleImages, deleteImage, uploadImage } from '../../../services/imageUploadService.js';
 import { createProductSchema, updateProductSchema } from '../validators/product.validator.js';
 import { ZodError } from 'zod';
+import auditLogService from '../../auditLog/auditLog.service.js';
 
 // Helper to parse product data
 const parseProductData = (req) => {
@@ -96,6 +97,16 @@ export const createProduct = asyncHandler(async (req, res) => {
         clearCache('cache:/api/home-layout*');
         clearCache('cache:/api/flash-sales*');
         clearCache('cache:/api/admin/dashboard*');
+
+        auditLogService.recordLog({
+            req,
+            action: "CREATE",
+            module: "Product",
+            resourceId: product._id,
+            resourceName: product.name,
+            description: `Created new product: "${product.name}" (৳${product.price})`,
+            details: { price: product.price, category: product.category, slug: product.slug },
+        });
 
         res.status(201).json(product);
     } catch (error) {
@@ -311,6 +322,18 @@ export const updateProduct = asyncHandler(async (req, res) => {
         clearCache('cache:/api/flash-sales*');
         clearCache('cache:/api/admin/dashboard*');
 
+        if (product) {
+            auditLogService.recordLog({
+                req,
+                action: "UPDATE",
+                module: "Product",
+                resourceId: product._id,
+                resourceName: product.name,
+                description: `Updated product: "${product.name}"`,
+                details: validatedData,
+            });
+        }
+
         res.json(product);
     } catch (error) {
         if (error instanceof ZodError) return handleZodError(error, res);
@@ -322,6 +345,9 @@ export const deleteProduct = asyncHandler(async (req, res) => {
     const product = await Product.findById(req.params.id);
     if (!product) return res.status(404).json({ message: 'Product not found' });
 
+    const productName = product.name;
+    const productId = product._id;
+
     if (product.images?.length) await Promise.all(product.images.map(img => deleteImage(img)));
     await product.deleteOne();
 
@@ -330,6 +356,15 @@ export const deleteProduct = asyncHandler(async (req, res) => {
     clearCache('cache:/api/home-layout*');
     clearCache('cache:/api/flash-sales*');
     clearCache('cache:/api/admin/dashboard*');
+
+    auditLogService.recordLog({
+        req,
+        action: "DELETE",
+        module: "Product",
+        resourceId: productId,
+        resourceName: productName,
+        description: `Deleted product: "${productName}"`,
+    });
 
     res.json({ message: 'Product purged.' });
 });

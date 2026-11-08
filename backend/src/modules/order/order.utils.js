@@ -2,7 +2,7 @@ import Product from "../product/product.model.js";
 import Coupon from "../coupon/coupon.model.js";
 import Cart from "../cart/cart.model.js";
 import PageSetting from "../settings/settings.model.js";
-import { sendOrderConfirmationEmail } from "../../services/email.service.js";
+import { queueOrderConfirmationEmail } from "../../queues/index.js";
 import logger from "../../utils/logger.js";
 
 /**
@@ -182,6 +182,14 @@ export const finalizeOrderProcessing = async (order, session = null) => {
     },
   }));
 
+  // Deterministically sort operations by Product ID and Size to eliminate multi-document deadlocks
+  bulkOps.sort((a, b) => {
+    const idA = String(a.updateOne.filter._id);
+    const idB = String(b.updateOne.filter._id);
+    if (idA !== idB) return idA.localeCompare(idB);
+    return String(a.updateOne.filter["sizes.size"]).localeCompare(String(b.updateOne.filter["sizes.size"]));
+  });
+
   if (bulkOps.length > 0) {
     const result = await Product.bulkWrite(bulkOps, { session });
     if (result.matchedCount < bulkOps.length) {
@@ -193,11 +201,21 @@ export const finalizeOrderProcessing = async (order, session = null) => {
   }
 
   if (order.couponCode) {
-    await Coupon.findOneAndUpdate(
-      { code: order.couponCode },
+    const updatedCoupon = await Coupon.findOneAndUpdate(
+      {
+        code: order.couponCode.toUpperCase(),
+        $or: [
+          { usageLimit: null },
+          { usageLimit: 0 },
+          { $expr: { $lt: ["$usedCount", "$usageLimit"] } },
+        ],
+      },
       { $inc: { usedCount: 1 } },
-      { session }
+      { session, new: true }
     );
+    if (!updatedCoupon) {
+      logger.warn(`Coupon ${order.couponCode} exceeded usage limit or was exhausted concurrently`);
+    }
   }
 
   if (!order.isDirectBuy && order.user) {
@@ -208,9 +226,14 @@ export const finalizeOrderProcessing = async (order, session = null) => {
     );
   }
 
-  try {
-    await sendOrderConfirmationEmail(order);
-  } catch (error) {
-    logger.error("Failed to dispatch order confirmation email:", { error: error.message });
+  // Asynchronously dispatch confirmation email outside of the active database lock
+  if (order?.shippingAddress?.email) {
+    setImmediate(async () => {
+      try {
+        await queueOrderConfirmationEmail(order);
+      } catch (error) {
+        logger.error("Failed to queue order confirmation email:", { error: error.message });
+      }
+    });
   }
 };

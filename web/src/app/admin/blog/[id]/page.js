@@ -17,7 +17,6 @@ export default function BlogEditPage() {
     setIsSubmitting(true);
     try {
       await updateBlog.mutateAsync({ id: blog._id, formData });
-      swalToast("Article updated successfully", "success");
       router.push("/admin/blog");
     } catch (err) {
       const message = err.response?.data?.message || "Update failed. Check your inputs.";

@@ -6,7 +6,9 @@ import { useFilters } from "@/app/admin/_hooks/useFilters";
 import TableSkeleton from "@/components/common/TableSkeleton";
 import OrdersSearchAndFilter from "./components/OrdersSearchAndFilter";
 import OrdersTable from "./components/OrdersTable";
-import { Store } from "lucide-react";
+import { Store, RefreshCw, Zap, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { swalToast, swalError } from "@/utils/swal";
 import AdminPageContainer from "@/app/admin/_components/AdminPageContainer";
@@ -33,11 +35,21 @@ function AdminOrdersContent() {
       ...queryParams,
       status: status !== "all" ? status : undefined,
     }),
-    [queryParams, status],
+    [queryParams, status]
   );
 
-  const { orders, total, pages, isLoading, isAllFetching, updateOrder, deleteOrder } =
-    useAdminOrders(finalQueryParams);
+  const {
+    orders,
+    total,
+    pages,
+    isLoading,
+    isAllFetching,
+    refetch,
+    newOrderIds,
+    isSocketConnected,
+    updateOrder,
+    deleteOrder,
+  } = useAdminOrders(finalQueryParams);
 
   const handleQuickStatusUpdate = async (id, newStatus) => {
     try {
@@ -67,7 +79,7 @@ function AdminOrdersContent() {
       setSearch(val);
       setPage(1);
     },
-    [setSearch, setPage],
+    [setSearch, setPage]
   );
 
   const handleFilterStatusChange = (newStatus) => {
@@ -79,19 +91,65 @@ function AdminOrdersContent() {
     <AdminPageContainer>
       <AdminPageHeader
         title="Orders"
-        description="Monitor online and in-store customer orders, shipment status, and payments"
+        description="Monitor online and in-store customer orders, fulfillment status, and payments in real time"
         actions={
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 flex-wrap justify-end">
+            {/* Live Socket Status Pill */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border border-border/60 bg-card/80 backdrop-blur-md shadow-2xs">
+              <span className="relative flex size-2">
+                <span
+                  className={cn(
+                    "absolute inline-flex h-full w-full rounded-full opacity-75",
+                    isSocketConnected ? "animate-ping bg-emerald-400" : "bg-amber-400"
+                  )}
+                />
+                <span
+                  className={cn(
+                    "relative inline-flex size-2 rounded-full",
+                    isSocketConnected ? "bg-emerald-500" : "bg-amber-500"
+                  )}
+                />
+              </span>
+              <span className="text-muted-foreground font-mono tabular-nums text-[11px]">
+                {isSocketConnected ? "Live Socket" : "Connecting..."}
+              </span>
+            </div>
+
+            {/* Glowing New Orders Badge */}
+            {newOrderIds && newOrderIds.size > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 animate-pulse shadow-sm">
+                <Zap className="size-3" />
+                <span>+{newOrderIds.size} New</span>
+              </div>
+            )}
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              className="h-8 gap-1.5 text-xs rounded-xl border-border/70 bg-card hover:bg-muted text-foreground transition-[background-color,transform] active:scale-95 shadow-2xs"
+              disabled={isAllFetching}
+              title="Force Refresh Orders"
+            >
+              <RefreshCw className={cn("size-3.5", isAllFetching && "animate-spin")} />
+              <span className="hidden sm:inline">Sync</span>
+            </Button>
+
             <AdminHeaderStat label="Total Orders" value={total || 0} />
-            <AdminHeaderButton href="/admin/pos" icon={Store}>
-              POS Terminal
+
+            <AdminHeaderButton
+              href="/admin/orders/new"
+              icon={Plus}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 transition-transform active:scale-[0.98] shadow-sm"
+            >
+              New Order (POS)
             </AdminHeaderButton>
           </div>
         }
       />
 
-      <AdminCard>
-        <div className="p-4 sm:p-5 border-b border-border/40 bg-muted/20">
+      <AdminCard className="rounded-2xl border-border/70 shadow-sm backdrop-blur-xl bg-card/90 overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-border/40 bg-muted/15">
           <OrdersSearchAndFilter
             status={status}
             onStatusChange={handleFilterStatusChange}
@@ -116,6 +174,7 @@ function AdminOrdersContent() {
               isAllFetching={isAllFetching}
               onQuickStatusUpdate={handleQuickStatusUpdate}
               onDeleteOrder={(id) => setDeleteTargetId(id)}
+              newOrderIds={newOrderIds}
             />
           )}
         </AdminCardContent>

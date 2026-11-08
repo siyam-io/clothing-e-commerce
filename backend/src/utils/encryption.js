@@ -90,7 +90,7 @@ export const decrypt = (text) => {
       decrypted += decipher.final("utf8");
       return decrypted;
     } catch (error) {
-      logger.error("Legacy CBC decryption failed:", { error: error.message });
+      logger.debug("Legacy CBC decryption failed:", { error: error.message });
       return "";
     }
   }

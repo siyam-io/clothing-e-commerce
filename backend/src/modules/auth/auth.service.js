@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import axios from "axios";
 import { OAuth2Client } from "google-auth-library";
 import { AuthRepository } from "./auth.repository.js";
-import { sendVerificationEmail, sendPasswordResetEmail } from "../../services/email.service.js";
+import { queueVerificationEmail, queuePasswordResetEmail } from "../../queues/index.js";
 import { clearCache } from "../../middleware/cacheMiddleware.js";
 import { ApiError } from "../../utils/responseHandler.js";
 import logger from "../../utils/logger.js";
@@ -22,8 +22,8 @@ export class AuthService {
    */
   constructor(dependencies = {}) {
     this.repository = dependencies.repository || new AuthRepository();
-    this.sendVerificationEmail = dependencies.sendVerificationEmail || sendVerificationEmail;
-    this.sendPasswordResetEmail = dependencies.sendPasswordResetEmail || sendPasswordResetEmail;
+    this.sendVerificationEmail = dependencies.sendVerificationEmail || queueVerificationEmail;
+    this.sendPasswordResetEmail = dependencies.sendPasswordResetEmail || queuePasswordResetEmail;
     this.clearCache = dependencies.clearCache || clearCache;
     this.jwtSecret = dependencies.jwtSecret || process.env.JWT_SECRET;
   }
@@ -38,7 +38,7 @@ export class AuthService {
     if (!this.jwtSecret) {
       throw new ApiError(500, "JWT secret key is not configured");
     }
-    return jwt.sign({ id: userId }, this.jwtSecret, { expiresIn: "7d" });
+    return jwt.sign({ id: userId }, this.jwtSecret, { expiresIn: "7d", algorithm: "HS256" });
   }
 
   /**
@@ -340,6 +340,9 @@ export class AuthService {
       const client = new OAuth2Client(clientId);
       const ticket = await client.verifyIdToken({ idToken, audience: clientId });
       const payload = ticket.getPayload();
+      if (!payload?.email_verified) {
+        throw new ApiError(400, "Google account email is not verified");
+      }
       return {
         googleId: payload.sub,
         email: payload.email,
@@ -352,6 +355,10 @@ export class AuthService {
     const response = await axios.get("https://www.googleapis.com/oauth2/v3/userinfo", {
       headers: { Authorization: `Bearer ${tokenToUse}` },
     });
+
+    if (!response.data?.email_verified) {
+      throw new ApiError(400, "Google account email is not verified");
+    }
 
     return {
       googleId: response.data.sub,

@@ -16,6 +16,7 @@ import User from "../user/user.model.js";
 import FlashSale from "../flashSale/flashSale.model.js";
 import Blog from "../blog/blog.model.js";
 import BannerCampaign from "../bannerCampaign/bannerCampaign.model.js";
+import { AdminAiMessage, AdminAiSession } from "./admin-ai-chat.model.js";
 import { decrypt } from "../../utils/encryption.js";
 import pathaoService from "../../services/pathao.service.js";
 import { clearCache } from "../../middleware/cacheMiddleware.js";
@@ -49,7 +50,7 @@ export const localTools = {
         .limit(5)
         .populate("category", "name")
         .lean();
-      
+
       if (!products || products.length === 0) {
         products = await Product.find({ name: { $regex: query, $options: "i" } })
           .limit(5)
@@ -337,7 +338,7 @@ export const localTools = {
       if (!flashSale) {
         const expiry = new Date();
         expiry.setDate(expiry.getDate() + 7);
-        
+
         flashSale = await FlashSale.create({
           name,
           discount: parseInt(discountPercentage || 20),
@@ -426,8 +427,8 @@ export const localTools = {
   createBlogDraft: async ({ title, content, category = "NEWS", imageUrl }) => {
     try {
       const slug = title.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '');
-      
-      const authorUser = await User.findOne({ role: { $ne: null } }); 
+
+      const authorUser = await User.findOne({ role: { $ne: null } });
       const authorId = authorUser ? authorUser._id : null;
 
       const blog = await Blog.create({
@@ -459,7 +460,7 @@ export const localTools = {
     try {
       const existing = await Category.findOne({ name: { $regex: `^${name}$`, $options: "i" } });
       if (existing) return { success: false, error: `Category "${name}" already exists.` };
-      
+
       const slug = name.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '');
       const category = await Category.create({
         name,
@@ -523,7 +524,7 @@ export const localTools = {
         const userObj = await User.findOne({ email: customerEmail });
         if (userObj) customerId = userObj._id;
       }
-      
+
       const resolvedItems = [];
       for (const item of orderItems) {
         let prod = null;
@@ -536,7 +537,7 @@ export const localTools = {
         if (!prod) {
           return { success: false, error: `Product "${item.productName || item.productId}" not found.` };
         }
-        
+
         let matchedSize = null;
         if (item.sizeId) {
           matchedSize = prod.sizes.find(s => String(s.size) === String(item.sizeId));
@@ -550,7 +551,7 @@ export const localTools = {
         if (!matchedSize) {
           return { success: false, error: `Size "${item.sizeName || item.sizeId}" not available for product "${prod.name}"` };
         }
-        
+
         resolvedItems.push({
           product: prod._id,
           name: prod.name,
@@ -561,9 +562,9 @@ export const localTools = {
       }
 
       const orderData = await calculateValidatedOrder(
-          resolvedItems,
-          couponCode,
-          shippingAddress.pathao_city_id
+        resolvedItems,
+        couponCode,
+        shippingAddress.pathao_city_id
       );
 
       const order = new Order({
@@ -606,7 +607,7 @@ export const localTools = {
     try {
       const order = await Order.findById(orderId);
       if (!order) return { success: false, error: "Order not found." };
-      
+
       const oldState = {
         orderId,
         orderStatus: order.orderStatus,
@@ -691,7 +692,7 @@ export const localTools = {
     try {
       const order = await Order.findById(orderId);
       if (!order) return { success: false, error: "Order not found." };
-      
+
       const pKeys = {
         clientId: process.env.PATHAO_CLIENT_ID,
         clientSecret: process.env.PATHAO_CLIENT_SECRET,
@@ -814,7 +815,7 @@ export const localTools = {
     try {
       const product = await Product.findById(productId);
       if (!product) return { success: false, error: "Product not found" };
-      
+
       const oldState = {
         productId,
         isFeatured: product.isFeatured,
@@ -843,7 +844,7 @@ export const localTools = {
     try {
       const category = await Category.findById(categoryId);
       if (!category) return { success: false, error: "Category not found" };
-      
+
       const oldState = {
         categoryId,
         name: category.name,
@@ -912,7 +913,7 @@ export const localTools = {
     try {
       const subcat = await Subcategory.findById(subcategoryId).populate("category");
       if (!subcat) return { success: false, error: "Subcategory not found." };
-      
+
       const oldState = {
         subcategoryId,
         name: subcat.name,
@@ -1762,7 +1763,7 @@ const hasToolPermission = (user, requiredPermission) => {
 };
 
 export const handleAdminAiChat = asyncHandler(async (req, res) => {
-  const { messages } = req.body;
+  const { messages, sessionId } = req.body;
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({
@@ -1780,15 +1781,17 @@ export const handleAdminAiChat = asyncHandler(async (req, res) => {
   }
 
   // Format incoming messages into Gemini contents structure with vision support
+  // Limit to the most recent conversation turns (up to 15) to maintain context without exceeding payload limits
+  const recentMessages = messages.slice(-15);
   const contents = [];
-  for (const msg of messages) {
+  for (const msg of recentMessages) {
     const textContent = msg.content + (msg.image ? `\n\n[Uploaded Image URL: ${msg.image}]` : "");
     const parts = [{ text: textContent }];
     if (msg.image) {
       try {
         let buffer;
         let mimeType = "image/jpeg"; // default
-        
+
         if (msg.image.startsWith("data:")) {
           const match = msg.image.match(/^data:([^;]+);base64,(.*)$/);
           if (match) {
@@ -1808,7 +1811,7 @@ export const handleAdminAiChat = asyncHandler(async (req, res) => {
           buffer = Buffer.from(imgResponse.data);
           mimeType = imgResponse.headers['content-type'] || "image/jpeg";
         }
-        
+
         if (buffer) {
           parts.push({
             inlineData: {
@@ -1821,11 +1824,17 @@ export const handleAdminAiChat = asyncHandler(async (req, res) => {
         console.error("Failed to load image for Gemini vision processing:", err.message);
       }
     }
-    
+
     contents.push({
       role: msg.role === "user" ? "user" : "model",
       parts
     });
+  }
+
+  // Ensure Gemini payload begins with a 'user' turn as required by Gemini API
+  const firstUserIdx = contents.findIndex(c => c.role === "user");
+  if (firstUserIdx > 0) {
+    contents.splice(0, firstUserIdx);
   }
 
   // Helper: call Gemini API with retry + model fallback
@@ -1882,7 +1891,7 @@ export const handleAdminAiChat = asyncHandler(async (req, res) => {
 
     while (keepLooping && iterations < maxIterations) {
       iterations++;
-      
+
       const payload = {
         contents,
         tools: [{ functionDeclarations: toolDeclarations }],
@@ -1953,18 +1962,76 @@ export const handleAdminAiChat = asyncHandler(async (req, res) => {
       }
     }
 
+    // Persist conversation history to database for the authenticated admin
+    let targetSession = null;
+    if (req.user?._id) {
+      try {
+        const lastUserMsg = messages[messages.length - 1];
+
+        // Find or create session
+        if (sessionId) {
+          targetSession = await AdminAiSession.findOne({ _id: sessionId, user: req.user._id });
+        }
+
+        if (!targetSession) {
+          // Generate an initial title based on user query
+          let autoTitle = "New Chat";
+          if (lastUserMsg && lastUserMsg.content) {
+            autoTitle = lastUserMsg.content.trim().slice(0, 36);
+            if (lastUserMsg.content.trim().length > 36) autoTitle += "...";
+          }
+          targetSession = await AdminAiSession.create({
+            user: req.user._id,
+            title: autoTitle,
+            lastMessage: (finalResponseText || "").slice(0, 100),
+          });
+        } else {
+          // If session is still titled "New Chat", give it a meaningful title from prompt
+          if (targetSession.title === "New Chat" && lastUserMsg && lastUserMsg.content) {
+            let autoTitle = lastUserMsg.content.trim().slice(0, 36);
+            if (lastUserMsg.content.trim().length > 36) autoTitle += "...";
+            targetSession.title = autoTitle;
+          }
+          targetSession.lastMessage = (finalResponseText || "").slice(0, 100);
+          await targetSession.save();
+        }
+
+        if (lastUserMsg && lastUserMsg.role === "user") {
+          await AdminAiMessage.create({
+            session: targetSession._id,
+            user: req.user._id,
+            role: "user",
+            content: lastUserMsg.content || "",
+            image: lastUserMsg.image || null,
+          });
+        }
+
+        await AdminAiMessage.create({
+          session: targetSession._id,
+          user: req.user._id,
+          role: "model",
+          content: finalResponseText,
+          toolExecutions: toolExecutionLog || [],
+        });
+      } catch (saveErr) {
+        console.error("Failed to persist Admin AI chat history:", saveErr.message);
+      }
+    }
+
     res.json({
       success: true,
       reply: finalResponseText,
-      toolExecutions: toolExecutionLog
+      toolExecutions: toolExecutionLog,
+      sessionId: targetSession ? targetSession._id : null,
+      sessionTitle: targetSession ? targetSession.title : "New Chat",
     });
 
   } catch (err) {
     console.error(" Gemini AI Admin Chat error:", err.message);
     const status = err.response?.status;
-    const isQuotaError = err.response?.data?.error?.message?.includes("quota") || 
-                         err.message?.includes("429") || 
-                         status === 429;
+    const isQuotaError = err.response?.data?.error?.message?.includes("quota") ||
+      err.message?.includes("429") ||
+      status === 429;
     const is503 = status === 503;
     let errMsg;
     if (isQuotaError) {
@@ -2005,4 +2072,178 @@ export const handleAdminAiChatUndo = asyncHandler(async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
+
+export const getAdminAiChatSessions = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  if (!userId) {
+    return res.status(401).json({ success: false, message: "Authentication required" });
+  }
+
+  const sessions = await AdminAiSession.find({ user: userId })
+    .sort({ updatedAt: -1 })
+    .lean();
+
+  res.json({
+    success: true,
+    sessions: sessions.map(s => ({
+      id: s._id,
+      title: s.title || "New Chat",
+      lastMessage: s.lastMessage || "",
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    }))
+  });
+});
+
+export const createAdminAiChatSession = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  if (!userId) {
+    return res.status(401).json({ success: false, message: "Authentication required" });
+  }
+
+  const { title } = req.body;
+  const session = await AdminAiSession.create({
+    user: userId,
+    title: title?.trim() || "New Chat",
+  });
+
+  res.status(201).json({
+    success: true,
+    session: {
+      id: session._id,
+      title: session.title,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+    }
+  });
+});
+
+export const getAdminAiChatSessionMessages = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { sessionId } = req.params;
+
+  if (!userId) {
+    return res.status(401).json({ success: false, message: "Authentication required" });
+  }
+
+  const session = await AdminAiSession.findOne({ _id: sessionId, user: userId }).lean();
+  if (!session) {
+    return res.status(404).json({ success: false, message: "Chat session not found" });
+  }
+
+  const messages = await AdminAiMessage.find({ session: sessionId, user: userId })
+    .sort({ createdAt: 1 })
+    .limit(200)
+    .lean();
+
+  res.json({
+    success: true,
+    session: {
+      id: session._id,
+      title: session.title,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+    },
+    messages: messages.map(m => ({
+      id: m._id,
+      role: m.role,
+      content: m.content,
+      image: m.image || null,
+      toolExecutions: m.toolExecutions || [],
+      createdAt: m.createdAt,
+    }))
+  });
+});
+
+export const deleteAdminAiChatSession = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { sessionId } = req.params;
+
+  if (!userId) {
+    return res.status(401).json({ success: false, message: "Authentication required" });
+  }
+
+  const session = await AdminAiSession.findOneAndDelete({ _id: sessionId, user: userId });
+  if (!session) {
+    return res.status(404).json({ success: false, message: "Session not found" });
+  }
+
+  await AdminAiMessage.deleteMany({ session: sessionId, user: userId });
+
+  res.json({
+    success: true,
+    message: "Session and conversation deleted successfully."
+  });
+});
+
+export const renameAdminAiChatSession = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { sessionId } = req.params;
+  const { title } = req.body;
+
+  if (!userId) {
+    return res.status(401).json({ success: false, message: "Authentication required" });
+  }
+  if (!title?.trim()) {
+    return res.status(400).json({ success: false, message: "Title is required" });
+  }
+
+  const session = await AdminAiSession.findOneAndUpdate(
+    { _id: sessionId, user: userId },
+    { title: title.trim() },
+    { new: true }
+  );
+  if (!session) {
+    return res.status(404).json({ success: false, message: "Session not found" });
+  }
+
+  res.json({
+    success: true,
+    session: {
+      id: session._id,
+      title: session.title,
+    }
+  });
+});
+
+export const getAdminAiChatHistory = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  if (!userId) {
+    return res.status(401).json({ success: false, message: "Authentication required" });
+  }
+
+  const messages = await AdminAiMessage.find({ user: userId })
+    .sort({ createdAt: 1 })
+    .limit(200)
+    .lean();
+
+  res.json({
+    success: true,
+    messages: messages.map((m) => ({
+      id: m._id,
+      role: m.role,
+      content: m.content,
+      image: m.image || null,
+      toolExecutions: m.toolExecutions || [],
+      createdAt: m.createdAt,
+    })),
+  });
+});
+
+export const clearAdminAiChatHistory = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  if (!userId) {
+    return res.status(401).json({ success: false, message: "Authentication required" });
+  }
+
+  await AdminAiMessage.deleteMany({ user: userId });
+  await AdminAiSession.deleteMany({ user: userId });
+
+  res.json({
+    success: true,
+    message: "Chat history cleared successfully.",
+  });
+});
+
+
 

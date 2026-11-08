@@ -110,7 +110,7 @@ export default function BannerCampaignFormPage() {
   }
 
   return (
-    <AdminPageContainer maxWidth="max-w-4xl">
+    <AdminPageContainer maxWidth="max-w-7xl">
       <AdminBackLink href="/admin/banner-campaigns" label="Back to Banner Campaigns" />
       <AdminPageHeader
         title={isEdit ? `Edit Campaign: ${campaign?.name || ""}` : "New Banner Campaign"}

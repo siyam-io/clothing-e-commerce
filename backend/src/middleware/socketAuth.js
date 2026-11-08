@@ -6,7 +6,7 @@ export const socketAuth = async (socket, next) => {
     const token = socket.handshake.auth.token;
     if (!token) return next(new Error("Identity Required"));
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
     const user = await User.findById(decoded.id).select("-password").populate("role");
 
     if (!user) return next(new Error("Invalid Identity"));

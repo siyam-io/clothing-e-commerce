@@ -1,7 +1,21 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import dns from "dns";
+import path from "path";
+import { fileURLToPath } from "url";
 import Role from "../modules/role/role.model.js";
 
+// Windows DNS override for MongoDB Atlas SRV lookup
+try {
+  dns.setServers(["8.8.8.8", "8.8.4.4"]);
+} catch (e) {
+  // ignore
+}
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 dotenv.config();
 
 const roles = [
@@ -20,7 +34,9 @@ const roles = [
       "orders:view", "orders:update",
       "users:view", "users:update",
       "categories:view", "categories:manage",
-      "ai-chat:view"
+      "ai-chat:view",
+      "audit:view",
+      "settings:view"
     ],
   },
   {

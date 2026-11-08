@@ -14,14 +14,6 @@ export const errorHandler = (err, req, res, next) => {
   let message = err.message || "Internal Server Error";
   let errors = err.errors || [];
 
-  logger.error(`${req.method} ${req.originalUrl} - Error: ${err.message}`, {
-    stack: err.stack,
-    statusCode,
-    url: req.originalUrl,
-    method: req.method,
-    ip: req.ip,
-  });
-
   if (err.name === "ValidationError" && err.errors) {
     statusCode = 400;
     message = "Validation Error";
@@ -50,6 +42,18 @@ export const errorHandler = (err, req, res, next) => {
   if (err.name === "TokenExpiredError") {
     statusCode = 401;
     message = "Authentication token has expired";
+  }
+
+  if (statusCode >= 500) {
+    logger.error(`${req.method} ${req.originalUrl} - Internal Server Error: ${message}`, {
+      stack: err.stack,
+      statusCode,
+      url: req.originalUrl,
+      method: req.method,
+      ip: req.ip,
+    });
+  } else {
+    logger.warn(`${req.method} ${req.originalUrl} - ${statusCode}: ${message}`);
   }
 
   res.status(statusCode).json({

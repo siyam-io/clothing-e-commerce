@@ -35,7 +35,7 @@ const ImageCell = ({ src, alt = "Preview" }) => {
   );
 };
 
-export default function DataTable({ columns, data, actions, className }) {
+export default function DataTable({ columns, data, actions, className, rowClassName }) {
   return (
     <div className={cn("overflow-hidden rounded-2xl border border-border/60 bg-card/70 backdrop-blur-md shadow-2xs", className)}>
       <div className="overflow-x-auto">
@@ -61,7 +61,10 @@ export default function DataTable({ columns, data, actions, className }) {
             {data?.map((item, rowIdx) => (
               <TableRow
                 key={item._id || rowIdx}
-                className="hover:bg-muted/40 border-border/30 group transition-colors"
+                className={cn(
+                  "hover:bg-muted/40 border-border/30 group transition-colors",
+                  typeof rowClassName === "function" ? rowClassName(item) : rowClassName
+                )}
               >
                 {columns.map((col, colIdx) => (
                   <TableCell

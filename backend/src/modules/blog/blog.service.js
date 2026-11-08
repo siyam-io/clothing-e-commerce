@@ -60,7 +60,7 @@ export class BlogService {
   /**
    * Publish a new blog post.
    */
-  async createPost({ title, content, category, status, seo, file, user, featuredImageUrl }) {
+  async createPost({ title, content, category, status, seo, file, user, featuredImageUrl, isFeatured, tags, excerpt, slug: customSlug }) {
     let finalImageUrl = featuredImageUrl || "";
 
     if (file) {
@@ -76,9 +76,32 @@ export class BlogService {
       throw new ApiError(400, "A featured image is required to publish an article");
     }
 
-    const slug = slugify(title, { lower: true, strict: true });
+    const baseSlug = customSlug
+      ? slugify(customSlug, { lower: true, strict: true })
+      : slugify(title || "untitled-article", { lower: true, strict: true });
+    let slug = baseSlug;
+
+    if (this.blogModel?.findOne) {
+      const existing = await this.blogModel.findOne({ slug });
+      if (existing) {
+        slug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
+      }
+    }
+
     const readingTime = this.calculateReadingTime(content);
     const parsedSeo = this.parseSeoPayload(seo);
+
+    let parsedTags = [];
+    if (Array.isArray(tags)) {
+      parsedTags = tags;
+    } else if (typeof tags === "string") {
+      try {
+        const parsed = JSON.parse(tags);
+        parsedTags = Array.isArray(parsed) ? parsed : tags.split(",").map((t) => t.trim()).filter(Boolean);
+      } catch {
+        parsedTags = tags.split(",").map((t) => t.trim()).filter(Boolean);
+      }
+    }
 
     const blog = await this.blogModel.create({
       title,
@@ -90,6 +113,9 @@ export class BlogService {
       readingTime,
       seo: parsedSeo,
       author: user._id,
+      isFeatured: isFeatured === true || isFeatured === "true",
+      tags: parsedTags,
+      excerpt: excerpt || "",
     });
 
     this.bustDashboardCache();
@@ -165,7 +191,7 @@ export class BlogService {
    */
   async updatePost(id, bodyData, file) {
     const blog = await this.getPostById(id);
-    const { title, content, seo, ...rest } = bodyData;
+    const { title, content, seo, tags, isFeatured, slug: customSlug, ...rest } = bodyData;
 
     if (file) {
       if (blog.featuredImage) {
@@ -180,7 +206,13 @@ export class BlogService {
 
     if (title) {
       blog.title = title;
-      blog.slug = slugify(title, { lower: true, strict: true });
+      if (!customSlug) {
+        blog.slug = slugify(title, { lower: true, strict: true });
+      }
+    }
+
+    if (customSlug) {
+      blog.slug = slugify(customSlug, { lower: true, strict: true });
     }
 
     if (content) {
@@ -190,6 +222,23 @@ export class BlogService {
 
     if (seo) {
       blog.seo = this.parseSeoPayload(seo);
+    }
+
+    if (tags !== undefined) {
+      if (Array.isArray(tags)) {
+        blog.tags = tags;
+      } else if (typeof tags === "string") {
+        try {
+          const parsed = JSON.parse(tags);
+          blog.tags = Array.isArray(parsed) ? parsed : tags.split(",").map((t) => t.trim()).filter(Boolean);
+        } catch {
+          blog.tags = tags.split(",").map((t) => t.trim()).filter(Boolean);
+        }
+      }
+    }
+
+    if (isFeatured !== undefined) {
+      blog.isFeatured = isFeatured === true || isFeatured === "true";
     }
 
     Object.assign(blog, rest);
