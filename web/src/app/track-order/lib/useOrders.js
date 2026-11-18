@@ -3,7 +3,7 @@ import api from "@/lib/api";
 import { getGuestId } from "@/utils/guestId";
 import { useAuthStore } from "@/store/authStore";
 
-export const useOrders = (orderId = null, phone = null) => {
+export const useOrders = (orderId = null, phone = null, options = {}) => {
   const { user, isLoading: authLoading } = useAuthStore();
   const guestId = getGuestId();
   const userId = user?._id || guestId;
@@ -15,7 +15,7 @@ export const useOrders = (orderId = null, phone = null) => {
       const { data } = await api.get(url);
       return data;
     },
-    enabled: (!!userId || !!phone) && !authLoading,
+    enabled: Boolean(options.fetchMyOrders && (!!userId || !!phone) && !authLoading),
     staleTime: 1000 * 60 * 5,
   });
 

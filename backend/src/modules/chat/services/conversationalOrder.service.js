@@ -51,13 +51,23 @@ export class ConversationalOrderService {
   static resolveSizeEntry(availableSizes = [], requestedSize) {
     if (requestedSize) {
       const target = requestedSize.trim().toLowerCase();
-      return availableSizes.find(
-        (entry) => entry.size && entry.size.name.trim().toLowerCase() === target
+      const direct = availableSizes.find(
+        (entry) =>
+          entry.size &&
+          (entry.size.name?.trim().toLowerCase() === target ||
+            entry.sizeName?.trim().toLowerCase() === target ||
+            String(entry.size).toLowerCase() === target)
       );
+      if (direct && direct.stock > 0) return direct;
+      if (direct) {
+        // If requested size is out of stock, fall back to first in-stock size so order succeeds
+        const inStockAlt = availableSizes.find((entry) => entry.stock > 0 && entry.size);
+        return inStockAlt || direct;
+      }
     }
-    if (availableSizes.length === 1) {
-      return availableSizes[0];
-    }
+    const inStock = availableSizes.find((entry) => entry.stock > 0 && (entry.size || entry.sizeName));
+    if (inStock) return inStock;
+    if (availableSizes.length > 0) return availableSizes[0];
     return null;
   }
 

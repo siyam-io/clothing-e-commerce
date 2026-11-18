@@ -4,24 +4,19 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Search, 
-  Package, 
   Truck, 
-  Clock, 
   ChevronRight, 
   AlertCircle,
-  ShoppingBag,
   ArrowRight,
   Phone,
   FileText
 } from "lucide-react";
 import { useOrders } from "@/app/track-order/lib/useOrders";
-import { getImageUrl } from "@/utils/imageUtils";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import OrderDetailsDialog from "@/app/profile/components/OrderDetailsDialog";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/store/appStore";
-import { Price } from "@/components/common/Price";
 
 export default function TrackOrderPage() {
   const router = useRouter();
@@ -37,9 +32,6 @@ export default function TrackOrderPage() {
   const [searchTriggered, setSearchTriggered] = useState(false);
   const [selectedDetailsId, setSelectedDetailsId] = useState(null);
 
-  // Auto-fetch my orders for the current guest session
-  const { myOrders, isLoading: ordersLoading } = useOrders();
-  
   // Specific order search
   const { orderDetails, orderDetailsLoading, isError } = useOrders(
     searchTriggered ? orderIdInput : null, 
@@ -197,68 +189,59 @@ export default function TrackOrderPage() {
           )}
         </AnimatePresence>
 
-        {/* History Section (Auto-fetched for guests) */}
+        {/* How It Works / Secure Tracking Guidelines */}
         {!searchTriggered && (
-          <div className="space-y-10">
-            <div className="flex items-center justify-between px-4">
-              <h2 className="text-2xl font-black uppercase italic tracking-tighter">Recent Sessions</h2>
-              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                <Clock size={12} /> Auto-synced
+          <div className="space-y-6 pt-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-accent/5 border border-border/10 p-6 md:p-8 rounded-[2.5rem] space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                  <FileText size={20} />
+                </div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-foreground">
+                  1. Order Identity
+                </h3>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Enter your unique Order ID found in your SMS notification or email invoice slip.
+                </p>
+              </div>
+
+              <div className="bg-accent/5 border border-border/10 p-6 md:p-8 rounded-[2.5rem] space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                  <Phone size={20} />
+                </div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-foreground">
+                  2. Phone Verification
+                </h3>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Enter the exact mobile number provided during checkout to verify ownership.
+                </p>
+              </div>
+
+              <div className="bg-accent/5 border border-border/10 p-6 md:p-8 rounded-[2.5rem] space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                  <Truck size={20} />
+                </div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-foreground">
+                  3. Live Tracking
+                </h3>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Track courier status, parcel dispatch milestones, and estimated arrival in real time.
+                </p>
               </div>
             </div>
 
-            {ordersLoading ? (
-              <div className="space-y-6">
-                {[1, 2].map(i => (
-                  <div key={i} className="h-40 w-full bg-accent/10 animate-pulse rounded-[2.5rem]" />
-                ))}
-              </div>
-            ) : myOrders?.length > 0 ? (
-              <div className="space-y-6">
-                {myOrders.map((order) => (
-                  <motion.div
-                    key={order._id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    onClick={() => setSelectedDetailsId(order._id)}
-                    className="bg-accent/5 border border-border/10 p-6 md:p-8 rounded-[2.5rem] hover:border-accent-secondary/30 transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-center justify-between gap-6">
-                      <div className="flex gap-6 items-center">
-                        <div className="w-16 h-16 bg-background rounded-2xl flex items-center justify-center border border-border/10 shadow-lg group-hover:scale-110 transition-transform">
-                          <Package className="text-primary w-6 h-6" />
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs font-black uppercase tracking-tighter text-primary">#{order._id.slice(-8).toUpperCase()}</p>
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase">{new Date(order.createdAt).toLocaleDateString()}</p>
-                        </div>
-                      </div>
-                      <div className="hidden sm:flex flex-col items-end gap-2">
-                        <Badge className={cn("px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest border-none", statusColors[order.orderStatus])}>
-                          {order.orderStatus}
-                        </Badge>
-                        <Price
-                          amount={order.totalPrice}
-                          className="text-sm font-black not-italic"
-                        />
-                      </div>
-                      <ChevronRight size={20} className="text-muted-foreground group-hover:text-foreground group-hover:translate-x-1 transition-all" />
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            ) : (
-              <div className="py-20 text-center space-y-6 border-2 border-dashed border-border/10 rounded-[3rem]">
-                <ShoppingBag size={48} className="mx-auto text-muted-foreground/20" />
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">No active fulfillment sessions detected</p>
-                <button 
-                  onClick={() => router.push("/products")}
-                  className="px-10 py-4 bg-foreground text-background rounded-full text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl"
+            <div className="text-center pt-2">
+              <p className="text-xs text-muted-foreground">
+                Looking for your previous order history?{" "}
+                <button
+                  type="button"
+                  onClick={() => router.push("/profile")}
+                  className="font-bold text-foreground hover:text-primary underline underline-offset-4 transition-colors"
                 >
-                  Start Shopping
+                  View all past orders in your Profile
                 </button>
-              </div>
-            )}
+              </p>
+            </div>
           </div>
         )}
       </div>

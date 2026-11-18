@@ -83,8 +83,12 @@ export const startCourierWorker = (io = null) => {
       concurrency: 2, // Conservative rate limiting for Courier APIs
     });
 
+    let hasLoggedNotice = false;
     courierWorker.on("error", (err) => {
-      logger.warn(`BullMQ Courier Worker connection notice: ${err.message}`);
+      if (!hasLoggedNotice) {
+        hasLoggedNotice = true;
+        logger.warn(`BullMQ Courier Worker connection notice: ${err.message}`);
+      }
     });
 
     courierWorker.on("completed", (job, result) => {

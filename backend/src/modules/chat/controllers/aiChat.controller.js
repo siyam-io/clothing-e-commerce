@@ -1,11 +1,13 @@
 import crypto from "crypto";
 import { VlmClientService } from "../services/vlmClient.service.js";
 import { ConversationalOrderService } from "../services/conversationalOrder.service.js";
+import { ChatGuardrails } from "../services/chatGuardrails.service.js";
 import logger from "../../../utils/logger.js";
 
 /**
  * Controller for POST /api/chat.
- * Processes multimodal customer queries, interfaces with vision-language engine,
+ * Processes multimodal customer queries (both guest and authenticated users),
+ * enforces security guardrails, interfaces with vision-language engine,
  * and executes conversational cart/order actions.
  */
 export const handleAiChat = async (req, res, next) => {
@@ -19,6 +21,25 @@ export const handleAiChat = async (req, res, next) => {
         message: "Please provide either a message or an image to start chatting.",
       });
     }
+
+    // Input Guardrails Check
+    const inputGuard = ChatGuardrails.validateInput(message);
+    if (!inputGuard.safe) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          reply: inputGuard.reason,
+          hasImage: false,
+          isFallback: false,
+          actionPayload: null,
+          actionResult: null,
+          matchedProducts: [],
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
+    const sanitizedMessage = inputGuard.sanitized;
 
     const userIdentifier =
       req.user?._id?.toString() ||
@@ -37,10 +58,13 @@ export const handleAiChat = async (req, res, next) => {
     }
 
     const vlmResponse = await VlmClientService.sendChatMessage({
-      message: message.trim(),
+      message: sanitizedMessage,
       file,
       history: parsedHistory,
     });
+
+    // Output Guardrails Check
+    const verifiedReply = ChatGuardrails.validateOutput(vlmResponse.reply);
 
     let actionResult = null;
     if (vlmResponse.action_payload) {
@@ -54,7 +78,7 @@ export const handleAiChat = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: {
-        reply: vlmResponse.reply,
+        reply: verifiedReply,
         hasImage: vlmResponse.has_image || false,
         isFallback: vlmResponse.isFallback || false,
         actionPayload: vlmResponse.action_payload || null,
@@ -69,3 +93,4 @@ export const handleAiChat = async (req, res, next) => {
     next(error);
   }
 };
+

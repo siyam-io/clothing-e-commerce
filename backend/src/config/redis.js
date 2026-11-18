@@ -3,7 +3,7 @@ import Redis from 'ioredis';
 
 let redisClient = null;
 let hasLoggedConnection = false;
-export let isRedisQuotaExceeded = false;
+export let isRedisQuotaExceeded = process.env.NODE_ENV !== 'production';
 
 export const getRedisConnectionOptions = () => {
   if (!process.env.REDIS_URL || process.env.NODE_ENV === 'test' || isRedisQuotaExceeded) {
@@ -76,11 +76,14 @@ const createClient = () => {
     });
 
     client.on('error', (err) => {
-      if (err.message && err.message.includes("max requests limit exceeded")) {
+      if (err.message && (err.message.includes("max requests limit exceeded") || err.message.includes("ECONNREFUSED") || err.message.includes("ENOTFOUND"))) {
         if (!isRedisQuotaExceeded) {
           isRedisQuotaExceeded = true;
-          console.warn(' Upstash Redis quota limit exceeded. Gracefully bypassing Redis operations.');
+          console.warn(' Redis connection unavailable or quota exceeded. Gracefully bypassing Redis operations.');
         }
+        try {
+          client.disconnect();
+        } catch (_) {}
         return;
       }
       // Only log actual errors, not disconnects if already reconnecting

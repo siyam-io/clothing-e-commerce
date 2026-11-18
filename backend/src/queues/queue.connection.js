@@ -24,11 +24,19 @@ export const createQueueConnection = () => {
       enableReadyCheck: false,
     });
 
+let hasLoggedQueueWarning = false;
+
     client.on("error", (err) => {
       if (err.message && err.message.includes("max requests limit exceeded")) {
+        try {
+          client.disconnect();
+        } catch (_) {}
         return;
       }
-      logger.warn("BullMQ Redis connection warning:", { error: err.message });
+      if (!hasLoggedQueueWarning) {
+        hasLoggedQueueWarning = true;
+        logger.warn("BullMQ Redis connection warning:", { error: err.message });
+      }
     });
 
     return client;

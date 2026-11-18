@@ -72,8 +72,12 @@ export const startImageWorker = () => {
       concurrency: 2, // Limit concurrency to protect CPU from image spikes
     });
 
+    let hasLoggedNotice = false;
     imageWorker.on("error", (err) => {
-      logger.warn(`BullMQ Image Worker connection notice: ${err.message}`);
+      if (!hasLoggedNotice) {
+        hasLoggedNotice = true;
+        logger.warn(`BullMQ Image Worker connection notice: ${err.message}`);
+      }
     });
 
     imageWorker.on("completed", (job) => {

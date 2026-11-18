@@ -39,7 +39,7 @@ export default function Navbar() {
   const pathname = usePathname();
 
   const { user, logout, isAuthenticated } = useAuthStore();
-  const { theme, toggleTheme, lang, setLang, settings, setChatOpen } = useAppStore();
+  const { theme, toggleTheme, lang, setLang, settings } = useAppStore();
   const branding = settings?.branding || {};
   const { cart, wishlistItems } = useProductStore();
   const { unreadCount } = useChatStore();

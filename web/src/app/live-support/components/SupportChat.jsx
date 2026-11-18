@@ -36,11 +36,31 @@ import { toast } from "sonner";
 // -----------------------------------------------------------------------------
 // Interactive Product Preview Card inside AI Chat Bubble
 // -----------------------------------------------------------------------------
+const extractSizeId = (s, idx) => {
+  if (!s) return `sz-${idx}`;
+  let raw = s.sizeId || (typeof s.size === "object" && s.size ? (s.size._id || s.size.id || s.size.sizeId) : s.size) || s._id || s.id;
+  if (raw && typeof raw === "object") {
+    raw = raw.sizeId || raw._id || raw.id || raw.name || raw.sizeName || idx;
+  }
+  return raw ? String(raw) : `sz-${idx}`;
+};
+
+const extractSizeName = (s, idx) => {
+  if (!s) return `S${idx + 1}`;
+  let raw = s.sizeName || (typeof s.size === "object" && s.size ? (s.size.name || s.size.sizeName) : s.size) || s.name;
+  if (raw && typeof raw === "object") {
+    raw = raw.sizeName || raw.name || raw._id || raw.id || `S${idx + 1}`;
+  }
+  return raw ? String(raw) : `S${idx + 1}`;
+};
+
 function ProductMatchCard({ product, onAddToCart }) {
   const [selectedSizeId, setSelectedSizeId] = useState(() => {
     if (!product.sizes || product.sizes.length === 0) return null;
     const inStock = product.sizes.find((s) => s.stock > 0);
-    return inStock ? (inStock.size?._id || inStock.size) : (product.sizes[0]?.size?._id || product.sizes[0]?.size);
+    const target = inStock || product.sizes[0];
+    const targetIdx = inStock ? product.sizes.indexOf(inStock) : 0;
+    return extractSizeId(target, targetIdx);
   });
   const [isAdded, setIsAdded] = useState(false);
 
@@ -98,6 +118,11 @@ function ProductMatchCard({ product, onAddToCart }) {
             <h4 className="mt-1 truncate text-[13px] font-black text-white">
               {product.name}
             </h4>
+            {product.description && (
+              <p className="line-clamp-2 text-[9.5px] text-zinc-400 mt-0.5 leading-snug">
+                {product.description}
+              </p>
+            )}
           </div>
 
           <div className="flex items-baseline gap-1.5">
@@ -129,14 +154,14 @@ function ProductMatchCard({ product, onAddToCart }) {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {product.sizes.map((s, idx) => {
-              const sizeId = s.size?._id || s.size;
-              const sizeName = s.size?.name || s.sizeName || s.name || `S${idx + 1}`;
+              const sizeId = extractSizeId(s, idx);
+              const sizeName = extractSizeName(s, idx);
               const isAvailable = s.stock > 0;
-              const isSelected = selectedSizeId === sizeId;
+              const isSelected = String(selectedSizeId) === String(sizeId);
 
               return (
                 <button
-                  key={sizeId || idx}
+                  key={`sz-btn-${sizeId}-${idx}`}
                   disabled={!isAvailable}
                   onClick={() => setSelectedSizeId(sizeId)}
                   className={cn(
@@ -156,33 +181,49 @@ function ProductMatchCard({ product, onAddToCart }) {
       )}
 
       {/* Action Footer */}
-      <div className="flex items-center justify-between border-t border-white/10 bg-black/50 p-2.5 px-3">
+      <div className="flex items-center justify-between border-t border-white/10 bg-black/50 p-2.5 px-3 gap-2">
         <Link
           href={`/product/${product.slug || product._id}`}
-          className="text-[10px] font-bold text-zinc-300 hover:text-white flex items-center gap-1 transition-colors"
+          className="text-[10px] font-bold text-zinc-300 hover:text-white flex items-center gap-0.5 transition-colors shrink-0"
         >
           Details <ChevronRight size={11} />
         </Link>
 
-        <button
-          onClick={handleAdd}
-          className={cn(
-            "flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all duration-300 shadow-md active:scale-95 cursor-pointer",
-            isAdded
-              ? "bg-emerald-600 text-white shadow-emerald-600/30"
-              : "bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-orange-500/25"
-          )}
-        >
-          {isAdded ? (
-            <>
-              <CheckCircle2 size={12} /> Added
-            </>
-          ) : (
-            <>
-              <ShoppingBag size={12} /> Add to Cart
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={handleAdd}
+            className={cn(
+              "flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-[9.5px] font-black uppercase tracking-wider transition-all duration-300 shadow-sm active:scale-95 cursor-pointer",
+              isAdded
+                ? "bg-emerald-600 text-white shadow-emerald-600/30"
+                : "bg-white/10 hover:bg-white/20 text-white border border-white/15"
+            )}
+          >
+            {isAdded ? (
+              <>
+                <CheckCircle2 size={11} /> Added
+              </>
+            ) : (
+              <>
+                <ShoppingBag size={11} /> Cart
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={() => {
+              if (!selectedSizeId) {
+                toast.error("Please select a size first");
+                return;
+              }
+              onAddToCart(product, selectedSizeId);
+              window.location.href = "/cart";
+            }}
+            className="flex items-center gap-1 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all duration-300 shadow-md active:scale-95 cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-orange-500/25"
+          >
+            Order Now <ChevronRight size={11} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -374,13 +415,14 @@ export default function SupportChat() {
     toast.success(`Added ${product.name} to cart!`);
   };
 
-  if (pathname.startsWith("/admin")) return null;
+  if (pathname.startsWith("/admin") || pathname === "/live-support") return null;
 
   return (
     <div className="fixed bottom-6 right-6 z-[9999] pointer-events-none">
-      <AnimatePresence>
-        {isOpen && (
+      <AnimatePresence mode="wait">
+        {isOpen ? (
           <motion.div
+            key="support-chat-drawer"
             initial={{ opacity: 0, y: 30, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 30, scale: 0.95 }}
@@ -494,9 +536,9 @@ export default function SupportChat() {
                           {/* Matched Product Cards (Rendered inside AI Bubble) */}
                           {!isUser && msg.matchedProducts && msg.matchedProducts.length > 0 && (
                             <div className="space-y-2 pt-1">
-                              {msg.matchedProducts.slice(0, 2).map((prod) => (
+                              {msg.matchedProducts.slice(0, 2).map((prod, pIdx) => (
                                 <ProductMatchCard
-                                  key={prod._id || prod.id}
+                                  key={prod._id ? String(prod._id) : (prod.id ? String(prod.id) : `matched-${pIdx}`)}
                                   product={prod}
                                   onAddToCart={handleAddToCartFromCard}
                                 />
@@ -627,9 +669,9 @@ export default function SupportChat() {
                                 {msg.text && <p>{msg.text}</p>}
                                 {msg.matchedProducts && msg.matchedProducts.length > 0 && (
                                   <div className="space-y-2 pt-2">
-                                    {msg.matchedProducts.slice(0, 2).map((prod) => (
+                                    {msg.matchedProducts.slice(0, 2).map((prod, pIdx) => (
                                       <ProductMatchCard
-                                        key={prod._id || prod.id}
+                                        key={prod._id ? String(prod._id) : (prod.id ? String(prod.id) : `live-match-${pIdx}`)}
                                         product={prod}
                                         onAddToCart={handleAddToCartFromCard}
                                       />
@@ -788,6 +830,35 @@ export default function SupportChat() {
               )}
             </div>
           </motion.div>
+        ) : (
+          <motion.button
+            key="support-chat-launcher"
+            initial={{ opacity: 0, scale: 0.8, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 15 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setIsOpen(true)}
+            className="pointer-events-auto flex items-center gap-2.5 sm:gap-3 px-3.5 sm:px-4 py-3 sm:py-3.5 rounded-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white shadow-[0_10px_35px_-5px_rgba(249,115,22,0.5)] hover:shadow-[0_15px_40px_rgba(249,115,22,0.65)] border border-white/25 backdrop-blur-md transition-all cursor-pointer group"
+            aria-label="Open AI Shopping Assistant"
+            title="Chat with AI Shopping Assistant"
+          >
+            <div className="relative flex items-center justify-center">
+              <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm group-hover:rotate-12 transition-transform duration-300">
+                <Bot size={18} className="text-white" />
+              </div>
+              <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400 border border-white"></span>
+              </span>
+            </div>
+            <div className="flex flex-col items-start text-left leading-tight pr-1">
+              <span className="text-[11px] sm:text-[12px] font-black uppercase tracking-wider flex items-center gap-1">
+                AI Assistant <Sparkles size={11} className="text-amber-200 fill-amber-200 animate-pulse" />
+              </span>
+              <span className="text-[8.5px] sm:text-[9.5px] font-medium text-white/90">Instant Chat & Ordering</span>
+            </div>
+          </motion.button>
         )}
       </AnimatePresence>
     </div>

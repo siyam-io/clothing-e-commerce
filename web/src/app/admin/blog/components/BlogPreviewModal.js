@@ -58,7 +58,7 @@ export default function BlogPreviewModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-5xl h-[92vh] p-0 flex flex-col gap-0 overflow-hidden bg-background border-border/60 rounded-3xl shadow-2xl">
+      <DialogContent className="w-[96vw] max-w-[96vw] sm:max-w-[95vw] md:max-w-5xl lg:max-w-6xl xl:max-w-7xl h-[92vh] p-0 flex flex-col gap-0 overflow-hidden bg-background border-border/60 rounded-3xl shadow-2xl">
         {/* Modal Top Control Bar */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-muted/20 shrink-0">
           <div className="flex items-center gap-3">
@@ -125,7 +125,7 @@ export default function BlogPreviewModal({
             className={`transition-all duration-300 w-full ${
               device === "mobile"
                 ? "max-w-[410px] bg-background border-4 border-zinc-800 rounded-[2.5rem] shadow-2xl p-6 my-auto min-h-[720px]"
-                : "max-w-3xl bg-background rounded-2xl border border-border/60 p-8 sm:p-12 shadow-sm"
+                : "max-w-4xl lg:max-w-5xl bg-background rounded-2xl border border-border/60 p-8 sm:p-12 shadow-sm"
             }`}
           >
             {/* Header info */}

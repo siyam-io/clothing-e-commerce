@@ -72,8 +72,12 @@ export const startTrackingWorker = () => {
       concurrency: 10, // Handle up to 10 marketing API dispatches concurrently
     });
 
+    let hasLoggedNotice = false;
     trackingWorker.on("error", (err) => {
-      logger.warn(`BullMQ Tracking Worker connection notice: ${err.message}`);
+      if (!hasLoggedNotice) {
+        hasLoggedNotice = true;
+        logger.warn(`BullMQ Tracking Worker connection notice: ${err.message}`);
+      }
     });
 
     trackingWorker.on("completed", (job) => {

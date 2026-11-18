@@ -51,7 +51,7 @@ export default function PosReceiptModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="w-full max-w-lg bg-card border border-border/20 rounded-3xl shadow-2xl p-6 space-y-6 my-auto">
+      <div className="w-full max-w-xl md:max-w-2xl bg-card border border-border/20 rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 my-auto">
         {/* Top Success Banner */}
         <div className="flex items-center justify-between pb-4 border-b border-border/10">
           <div className="flex items-center gap-3">
@@ -80,7 +80,7 @@ export default function PosReceiptModal({
         <div 
           id="pos-receipt-print-area" 
           ref={receiptRef}
-          className="bg-white text-black p-6 rounded-2xl shadow-inner border border-gray-200 font-mono text-[11px] leading-tight max-w-[340px] mx-auto space-y-3"
+          className="bg-white text-black p-6 sm:p-7 rounded-2xl shadow-inner border border-gray-200 font-mono text-[11px] leading-tight w-full max-w-[440px] sm:max-w-[480px] mx-auto space-y-3.5"
         >
           {/* Store Header */}
           <div className="text-center space-y-1 pb-2 border-b border-dashed border-gray-400">
@@ -111,7 +111,7 @@ export default function PosReceiptModal({
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Customer:</span>
-              <span className="font-bold truncate max-w-[150px]">
+              <span className="font-bold truncate max-w-[200px] sm:max-w-[260px]">
                 {order.shippingAddress?.name || "Walk-in Customer"}
               </span>
             </div>
@@ -138,7 +138,7 @@ export default function PosReceiptModal({
                 {order.orderItems?.map((item, idx) => (
                   <tr key={idx} className="py-1">
                     <td className="py-1 font-bold">
-                      <div className="truncate max-w-[120px]">{item.name}</div>
+                      <div className="truncate max-w-[180px] sm:max-w-[240px]">{item.name}</div>
                       {item.size && (
                         <div className="text-[8px] text-gray-500 font-normal">
                           Size: {typeof item.size === "object" ? item.size?.name : "Std"}

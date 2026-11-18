@@ -97,8 +97,12 @@ export const startEmailWorker = () => {
       concurrency: 5, // Process up to 5 emails concurrently
     });
 
+    let hasLoggedNotice = false;
     emailWorker.on("error", (err) => {
-      logger.warn(`BullMQ Email Worker connection notice: ${err.message}`);
+      if (!hasLoggedNotice) {
+        hasLoggedNotice = true;
+        logger.warn(`BullMQ Email Worker connection notice: ${err.message}`);
+      }
     });
 
     emailWorker.on("completed", (job) => {

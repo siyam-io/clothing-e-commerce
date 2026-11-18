@@ -43,11 +43,17 @@ if (redisClient) {
     const subClient = redisClient.duplicate();
 
     pubClient.on("error", (err) => {
-      if (err.message && err.message.includes("max requests limit exceeded")) return;
+      if (err.message && err.message.includes("max requests limit exceeded")) {
+        try { pubClient.disconnect(); } catch (_) {}
+        return;
+      }
       logger.warn("Redis pub client notice:", { error: err.message });
     });
     subClient.on("error", (err) => {
-      if (err.message && err.message.includes("max requests limit exceeded")) return;
+      if (err.message && err.message.includes("max requests limit exceeded")) {
+        try { subClient.disconnect(); } catch (_) {}
+        return;
+      }
       logger.warn("Redis sub client notice:", { error: err.message });
     });
 

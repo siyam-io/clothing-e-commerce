@@ -40,6 +40,24 @@ import { toast } from "sonner";
 // -----------------------------------------------------------------------------
 // Interactive Product Preview Card for Matched Products
 // -----------------------------------------------------------------------------
+const extractSizeId = (s, idx) => {
+  if (!s) return `sz-${idx}`;
+  let raw = s.sizeId || (typeof s.size === "object" && s.size ? (s.size._id || s.size.id || s.size.sizeId) : s.size) || s._id || s.id;
+  if (raw && typeof raw === "object") {
+    raw = raw.sizeId || raw._id || raw.id || raw.name || raw.sizeName || idx;
+  }
+  return raw ? String(raw) : `sz-${idx}`;
+};
+
+const extractSizeName = (s, idx) => {
+  if (!s) return `S${idx + 1}`;
+  let raw = s.sizeName || (typeof s.size === "object" && s.size ? (s.size.name || s.size.sizeName) : s.size) || s.name;
+  if (raw && typeof raw === "object") {
+    raw = raw.sizeName || raw.name || raw._id || raw.id || `S${idx + 1}`;
+  }
+  return raw ? String(raw) : `S${idx + 1}`;
+};
+
 function ProductMatchCard({ product, onAddToCart }) {
   const images = (Array.isArray(product.images) && product.images.length > 0)
     ? product.images
@@ -50,7 +68,9 @@ function ProductMatchCard({ product, onAddToCart }) {
   const [selectedSizeId, setSelectedSizeId] = useState(() => {
     if (!product.sizes || product.sizes.length === 0) return null;
     const inStock = product.sizes.find((s) => s.stock > 0);
-    return inStock ? (inStock.size?._id || inStock.size) : (product.sizes[0]?.size?._id || product.sizes[0]?.size);
+    const target = inStock || product.sizes[0];
+    const targetIdx = inStock ? product.sizes.indexOf(inStock) : 0;
+    return extractSizeId(target, targetIdx);
   });
   const [isAdded, setIsAdded] = useState(false);
 
@@ -135,6 +155,11 @@ function ProductMatchCard({ product, onAddToCart }) {
             <h4 className="mt-1.5 line-clamp-2 text-[14px] font-black text-white leading-snug">
               {product.name}
             </h4>
+            {product.description && (
+              <p className="line-clamp-2 text-[10.5px] text-zinc-400 mt-1 leading-snug">
+                {product.description}
+              </p>
+            )}
           </div>
 
           <div className="flex items-baseline gap-2 mt-2">
@@ -166,14 +191,14 @@ function ProductMatchCard({ product, onAddToCart }) {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {product.sizes.map((s, idx) => {
-              const sizeId = s.size?._id || s.size;
-              const sizeName = s.size?.name || s.sizeName || s.name || `S${idx + 1}`;
+              const sizeId = extractSizeId(s, idx);
+              const sizeName = extractSizeName(s, idx);
               const isAvailable = s.stock > 0;
-              const isSelected = selectedSizeId === sizeId;
+              const isSelected = String(selectedSizeId) === String(sizeId);
 
               return (
                 <button
-                  key={sizeId || idx}
+                  key={`sz-btn-${sizeId}-${idx}`}
                   disabled={!isAvailable}
                   onClick={() => setSelectedSizeId(sizeId)}
                   className={cn(
@@ -201,25 +226,40 @@ function ProductMatchCard({ product, onAddToCart }) {
           View Details <ChevronRight size={12} />
         </Link>
 
-        <button
-          onClick={handleAdd}
-          className={cn(
-            "flex items-center gap-1.5 rounded-xl px-4 py-2 text-[11px] font-black uppercase tracking-wider transition-all duration-300 shadow-md active:scale-95 cursor-pointer",
-            isAdded
-              ? "bg-emerald-600 text-white shadow-emerald-600/30"
-              : "bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-orange-500/25"
-          )}
-        >
-          {isAdded ? (
-            <>
-              <CheckCircle2 size={14} className="text-white" /> Added!
-            </>
-          ) : (
-            <>
-              <ShoppingBag size={14} className="text-white" /> Add to Cart
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={handleAdd}
+            className={cn(
+              "flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-wider transition-all duration-300 shadow-md active:scale-95 cursor-pointer",
+              isAdded
+                ? "bg-emerald-600 text-white shadow-emerald-600/30"
+                : "bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-sm"
+            )}
+          >
+            {isAdded ? (
+              <>
+                <CheckCircle2 size={13} className="text-white" /> Added!
+              </>
+            ) : (
+              <>
+                <ShoppingBag size={13} className="text-white" /> Cart
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              if (!selectedSizeId) {
+                toast.error("Please select a size first");
+                return;
+              }
+              onAddToCart(product, selectedSizeId);
+              window.location.href = "/cart";
+            }}
+            className="flex items-center gap-1 rounded-xl px-3.5 py-2 text-[11px] font-black uppercase tracking-wider transition-all duration-300 shadow-md active:scale-95 cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-orange-500/25"
+          >
+            Order Now <ChevronRight size={13} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -299,8 +339,8 @@ const ChatMessage = ({ message, isMe, onAddToCart }) => {
           {/* Matched Product Cards */}
           {message.matchedProducts && message.matchedProducts.length > 0 && (
             <div className="px-3 pb-3 space-y-2">
-              {message.matchedProducts.map((p) => (
-                <ProductMatchCard key={p._id || p.id} product={p} onAddToCart={onAddToCart} />
+              {message.matchedProducts.map((p, pIdx) => (
+                <ProductMatchCard key={p._id ? String(p._id) : (p.id ? String(p.id) : `match-${pIdx}`)} product={p} onAddToCart={onAddToCart} />
               ))}
             </div>
           )}
@@ -317,7 +357,7 @@ const ChatMessage = ({ message, isMe, onAddToCart }) => {
               edited
             </span>
           )}
-          <span className="text-[9px] font-bold uppercase tracking-widest">
+          <span suppressHydrationWarning className="text-[9px] font-bold uppercase tracking-widest">
             {timeStr}
           </span>
           {isMe && (
@@ -593,123 +633,104 @@ export default function LiveSupportPage() {
     (isAuth && currentChatMode === "agent" && !isConnected);
 
   return (
-    <div id="live-support-container" className="fixed inset-0 flex flex-col bg-[#f0f2f5] dark:bg-[#0b141a] overflow-hidden z-50">
+    <div id="live-support-container" className="fixed inset-0 h-screen supports-[height:100dvh]:h-[100dvh] flex flex-col bg-[#f0f2f5] dark:bg-[#0b141a] overflow-hidden z-50">
       {/* Header */}
-      <header className="h-[68px] bg-white dark:bg-[#202c33] px-4 md:px-8 flex items-center justify-between border-b border-border/10 shrink-0 z-20 shadow-sm">
-        <div className="flex items-center gap-3">
+      <header className="h-16 md:h-[68px] bg-white dark:bg-[#202c33] px-2.5 sm:px-4 md:px-8 flex items-center justify-between border-b border-border/10 shrink-0 z-20 shadow-sm gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <Button
             variant="ghost"
             size="icon"
             asChild
-            className="rounded-full hover:bg-black/5 dark:hover:bg-white/5"
+            className="h-9 w-9 sm:h-10 sm:w-10 rounded-full hover:bg-black/5 dark:hover:bg-white/5 shrink-0"
           >
-            <Link href="/">
-              <ArrowLeft size={20} className="text-foreground/70" />
+            <Link href="/" aria-label="Go Back">
+              <ArrowLeft size={18} className="text-foreground/70 sm:w-5 sm:h-5" />
             </Link>
           </Button>
 
-          <div className="relative">
-            <div className="w-10 h-10 rounded-full bg-accent-secondary/15 flex items-center justify-center text-accent-secondary">
-              {currentChatMode === "ai" ? <Bot size={22} /> : <Headphones size={22} />}
+          <div className="relative shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-accent-secondary/15 flex items-center justify-center text-accent-secondary">
+              {currentChatMode === "ai" ? <Bot size={19} className="sm:w-[22px] sm:h-[22px]" /> : <Headphones size={19} className="sm:w-[22px] sm:h-[22px]" />}
             </div>
             <div
               className={cn(
-                "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-[#202c33]",
+                "absolute -bottom-0.5 -right-0.5 w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full border-2 border-white dark:border-[#202c33]",
                 currentChatMode === "ai" || isConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
               )}
             />
           </div>
 
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-[15px] font-bold leading-tight">
-                {currentChatMode === "ai" ? `${siteName} AI Shopping Assistant` : "Live Customer Support"}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h2 className="text-[13px] sm:text-[15px] font-bold leading-tight truncate">
+                {currentChatMode === "ai" ? `${siteName} AI Assistant` : "Live Customer Support"}
               </h2>
               {currentChatMode === "ai" && (
-                <span className="rounded-full bg-orange-500/15 border border-orange-500/30 px-2 py-0.5 text-[9px] font-bold text-orange-400">
+                <span className="hidden md:inline-flex rounded-full bg-orange-500/15 border border-orange-500/30 px-2 py-0.5 text-[9px] font-bold text-orange-400 shrink-0">
                   Qwen2-VL Local
                 </span>
               )}
             </div>
-            <p className="text-[11px] font-medium text-emerald-500 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              {currentChatMode === "ai"
-                ? "AI Assistant is ready (Instant Answers • No Login Required)"
-                : isAuth && isConnected
-                ? "Live Agent is online"
-                : "Live Support (Sign in for human agent)"}
+            <p className="text-[10px] sm:text-[11px] font-medium text-emerald-500 flex items-center gap-1 truncate">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="truncate">
+                {currentChatMode === "ai"
+                  ? "AI Assistant Ready • Instant Answers"
+                  : isAuth && isConnected
+                  ? "Live Agent Online"
+                  : "Live Support"}
+              </span>
+              <span className="hidden sm:inline text-emerald-500/70">
+                {currentChatMode === "ai" ? "• No Login Required" : "(Sign in for agent)"}
+              </span>
             </p>
-          </div>
-        </div>
-
-        {/* Dual Mode Switcher Pill */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center rounded-2xl bg-black/30 dark:bg-black/50 p-1 border border-white/10 shadow-inner">
-            <button
-              onClick={() => handleModeChange("ai")}
-              className={cn(
-                "flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-[11px] font-black transition-all cursor-pointer",
-                currentChatMode === "ai"
-                  ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/25"
-                  : "text-zinc-400 hover:text-white"
-              )}
-            >
-              <Bot size={14} className={currentChatMode === "ai" ? "text-white" : "text-zinc-400"} />
-              AI Assistant
-            </button>
-            <button
-              onClick={() => handleModeChange("agent")}
-              className={cn(
-                "flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-[11px] font-black transition-all cursor-pointer",
-                currentChatMode === "agent"
-                  ? "bg-gradient-to-r from-emerald-600 to-teal-500 text-white shadow-md shadow-emerald-600/25"
-                  : "text-zinc-400 hover:text-white"
-              )}
-            >
-              <Headphones size={14} className={currentChatMode === "agent" ? "text-white" : "text-zinc-400"} />
-              Live Agent
-            </button>
           </div>
         </div>
       </header>
 
       {/* Messages Area */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 no-scrollbar relative z-10">
+      <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-8 no-scrollbar relative z-10">
         <div className="absolute inset-0 opacity-[0.04] dark:opacity-[0.02] pointer-events-none bg-[url('https://w0.peakpx.com/wallpaper/818/148/HD-wallpaper-whatsapp-background-whatsapp-texture.jpg')] bg-repeat" />
 
         <div className="max-w-3xl mx-auto space-y-2 relative z-10">
           {/* Real-time Mode Notification Banner */}
           <div className="flex justify-center mb-3 sticky top-0 z-20">
             {currentChatMode === "agent" ? (
-              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/15 backdrop-blur-md border border-emerald-500/30 text-emerald-400 text-[11px] font-bold shadow-sm">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>
-                  {isAuth
-                    ? "🎧 Live Support agent is connected to your chat."
-                    : "🎧 Live Human Agent (Sign in to connect or continue with AI below)"}
-                </span>
-                {!isAuth && (
-                  <Link
-                    href="/login"
-                    className="ml-1 px-2 py-0.5 rounded bg-emerald-500 text-white font-black text-[10px] hover:bg-emerald-600"
+              <div className="w-full sm:w-auto flex items-center justify-between sm:justify-center gap-2 px-3 sm:px-4 py-1.5 rounded-2xl sm:rounded-full bg-emerald-500/15 backdrop-blur-md border border-emerald-500/30 text-emerald-400 text-[10px] sm:text-[11px] font-bold shadow-sm">
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                  <span className="truncate">
+                    {isAuth
+                      ? "🎧 Live Support agent connected"
+                      : "🎧 Live Human Agent"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {!isAuth && (
+                    <Link
+                      href="/login"
+                      className="px-2 py-0.5 rounded-md bg-emerald-500 text-white font-black text-[9px] sm:text-[10px] hover:bg-emerald-600"
+                    >
+                      Sign In
+                    </Link>
+                  )}
+                  <button
+                    onClick={() => handleModeChange("ai")}
+                    className="px-2 py-0.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 font-black hover:text-emerald-200 cursor-pointer text-emerald-300 text-[9px] sm:text-[10px] transition-colors"
                   >
-                    Sign In
-                  </Link>
-                )}
-                <button
-                  onClick={() => handleModeChange("ai")}
-                  className="ml-1 underline font-black hover:text-emerald-300 cursor-pointer text-emerald-300"
-                >
-                  Switch to AI
-                </button>
+                    Switch to AI
+                  </button>
+                </div>
               </div>
             ) : (
-              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-500/15 backdrop-blur-md border border-orange-500/30 text-orange-400 text-[11px] font-bold shadow-sm">
-                <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
-                <span>🤖 AI Shopping Assistant is active (Instant Answers • Free for all).</span>
+              <div className="w-full sm:w-auto flex items-center justify-between sm:justify-center gap-2 px-3 sm:px-4 py-1.5 rounded-2xl sm:rounded-full bg-orange-500/15 backdrop-blur-md border border-orange-500/30 text-orange-400 text-[10px] sm:text-[11px] font-bold shadow-sm">
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse shrink-0" />
+                  <span className="truncate">🤖 AI Shopping Assistant active (Free)</span>
+                </div>
                 <button
                   onClick={() => handleModeChange("agent")}
-                  className="ml-1 underline font-black hover:text-orange-300 cursor-pointer text-orange-300"
+                  className="shrink-0 px-2.5 py-0.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 font-black hover:text-orange-200 cursor-pointer text-orange-300 text-[9px] sm:text-[10px] transition-colors"
                 >
                   Request Human
                 </button>
@@ -795,7 +816,7 @@ export default function LiveSupportPage() {
       )}
 
       {/* Input area */}
-      <footer className="p-3 md:p-6 bg-white dark:bg-[#202c33] border-t border-border/10 shrink-0 z-20 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
+      <footer className="p-2.5 sm:p-3 md:p-6 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white dark:bg-[#202c33] border-t border-border/10 shrink-0 z-20 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
         <div className="max-w-3xl mx-auto flex items-center gap-2 md:gap-4">
           <input
             type="file"
@@ -813,27 +834,27 @@ export default function LiveSupportPage() {
             size="icon"
             disabled={isUploading || isAiThinking}
             onClick={() => fileInputRef.current?.click()}
-            className="h-11 w-11 md:h-12 md:w-12 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-muted-foreground shrink-0 cursor-pointer"
+            className="h-10 w-10 sm:h-11 sm:w-11 md:h-12 md:w-12 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-muted-foreground shrink-0 cursor-pointer"
             title="Upload clothing photo"
           >
             {isUploading ? (
-              <Loader2 size={20} className="animate-spin text-orange-400" />
+              <Loader2 size={18} className="animate-spin text-orange-400 sm:w-5 sm:h-5" />
             ) : (
-              <ImageIcon size={20} />
+              <ImageIcon size={18} className="sm:w-5 sm:h-5" />
             )}
           </Button>
 
-          <div className="flex-1 relative">
+          <div className="flex-1 min-w-0 relative">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={
                 currentChatMode === "ai"
-                  ? "Ask AI Assistant about products, sizes, prices, or upload photo (No login required)..."
-                  : "Type your message to live agent..."
+                  ? "Ask AI Assistant or upload photo..."
+                  : "Type your message..."
               }
-              className="w-full h-11 md:h-12 bg-[#f0f2f5] dark:bg-[#2a3942] border-none rounded-2xl px-4 md:px-5 text-[14px] md:text-[15px] focus-visible:ring-0 placeholder:text-muted-foreground/50 shadow-inner text-foreground font-medium"
+              className="w-full h-10 sm:h-11 md:h-12 bg-[#f0f2f5] dark:bg-[#2a3942] border-none rounded-2xl px-3.5 sm:px-4 md:px-5 text-[13px] sm:text-[14px] md:text-[15px] focus-visible:ring-0 placeholder:text-muted-foreground/50 shadow-inner text-foreground font-medium truncate"
             />
           </div>
 
@@ -841,19 +862,19 @@ export default function LiveSupportPage() {
             onClick={handleSend}
             disabled={isSendDisabled}
             className={cn(
-              "h-11 w-11 md:h-12 md:w-12 rounded-full shadow-md transition-all duration-300 cursor-pointer",
+              "h-10 w-10 sm:h-11 sm:w-11 md:h-12 md:w-12 rounded-full shadow-md transition-all duration-300 cursor-pointer shrink-0",
               input.trim() || selectedFile
                 ? "bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white scale-100 shadow-orange-500/25"
                 : "bg-muted text-muted-foreground scale-95 opacity-50 cursor-not-allowed"
             )}
           >
             {isAiThinking ? (
-              <Loader2 size={18} className="animate-spin text-white" />
+              <Loader2 size={16} className="animate-spin text-white sm:w-[18px] sm:h-[18px]" />
             ) : (
               <Send
-                size={18}
+                size={16}
                 className={cn(
-                  "transition-transform text-white",
+                  "transition-transform text-white sm:w-[18px] sm:h-[18px]",
                   (input.trim() || selectedFile) && "translate-x-0.5 -translate-y-0.5"
                 )}
               />

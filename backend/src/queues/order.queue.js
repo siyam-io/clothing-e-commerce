@@ -83,8 +83,12 @@ export const startOrderPlacementWorker = () => {
       concurrency: 8, // Smooth transaction concurrency to eliminate MongoDB WriteConflict storms
     });
 
+    let hasLoggedNotice = false;
     orderPlacementWorker.on("error", (err) => {
-      logger.warn(`BullMQ Order Placement Worker connection notice: ${err.message}`);
+      if (!hasLoggedNotice) {
+        hasLoggedNotice = true;
+        logger.warn(`BullMQ Order Placement Worker connection notice: ${err.message}`);
+      }
     });
 
     orderPlacementWorker.on("completed", (job) => {
